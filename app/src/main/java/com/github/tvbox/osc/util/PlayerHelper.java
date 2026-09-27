@@ -5,6 +5,7 @@ import android.content.Context;
 
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.bean.IJKCode;
+import com.github.tvbox.osc.player.EXOmPlayer;
 import com.github.tvbox.osc.player.IjkMediaPlayer;
 import com.github.tvbox.osc.player.render.SurfaceRenderViewFactory;
 import com.github.tvbox.osc.player.thirdparty.Kodi;
@@ -31,6 +32,8 @@ import xyz.doikki.videoplayer.render.TextureRenderViewFactory;
 
 public class PlayerHelper {
     public static void updateCfg(VideoView videoView, JSONObject playerCfg) {
+        // 播放器可能在 Activity 销毁时被置空, 而调用方可能来自延迟的异步回调(如直播列表网络返回), 这里做空保护
+        if (videoView == null) return;
         int playerType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
         int renderType = Hawk.get(HawkConfig.PLAY_RENDER, 0);
         String ijkCode = Hawk.get(HawkConfig.IJK_CODEC, "软解码");
@@ -67,7 +70,12 @@ public class PlayerHelper {
                 th.printStackTrace();
             }
         } else if (playerType == 2) {
-            playerFactory = ExoMediaPlayerFactory.create();
+            playerFactory = new PlayerFactory<EXOmPlayer>() {
+                @Override
+                public EXOmPlayer createPlayer(Context context) {
+                    return new EXOmPlayer(context);
+                }
+            };
         } else {
             playerFactory = AndroidMediaPlayerFactory.create();
         }
@@ -87,6 +95,7 @@ public class PlayerHelper {
     }
 
     public static void updateCfg(VideoView videoView) {
+        if (videoView == null) return;
         int playType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
         PlayerFactory playerFactory;
         if (playType == 1) {
@@ -111,7 +120,12 @@ public class PlayerHelper {
                 th.printStackTrace();
             }
         } else if (playType == 2) {
-            playerFactory = ExoMediaPlayerFactory.create();
+            playerFactory = new PlayerFactory<EXOmPlayer>() {
+                @Override
+                public EXOmPlayer createPlayer(Context context) {
+                    return new EXOmPlayer(context);
+                }
+            };
         } else {
             playerFactory = AndroidMediaPlayerFactory.create();
         }
@@ -178,7 +192,7 @@ public class PlayerHelper {
     public static HashMap<Integer, Boolean> getPlayersExistInfo() {
         if (mPlayersExistInfo == null) {
             HashMap<Integer, Boolean> playersExist = new HashMap<>();
-            playersExist.put(0, true);
+            playersExist.put(0, false);
             playersExist.put(1, true);
             playersExist.put(2, true);
             playersExist.put(10, MXPlayer.getPackageInfo() != null);

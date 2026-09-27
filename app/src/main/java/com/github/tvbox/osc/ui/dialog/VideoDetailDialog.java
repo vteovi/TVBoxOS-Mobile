@@ -23,13 +23,9 @@ import com.squareup.picasso.Picasso;
 
 import me.jessyan.autosize.utils.AutoSizeUtils;
 
-/**
- * @Author : Liu XiaoRan
- * @Email : 592923276@qq.com
- * @Date : on 2023/8/17 09:28.
- * @Description :
- */
+
 public class VideoDetailDialog extends BottomPopupView {
+
 
     @NonNull
     private final DetailActivity mActivity;
@@ -68,7 +64,6 @@ public class VideoDetailDialog extends BottomPopupView {
             ClipboardUtils.copyText(mActivity.getCurrentVodUrl());
             ToastUtils.showLong("已复制");
         });
-
         String picUrl = DefaultConfig.checkReplaceProxy(mVideo.pic);
         if (!TextUtils.isEmpty(picUrl)){
             Picasso.get()

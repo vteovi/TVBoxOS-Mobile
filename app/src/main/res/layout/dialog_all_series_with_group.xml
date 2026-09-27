@@ -29,7 +29,7 @@
             android:clipToPadding="false"
             app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
             app:tv_selectedItemIsCentered="true"
-            tools:listitem="@layout/item_series_flag"
+            tools:listitem="@layout/item_select_flag"
             />
         <TextView
             android:id="@+id/tvSort"
@@ -37,7 +37,7 @@
             android:layout_height="wrap_content"
             android:text="倒序"
             android:drawableRight="@drawable/ic_sort_18"
-            android:textColor="@color/text_color"
+            android:textColor="@color/text_foreground"
             android:drawablePadding="4dp"
             android:paddingVertical="6dp"
             android:layout_marginRight="20dp"

@@ -1,5 +1,6 @@
 package com.github.tvbox.osc.util;
 
+import android.content.Context;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.os.Build;
@@ -17,20 +18,26 @@ import java.util.Formatter;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * @Author : Liu XiaoRan
- * @Email : 592923276@qq.com
- * @Date : on 2023/8/14 15:06.
- * @Description :
- */
+
 public class Utils {
+
+    public static boolean isTablet(Context context) {
+        return context.getResources().getConfiguration().smallestScreenWidthDp >= 600;
+    }
+
+    public static int getPosterSpanCount(Context context) {
+        if (!isTablet(context)) return 3;
+        int widthDp = context.getResources().getConfiguration().screenWidthDp;
+        if (widthDp >= 1200) return 6;
+        if (widthDp >= 900) return 5;
+        return 4;
+    }
 
     public static boolean supportsPiPMode() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
     }
 
     public static int getSeriesSpanCount(List<VodInfo.VodSeries> list) {
-        LOG.i(list.toString());
         int spanCount = 4;
         int total = 0;
         for (VodInfo.VodSeries item : list) total += item.name.length();
@@ -61,26 +68,28 @@ public class Utils {
 
     public static List<VideoInfo> getVideoList() {
         List<VideoInfo> videoList = new ArrayList<>();
-        Cursor cursor = App.getInstance().getContentResolver().query(
+        try (Cursor cursor = App.getInstance().getContentResolver().query(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                new String[] { // 查询内容
-                        MediaStore.Video.Media._ID, // 视频id
-                        MediaStore.Video.Media.DATA, // 视频路径
-                        MediaStore.Video.Media.SIZE, // 视频字节大小
-                        MediaStore.Video.Media.DISPLAY_NAME, // 视频名称 xxx.mp4
-                        MediaStore.Video.Media.TITLE, // 视频标题
-                        MediaStore.Video.Media.DURATION, // 视频时长
-                        MediaStore.Video.Media.RESOLUTION, // 视频分辨率 X x Y格式
+                new String[] {
+                        MediaStore.Video.Media._ID,
+                        MediaStore.Video.Media.DATA,
+                        MediaStore.Video.Media.SIZE,
+                        MediaStore.Video.Media.DISPLAY_NAME,
+                        MediaStore.Video.Media.TITLE,
+                        MediaStore.Video.Media.DURATION,
+                        MediaStore.Video.Media.RESOLUTION,
                         MediaStore.Video.Media.IS_PRIVATE,
                         MediaStore.Video.Media.BUCKET_ID,
                         MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
-                        MediaStore.Video.Media.BOOKMARK // 上次视频播放的位置
+                        MediaStore.Video.Media.BOOKMARK
                 },
                 null,
                 null,
                 null
-        );
-        if (cursor != null && cursor.moveToFirst()) {
+        )) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                return videoList;
+            }
             do {
                 VideoInfo videoInfo = new VideoInfo();
                 videoInfo.setId(cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)));
@@ -96,7 +105,8 @@ public class Utils {
                 videoInfo.setBookmark(cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BOOKMARK)));
                 videoList.add(videoInfo);
             } while (cursor.moveToNext());
-            cursor.close();
+        } catch (SecurityException ignored) {
+            // The activity requests the media permission before it opens this page.
         }
         return videoList;
     }

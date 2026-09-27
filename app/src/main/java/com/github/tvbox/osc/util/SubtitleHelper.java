@@ -8,7 +8,6 @@ public class SubtitleHelper {
 
     public static int getSubtitleTextAutoSize(Activity activity) {
         double screenSqrt = ScreenUtils.getSqrt(activity);
-        // LOG.i("SubtitleHelper screenSqrt : " + screenSqrt);
         int subtitleTextSize = 16;
         if (screenSqrt > 7.0 && screenSqrt <= 13.0) {
             subtitleTextSize = 24;

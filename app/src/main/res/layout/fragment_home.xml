@@ -31,7 +31,7 @@
                 android:maxWidth="110dp"
                 android:text="@string/app_name"
                 android:textAlignment="gravity"
-                android:textColor="@color/text_color"
+                android:textColor="@color/text_foreground"
                 android:textSize="16dp"
                 android:drawablePadding="6dp"
                 android:singleLine="true"
@@ -86,7 +86,6 @@
             android:layout_width="match_parent"
             android:layout_height="40dp"
             app:tab_indicator_drawable="@drawable/indicator_flash"
-            app:tab_enable_text_color="true"
             app:tab_indicator_enable_flash="true"
             app:tab_indicator_enable_flash_clip="true"
             app:tab_indicator_height="5dp"
@@ -104,8 +103,7 @@
             android:id="@+id/mViewPager"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/bg_gray_deep"
-            android:layout_marginTop="@dimen/dp_10"
+            android:layout_marginTop="10dp"
             />
     </LinearLayout>
 </LinearLayout>

@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.ui.fragment;
 
 import android.os.Bundle;
+import android.content.res.Configuration;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.animation.BounceInterpolator;
@@ -12,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.GsonUtils;
+import com.blankj.utilcode.util.LogUtils;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
@@ -27,6 +29,7 @@ import com.github.tvbox.osc.ui.adapter.GridAdapter;
 import com.github.tvbox.osc.ui.dialog.GridFilterDialog;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
+import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
 import com.orhanobut.hawk.Hawk;
@@ -86,9 +89,6 @@ public class GridFragment extends BaseLazyFragment {
         if (savedInstanceState != null && this.sortData == null) {
             //activity销毁再进入,会直接恢复fragment,从而直接getList,导致sortData为空闪退
             this.sortData = GsonUtils.fromJson(savedInstanceState.getString("sortDataJson"), MovieSort.SortData.class);
-            //后台杀进程再进入,会直接恢复fragment,从而直接getList,导致ApiConfig的mHomeSource为空闪退
-            SourceBean homeSourceBean = GsonUtils.fromJson(savedInstanceState.getString("homeSourceBean"), SourceBean.class);
-            ApiConfig.get().setSourceBean(homeSourceBean);
         }
     }
 
@@ -103,10 +103,9 @@ public class GridFragment extends BaseLazyFragment {
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString("sortDataJson", GsonUtils.toJson(sortData));
-        // outState.putString("homeSourceBean", GsonUtils.toJson(ApiConfig.get().getHomeSourceBean()));
     }
 
-    private void changeView(String id,Boolean isFolder){
+    private void changeView(String id, Boolean isFolder){
         if(isFolder){
             this.sortData.flag ="1"; // 修改sortData.flag
         }else {
@@ -181,7 +180,7 @@ public class GridFragment extends BaseLazyFragment {
     private void initView() {
         this.createView();
         mGridView.setAdapter(gridAdapter);
-        mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, 3));
+        mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, Utils.getPosterSpanCount(this.mContext)));
 
         gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
             @Override
@@ -240,6 +239,14 @@ public class GridFragment extends BaseLazyFragment {
         setLoadSir2(mGridView);
     }
 
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (mGridView != null) {
+            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, Utils.getPosterSpanCount(this.mContext)));
+        }
+    }
+
     private void initViewModel() {
         if(sourceViewModel != null) { return;}
         sourceViewModel = new ViewModelProvider(this).get(SourceViewModel.class);
@@ -284,7 +291,6 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
-
         if (ApiConfig.get().getHomeSourceBean().getApi()==null){// 系统杀死app恢复缓存的fragment后会直接getList,此时首页api都未加载完
             showEmpty();
             return;
@@ -305,7 +311,7 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     public void showFilter() {
-        if (null != sortData && !sortData.filters.isEmpty() && gridFilterDialog == null) {
+        if (sortData!=null && !sortData.filters.isEmpty() && gridFilterDialog == null) {
             gridFilterDialog = new GridFilterDialog(mContext);
             gridFilterDialog.setData(sortData);
             gridFilterDialog.setOnDismiss(new GridFilterDialog.Callback() {

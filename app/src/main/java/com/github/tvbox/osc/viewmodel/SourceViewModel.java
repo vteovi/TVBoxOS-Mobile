@@ -75,6 +75,15 @@ public class SourceViewModel extends ViewModel {
 
     public static final ExecutorService spThreadPool = Executors.newSingleThreadExecutor();
 
+    /**
+     * 首页推荐(homeVideoContent)专用线程池。
+     * 必须与 spThreadPool 分开: getSort(type=3) 本身就跑在 spThreadPool 上, 它内部又会调用
+     * getHomeRecList(); 若后者还往同一个单线程池提交任务, 新任务会排在当前任务之后永远得不到执行,
+     * 而当前任务又在等它的回调 -> 死锁: sortResult 永不回调, 首页一个分栏都不显示, 而且
+     * spThreadPool 被永久占死(后续列表/详情也全部加载不出来)。
+     */
+    public static final ExecutorService homeRecThreadPool = Executors.newSingleThreadExecutor();
+
     // homeContent
     public void getSort(String sourceKey) {
         if (sourceKey == null) {
@@ -235,10 +244,6 @@ public class SourceViewModel extends ViewModel {
     }
     // categoryContent
     public void getList(MovieSort.SortData sortData, int page) {
-        // if(sortData == null){
-        //     ToastUtils.showLong("首页数据丢失,请切换站点");
-        //     return;
-        // }
         SourceBean homeSourceBean = ApiConfig.get().getHomeSourceBean();
         int type = homeSourceBean.getType();
         if (type == 3) {
@@ -382,7 +387,8 @@ public class SourceViewModel extends ViewModel {
                     }
                 }
             };
-            spThreadPool.execute(waitResponse);
+            // 用独立线程池, 避免从 spThreadPool 内部再提交到 spThreadPool 造成自锁死
+            homeRecThreadPool.execute(waitResponse);
         } else if (type == 0 || type == 1) {
             OkGo.<String>get(sourceBean.getApi())
                     .tag("detail")
@@ -653,8 +659,8 @@ public class SourceViewModel extends ViewModel {
                 @Override
                 public void run() {
                     Spider sp = ApiConfig.get().getCSP(sourceBean);
-                    String json = sp.playerContent(playFlag, url, ApiConfig.get().getVipParseFlags());
                     try {
+                        String json = sp.playerContent(playFlag, url, ApiConfig.get().getVipParseFlags());
                         JSONObject result = new JSONObject(json);
                         result.put("key", url);
                         result.put("proKey", progressKey);

@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="140dp"
     android:layout_margin="3dp"
-    app:hl_cornerRadius="@dimen/dp_5"
+    app:hl_cornerRadius="14dp"
     >
 
     <RelativeLayout
@@ -13,10 +13,10 @@
         android:layout_height="match_parent">
 
         <ImageView
-                android:id="@+id/ivThumb"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop"/>
+            android:id="@+id/ivThumb"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
 
         <com.lihang.ShadowLayout
             android:layout_width="wrap_content"

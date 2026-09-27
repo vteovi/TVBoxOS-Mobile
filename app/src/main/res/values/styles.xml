@@ -10,6 +10,11 @@
         <item name="android:windowBackground">@color/windowBackground</item>
     </style>
 
+    <style name="SplashTheme" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/bg_splash</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
+    </style>
 
     <style name="AppTheme.NoActionBar">
         <item name="android:windowActionBar">false</item>
@@ -62,8 +67,8 @@
     </style>
 
     <style name="DialogFadeAnimation">
-        <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
-        <item name="android:windowExitAnimation">@android:anim/fade_out</item>
+        <item name="android:windowEnterAnimation">@anim/fade_in</item>
+        <item name="android:windowExitAnimation">@anim/fade_out</item>
     </style>
 
     <style name="TabVerticalItemStyle">
@@ -118,17 +123,6 @@
 
     </style>
 
-    <style name="mbNormal" parent="@style/Widget.MaterialComponents.Button.TextButton">
-                <item name="android:textColor">@color/text_color</item>
-        <item name="android:insetTop">0dp</item>
-        <item name="android:insetBottom">0dp</item>
-        <item name="android:gravity">center</item>
-        <item name="android:textSize">13sp</item>
-        <item name="android:background">@drawable/button_red_mask</item>
-        <item name="cornerRadius">@dimen/common_corners</item>
-
-    </style>
-
 <!--文件选择器样式,在此只改变了背景和基本颜色-->
     <style name="FileChooser" parent="FileChooserStyle">
         <item name="android:textColor">@color/colorPrimary</item>
@@ -161,7 +155,7 @@
         <item name="android:background">@android:color/transparent</item>
     </style>
     <style name="FileChooserTextNameStyle1" parent="FileChooserTextNameStyle">
-        <item name="android:textColor">@color/text_color</item>
+        <item name="android:textColor">@color/text_foreground</item>
     </style>
     <style name="FileChooserTextSizeStyle1" parent="FileChooserTextSizeStyle">
         <item name="android:textColor">@color/colorPrimary</item>
@@ -171,10 +165,15 @@
     </style>
 <!--    文件选择器条目样式结束-->
 
+    <!-- 底部导航栏文字: 缩小字号, 颜色由 itemTextColor 统一为黑色 -->
+    <style name="BottomNavTextAppearance" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textSize">10sp</item>
+    </style>
+
     <!-- 选择器文件路径样式   -->
     <style name="FileChooserPathViewStyle1" parent="FileChooserPathViewStyle">
         <item name="android:background">@android:color/transparent</item>
-        <item name="android:textColor">@color/text_color</item>
+        <item name="android:textColor">@color/text_foreground</item>
     </style>
 
 

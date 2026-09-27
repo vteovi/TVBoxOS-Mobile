@@ -33,6 +33,7 @@ public class LivePlayerManager {
     }
 
     public void getDefaultLiveChannelPlayer(VideoView videoView) {
+        if (videoView == null) return;
         PlayerHelper.updateCfg(videoView, defaultPlayerConfig);
         try {
             currentPlayerConfig = new JSONObject(defaultPlayerConfig.toString());
@@ -42,6 +43,7 @@ public class LivePlayerManager {
     }
 
     public void getLiveChannelPlayer(VideoView videoView, String channelName) {
+        if (videoView == null || currentPlayerConfig == null) return;
         JSONObject playerConfig = Hawk.get(channelName, null);
         if (playerConfig == null) {
             if (!currentPlayerConfig.toString().equals(defaultPlayerConfig.toString()))

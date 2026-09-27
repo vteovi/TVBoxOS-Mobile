@@ -38,7 +38,7 @@ public class SearchAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder>
                         .transform(new RoundTransformation(MD5.string2MD5(item.pic + "position=" + helper.getLayoutPosition()))
                                 .centerCorp(true)
                                 .override(AutoSizeUtils.dp2px(mContext, 100), AutoSizeUtils.dp2px(mContext, 140))
-                                .roundRadius(AutoSizeUtils.dp2px(mContext, 5), RoundTransformation.RoundType.ALL))
+                                .roundRadius(AutoSizeUtils.dp2px(mContext, 20), RoundTransformation.RoundType.ALL))
                         .placeholder(R.drawable.img_loading_placeholder)
                         .error(R.drawable.img_loading_placeholder)
                         .into(ivThumb);

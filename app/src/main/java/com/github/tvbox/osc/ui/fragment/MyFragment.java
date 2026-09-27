@@ -1,7 +1,9 @@
 package com.github.tvbox.osc.ui.fragment;
 
+import android.Manifest;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.text.TextUtils;
 
 import com.blankj.utilcode.util.AppUtils;
@@ -14,15 +16,14 @@ import com.github.tvbox.osc.databinding.FragmentMyBinding;
 import com.github.tvbox.osc.ui.activity.CollectActivity;
 import com.github.tvbox.osc.ui.activity.DetailActivity;
 import com.github.tvbox.osc.ui.activity.HistoryActivity;
-import com.github.tvbox.osc.ui.activity.LiveActivity;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.LocalPlayActivity;
 import com.github.tvbox.osc.ui.activity.MovieFoldersActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
-import com.github.tvbox.osc.ui.activity.SubscriptionActivity;
 import com.github.tvbox.osc.ui.dialog.AboutDialog;
+import com.github.tvbox.osc.ui.dialog.WallpaperDialog;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.Utils;
+import com.github.tvbox.osc.util.WallpaperManager;
 import com.hjq.permissions.OnPermissionCallback;
 import com.hjq.permissions.Permission;
 import com.hjq.permissions.XXPermissions;
@@ -39,6 +40,8 @@ import java.util.List;
  */
 public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
 
+    private static final int REQUEST_IMPORT_WALLPAPER = 9201;
+
 
     @Override
     protected void init() {
@@ -46,7 +49,7 @@ public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
 
         mBinding.addrPlay.setOnClickListener(v ->{
             new XPopup.Builder(getContext())
-                    .asInputConfirm("播放", "", isPush(ClipboardUtils.getText().toString())?ClipboardUtils.getText():"", "地址", text -> {
+                    .asInputConfirm("点播", "", isPush(ClipboardUtils.getText().toString())?ClipboardUtils.getText():"", "影视地址", text -> {
                         if (!TextUtils.isEmpty(text)){
                             Intent newIntent = new Intent(mContext, DetailActivity.class);
                             newIntent.putExtra("id", text);
@@ -56,9 +59,6 @@ public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
                         }
                     }, null, R.layout.dialog_input).show();
         });
-        //mBinding.tvLive.setOnClickListener(v -> jumpActivity(LivePlayActivity.class));
-        mBinding.tvLive.setOnClickListener(v -> jumpActivity(LiveActivity.class));
-
         mBinding.tvSetting.setOnClickListener(v -> jumpActivity(SettingActivity.class));
 
         mBinding.tvHistory.setOnClickListener(v -> jumpActivity(HistoryActivity.class));
@@ -66,14 +66,18 @@ public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
         mBinding.tvFavorite.setOnClickListener(v -> jumpActivity(CollectActivity.class));
 
         mBinding.tvLocal.setOnClickListener(v -> {
-            if (!XXPermissions.isGranted(mContext, Permission.MANAGE_EXTERNAL_STORAGE)) {
+            if (!hasVideoAccess()) {
                 showPermissionTipPopup();
             } else {
                 jumpActivity(MovieFoldersActivity.class);
             }
         });
 
-        mBinding.llSubscription.setOnClickListener(v -> jumpActivity(SubscriptionActivity.class));
+        mBinding.tvWallpaper.setOnClickListener(v -> {
+            new XPopup.Builder(mActivity)
+                    .asCustom(new WallpaperDialog(mActivity, this::pickWallpaper))
+                    .show();
+        });
 
         mBinding.llAbout.setOnClickListener(v -> {
             new XPopup.Builder(mActivity)
@@ -82,17 +86,47 @@ public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
         });
     }
 
+    private void pickWallpaper() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        startActivityForResult(intent, REQUEST_IMPORT_WALLPAPER);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_IMPORT_WALLPAPER || resultCode != android.app.Activity.RESULT_OK
+                || data == null || data.getData() == null) return;
+        String value = WallpaperManager.get().importWallpaper(data.getData());
+        if (value.isEmpty()) {
+            ToastUtils.showShort("图片导入失败，请选择有效图片");
+        } else {
+            WallpaperManager.get().applyToActivity(mActivity);
+            ToastUtils.showShort("壁纸已导入并应用");
+        }
+    }
+
     private void showPermissionTipPopup(){
         new XPopup.Builder(mActivity)
                 .isDarkTheme(Utils.isDarkTheme())
-                .asConfirm("提示","为了播放视频、音频等,我们需要访问您设备文件的读写权限", () -> {
+                .asConfirm("提示","为了读取本地视频,需要访问设备中的视频媒体", () -> {
                     getPermission();
                 }).show();
     }
 
+    private boolean hasVideoAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return XXPermissions.isGranted(mContext, Manifest.permission.READ_MEDIA_VIDEO);
+        }
+        return XXPermissions.isGranted(mContext, Permission.READ_EXTERNAL_STORAGE);
+    }
+
     private void getPermission(){
         XXPermissions.with(this)
-                .permission(Permission.MANAGE_EXTERNAL_STORAGE)
+                .permission(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                        ? Manifest.permission.READ_MEDIA_VIDEO
+                        : Permission.READ_EXTERNAL_STORAGE)
                 .request(new OnPermissionCallback() {
                     @Override
                     public void onGranted(List<String> permissions, boolean all) {
@@ -106,8 +140,7 @@ public class MyFragment extends BaseVbFragment<FragmentMyBinding> {
                     @Override
                     public void onDenied(List<String> permissions, boolean never) {
                         if (never) {
-                            ToastUtils.showLong("读写文件权限被永久拒绝，请手动授权");
-                            // 如果是被永久拒绝就跳转到应用权限系统设置页面
+                            ToastUtils.showLong("视频媒体权限被永久拒绝，请手动授权");
                             XXPermissions.startPermissionActivity(mActivity, permissions);
                         } else {
                             ToastUtils.showShort("获取权限失败");

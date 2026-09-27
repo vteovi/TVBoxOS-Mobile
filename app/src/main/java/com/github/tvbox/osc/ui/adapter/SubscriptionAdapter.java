@@ -16,7 +16,6 @@ import com.github.tvbox.osc.bean.Subscription;
 import com.github.tvbox.osc.bean.VideoFolder;
 import com.github.tvbox.osc.bean.VideoInfo;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -30,27 +29,21 @@ public class SubscriptionAdapter extends BaseQuickAdapter<Subscription, BaseView
         helper.setText(R.id.tv_name,item.getName())
         .setText(R.id.tv_url,item.getUrl())
         .setChecked(R.id.cb,item.isChecked())
-        .setVisible(R.id.iv_pushpin,item.isTop());
+        .setVisible(R.id.iv_pushpin,item.isTop())
+        .setVisible(R.id.iv_del,!item.isBuiltIn());
 
-        helper.addOnClickListener(R.id.iv_del);
+        if (!item.isBuiltIn()) {
+            helper.addOnClickListener(R.id.iv_del);
+        }
     }
 
     /**
-     * 刷新列表时候,添加去重和排序
+     * 刷新列表时按置顶和选中状态排序。
      * @param data
      */
     @Override
     public void setNewData(@Nullable List<Subscription> data) {
         if (data!=null){
-            //去除url重复的订阅
-            for (int i = 0; i < data.size(); i++) {
-                for (int j = i+1; j < data.size(); j++) {
-                    if (data.get(i).getUrl().equals(data.get(j).getUrl())){
-                        data.remove(j);
-                        j--;
-                    }
-                }
-            }
             data.sort(mComparator);
         }
         super.setNewData(data);

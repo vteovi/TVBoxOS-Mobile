@@ -27,8 +27,6 @@ package com.github.tvbox.osc.subtitle.widget;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.res.AssetManager;
-import android.graphics.Typeface;
 import androidx.annotation.Nullable;
 
 import android.graphics.Canvas;
@@ -41,12 +39,10 @@ import android.util.AttributeSet;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.cache.CacheManager;
 import com.github.tvbox.osc.subtitle.DefaultSubtitleEngine;
 import com.github.tvbox.osc.subtitle.SubtitleEngine;
 import com.github.tvbox.osc.subtitle.model.Subtitle;
-import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.MD5;
 
 import java.util.List;
@@ -71,6 +67,7 @@ public class SimpleSubtitleView extends TextView
     public boolean hasInternal = false;
 
     private TextView backGroundText = null;//用于描边的TextView
+    private int backGroundTextColor = Color.BLACK;//用于描边的TextView
 
     public SimpleSubtitleView(final Context context) {
         super(context);
@@ -109,10 +106,16 @@ public class SimpleSubtitleView extends TextView
             return;
         }
         String text = subtitle.content;
+        if (text.startsWith("Dialogue:") || text.startsWith("m ")) {
+            setText(EMPTY_TEXT);
+            return;
+        }
         text = text.replaceAll("(?:\\r\\n)", "<br />");
         text = text.replaceAll("(?:\\r)", "<br />");
         text = text.replaceAll("(?:\\n)", "<br />");
-        text = text.replaceAll("\\{[\\s\\S]*\\}", "");
+        text = text.replaceAll("\\\\N", "<br />");
+        text = text.replaceAll("\\{[\\s\\S]*?\\}", "");
+        text = text.replaceAll("^.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,", "");
         setText(Html.fromHtml(text));
     }
 
@@ -194,6 +197,12 @@ public class SimpleSubtitleView extends TextView
     }
 
     @Override
+    public void setShadowLayer(float radius, float dx, float dy, int color) {
+        this.backGroundTextColor = color;
+        super.setShadowLayer(radius, dx, dy, color);
+    }
+
+    @Override
     public void setLayoutParams(ViewGroup.LayoutParams params) {
         //同步布局参数
         backGroundText.setLayoutParams(params);
@@ -222,7 +231,6 @@ public class SimpleSubtitleView extends TextView
     protected void onTextChanged(CharSequence text, int start, int lengthBefore, int lengthAfter) {
         if (backGroundText != null) {
             backGroundText.setText(text);
-            // LOG.i("simplesubtView size: " + backGroundText.getTextSize());
         }
         super.onTextChanged(text, start, lengthBefore, lengthAfter);
     }
@@ -246,9 +254,9 @@ public class SimpleSubtitleView extends TextView
         //设置描边宽度
         tp.setStrokeWidth(1);
         //背景描边并填充全部
-        tp.setStyle(Paint.Style.FILL_AND_STROKE);
+        tp.setStyle(Paint.Style.STROKE);
         //设置描边颜色
-        backGroundText.setTextColor(Color.MAGENTA);
+        backGroundText.setTextColor(backGroundTextColor);
         //将背景的文字对齐方式做同步
         backGroundText.setGravity(getGravity());
     }

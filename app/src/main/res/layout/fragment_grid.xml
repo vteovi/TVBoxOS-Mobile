@@ -7,15 +7,14 @@
     android:orientation="vertical">
 
     <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/mGridView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:tv_selectedItemIsCentered="true"
-            tools:listitem="@layout/item_grid"
-            tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-            tools:spanCount="3"
-            android:paddingTop="10dp"
-            android:paddingHorizontal="10dp"/>
+        android:id="@+id/mGridView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:tv_selectedItemIsCentered="true"
+        tools:listitem="@layout/item_grid"
+        tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        tools:spanCount="3"
+        android:paddingHorizontal="10dp"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btn_filter"

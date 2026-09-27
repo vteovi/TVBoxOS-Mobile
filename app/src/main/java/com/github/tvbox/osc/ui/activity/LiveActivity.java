@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -24,6 +25,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
 import com.blankj.utilcode.util.ConvertUtils;
 import com.blankj.utilcode.util.ScreenUtils;
 import com.blankj.utilcode.util.ToastUtils;
@@ -32,7 +35,6 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.base.BaseActivity;
-import com.github.tvbox.osc.bean.CastVideo;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LivePlayerManager;
@@ -44,7 +46,6 @@ import com.github.tvbox.osc.ui.adapter.LiveChannelItemNewAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingGroupAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingItemAdapter;
 import com.github.tvbox.osc.ui.dialog.AllChannelsRightDialog;
-import com.github.tvbox.osc.ui.dialog.CastListDialog;
 import com.github.tvbox.osc.ui.dialog.LivePasswordDialog;
 import com.github.tvbox.osc.ui.dialog.LiveSettingDialog;
 import com.github.tvbox.osc.ui.dialog.LiveSettingRightDialog;
@@ -70,6 +71,9 @@ import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -139,6 +143,7 @@ public class LiveActivity extends BaseActivity {
     private BasePopupView mSettingRightDialog;
     private BasePopupView mSettingBottomDialog;
     private BasePopupView mAllChannelRightDialog;
+    private boolean noLiveChannelsShown;
 
     @Override
     protected int getLayoutResID() {
@@ -160,6 +165,7 @@ public class LiveActivity extends BaseActivity {
             epgStringAddress = "http://epg.51zmt.top:8000/api/diyp/";
 
         setLoadSir(findViewById(R.id.live_root));
+        initBottomNavigation();
         mVideoView = findViewById(R.id.mVideoView);
 
         tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -190,7 +196,7 @@ public class LiveActivity extends BaseActivity {
         tv_srcinfo.setOnClickListener(view -> playNextSource());
         //投屏/设置
         findViewById(R.id.ic_setting).setOnClickListener(view -> showSettingDialog(false));
-        findViewById(R.id.ic_cast).setOnClickListener(view -> showCastDialog());
+        findViewById(R.id.ic_cast).setVisibility(View.GONE);
 
         initVideoView();
         initChannelGroupView();
@@ -199,6 +205,32 @@ public class LiveActivity extends BaseActivity {
         initSettingItemView();
         initLiveChannelList();
         initLiveSettingGroupList();
+    }
+
+    private void initBottomNavigation() {
+        BottomNavigationView bottomNavigation = findViewById(R.id.bottom_nav);
+        bottomNavigation.setSelectedItemId(R.id.navigation_live);
+        bottomNavigation.setOnItemSelectedListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == R.id.navigation_home || itemId == R.id.navigation_dashboard) {
+                openMainDestination(itemId);
+                return false;
+            }
+            if (itemId == R.id.navigation_subscription) {
+                startActivity(new Intent(this, SubscriptionActivity.class));
+                finish();
+                return false;
+            }
+            return itemId == R.id.navigation_live;
+        });
+    }
+
+    private void openMainDestination(int destination) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra(MainActivity.EXTRA_START_DESTINATION, destination);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 
     //显示底部EPG
@@ -311,6 +343,8 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         mHandler.removeCallbacksAndMessages(null);
+        // 取消本页未完成的网络请求, 避免回调在本 Activity 销毁后才返回导致空指针
+        OkGo.getInstance().cancelTag(this);
         super.onDestroy();
         if (mVideoView != null) {
             mVideoView.release();
@@ -567,10 +601,6 @@ public class LiveActivity extends BaseActivity {
                 showSettingDialog(true);
             }
 
-            @Override
-            public void onCast() {
-                showCastDialog();
-            }
         });
         return playerMenuView;
     }
@@ -774,8 +804,7 @@ public class LiveActivity extends BaseActivity {
     private void initLiveChannelList() {
         List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
         if (list.isEmpty()) {
-            Toast.makeText(App.getInstance(), "频道列表为空", Toast.LENGTH_SHORT).show();
-            finish();
+            showNoLiveChannels();
             return;
         }
 
@@ -795,12 +824,26 @@ public class LiveActivity extends BaseActivity {
             Uri parsedUrl = Uri.parse(url);
             url = new String(Base64.decode(parsedUrl.getQueryParameter("ext"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP), "UTF-8");
         } catch (Throwable th) {
-            Toast.makeText(App.getInstance(), "频道列表为空", Toast.LENGTH_SHORT).show();
-            finish();
+            showNoLiveChannels();
             return;
         }
         showLoading();
-        OkGo.<String>get(url).execute(new AbsCallback<String>() {
+        if (url.startsWith("content://")) {
+            final String localUrl = url;
+            new Thread(() -> {
+                try (InputStream input = getContentResolver().openInputStream(Uri.parse(localUrl));
+                     BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+                    StringBuilder content = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) content.append(line).append('\n');
+                    runOnUiThread(() -> parseProxyLiveContent(content.toString()));
+                } catch (Throwable error) {
+                    runOnUiThread(this::showNoLiveChannels);
+                }
+            }).start();
+            return;
+        }
+        OkGo.<String>get(url).tag(this).execute(new AbsCallback<String>() {
 
             @Override
             public String convertResponse(okhttp3.Response response) throws Throwable {
@@ -809,33 +852,53 @@ public class LiveActivity extends BaseActivity {
 
             @Override
             public void onSuccess(Response<String> response) {
-                JsonArray livesArray;
-                LinkedHashMap<String, LinkedHashMap<String, ArrayList<String>>> linkedHashMap = new LinkedHashMap<>();
-                TxtSubscribe.parse(linkedHashMap, response.body());
-                livesArray = TxtSubscribe.live2JsonArray(linkedHashMap);
+                parseProxyLiveContent(response.body());
+            }
 
-                ApiConfig.get().loadLives(livesArray);
-                List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
-                if (list.isEmpty()) {
-                    Toast.makeText(App.getInstance(), "频道列表为空", Toast.LENGTH_SHORT).show();
-                    finish();
-                    return;
-                }
-                liveChannelGroupList.clear();
-                liveChannelGroupList.addAll(list);
-
-                mHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        LiveActivity.this.showSuccess();
-                        initLiveState();
-                    }
-                });
+            @Override
+            public void onError(Response<String> response) {
+                super.onError(response);
+                showNoLiveChannels();
             }
         });
     }
 
+    private void parseProxyLiveContent(String content) {
+        if (isFinishing() || isDestroyed()) return;
+        LinkedHashMap<String, LinkedHashMap<String, ArrayList<String>>> linkedHashMap = new LinkedHashMap<>();
+        TxtSubscribe.parse(linkedHashMap, content);
+        ApiConfig.get().loadLives(TxtSubscribe.live2JsonArray(linkedHashMap));
+        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
+        if (list.isEmpty()) {
+            showNoLiveChannels();
+            return;
+        }
+        liveChannelGroupList.clear();
+        liveChannelGroupList.addAll(list);
+        showSuccess();
+        initLiveState();
+    }
+
+    private void showNoLiveChannels() {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (noLiveChannelsShown) {
+            return;
+        }
+        noLiveChannelsShown = true;
+        showEmpty();
+        new XPopup.Builder(this)
+                .asConfirm("暂无直播频道", "当前订阅未提供可用直播频道，请切换或导入包含直播内容的订阅。", () -> {
+                    jumpActivity(SubscriptionActivity.class);
+                    finish();
+                })
+                .show();
+    }
+
     private void initLiveState() {
+        // mVideoView 会在 onDestroy 中被释放并置空, 而本方法可能由延迟的网络回调触发
+        if (isFinishing() || isDestroyed() || mVideoView == null) return;
         String lastChannelName = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
 
         int lastChannelGroupIndex = -1;
@@ -1107,15 +1170,6 @@ public class LiveActivity extends BaseActivity {
                 .popupPosition(PopupPosition.Right)
                 .asCustom(new AllChannelsRightDialog(this));
         mAllChannelRightDialog.show();
-    }
-
-    public void showCastDialog() {
-        if (currentLiveChannelItem!=null){
-            new XPopup.Builder(this)
-                    .maxWidth(ConvertUtils.dp2px(360))
-                    .asCustom(new CastListDialog(this,new CastVideo(currentLiveChannelItem.getChannelName(),currentLiveChannelItem.getUrl())))
-                    .show();
-        }
     }
 
     public LivePlayerManager getLivePlayerManager(){

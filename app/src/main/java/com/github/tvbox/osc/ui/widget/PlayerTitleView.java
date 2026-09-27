@@ -18,6 +18,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import com.blankj.utilcode.util.ActivityUtils;
 import com.github.tvbox.osc.ui.activity.LiveActivity;
@@ -97,7 +98,8 @@ public class PlayerTitleView extends FrameLayout implements IControlComponent {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         if (!mIsRegister) {
-            getContext().registerReceiver(mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            // Android 14+ 要求动态注册的接收器显式声明导出性, 否则抛 SecurityException
+            ContextCompat.registerReceiver(getContext(), mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
             mIsRegister = true;
         }
     }

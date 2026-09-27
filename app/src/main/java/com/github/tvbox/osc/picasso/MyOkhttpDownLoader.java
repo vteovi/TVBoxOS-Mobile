@@ -63,7 +63,6 @@ public final class MyOkhttpDownLoader implements Downloader {
     @Override
     public Response load(@NonNull Request request) throws IOException {
         String url = request.url().toString();
-        // url= URLDecoder.decode(url);
         String header = null;
         String cookie = null;
         String ua = null;
@@ -87,24 +86,25 @@ public final class MyOkhttpDownLoader implements Downloader {
                 mRequestBuilder.addHeader(key.toUpperCase(), removeDuplicateSlashes(val));
             }
         }else {
-            // if(!TextUtils.isEmpty(cookie))mRequestBuilder.addHeader("Cookie", cookie);
-            // if(!TextUtils.isEmpty(ua))mRequestBuilder.addHeader("User-Agent", ua);
-            // if(!TextUtils.isEmpty(referer))mRequestBuilder.addHeader("Referer", referer);
             if(!TextUtils.isEmpty(cookie)) {
+                assert cookie != null;
                 mRequestBuilder.addHeader("Cookie", cookie);
             }
             if(!TextUtils.isEmpty(ua)){
+                assert ua != null;
                 mRequestBuilder.addHeader("User-Agent", ua);
             }else {
                 String mobile_UA = "Dalvik/2.1.0 (Linux; U; Android 13; M2102J2SC Build/TKQ1.220829.002)";
                 mRequestBuilder.addHeader("User-Agent", mobile_UA);
             }
             if(!TextUtils.isEmpty(referer)){
+                assert referer != null;
                 mRequestBuilder.addHeader("Referer", referer);
             }
         }
         return client.newCall(mRequestBuilder.build()).execute();
     }
+
     private static String removeDuplicateSlashes(String paramValue) {
         return paramValue.replaceAll("//", "/");
     }

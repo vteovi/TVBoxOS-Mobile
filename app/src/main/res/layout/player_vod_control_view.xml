@@ -4,111 +4,49 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:forceDarkAllowed="false"
     android:id="@+id/rootView"
-    tools:background="@color/gray_darker">
+    tools:background="@color/black">
 
     <LinearLayout
-            android:id="@+id/top_container"
-            android:layout_width="match_parent"
+            android:id="@+id/tv_top_l_container"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:background="@drawable/bg_top_container"
-            android:padding="@dimen/dp_20"
             android:visibility="gone"
-            tools:visibility="visible">
-        <LinearLayout
-                android:id="@+id/tv_top_l_container"
+            tools:visibility="visible"
+            android:layout_marginStart="@dimen/dp_20"
+            android:layout_marginLeft="@dimen/dp_20"
+            android:layout_marginTop="22dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_info_name1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                tools:visibility="visible"
-                android:orientation="vertical">
+                android:maxWidth="200dp"
+                android:ellipsize="marquee"
+                android:singleLine="true"
+                tools:text="http://http://http://http://http://http://http://"
+                android:textColor="@color/white"
+                android:drawablePadding="20dp"
+                android:drawableLeft="@drawable/dkplayer_ic_action_arrow_back"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                 />
 
-                <TextView
-                    android:id="@+id/tv_info_name1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:maxWidth="200dp"
-                    android:ellipsize="marquee"
-                    android:singleLine="true"
-                    tools:text="http://http://http://http://http://http://http://"
-                    android:textColor="@color/white"
-                    android:drawablePadding="20dp"
-                    android:drawableLeft="@drawable/dkplayer_ic_action_arrow_back"
-                    android:marqueeRepeatLimit="marquee_forever"
-                    android:focusable="true"
-                    android:focusableInTouchMode="true"
-                     />
-
-                <TextView
-                    android:id="@+id/tv_videosize"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="left"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:paddingLeft="@dimen/dp_20"
-                    android:tag="vod_video_size"
-                    tools:text="1024 x 768"
-                    android:textColor="@color/white"
-                     />
-
-        </LinearLayout>
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"/>
-
-        <LinearLayout
-            android:id="@+id/tv_top_r_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:gravity="end"
-            android:orientation="vertical"
-            tools:visibility="visible">
-
-        <LinearLayout
-                android:id="@+id/container_top_right_device_info"
+            <TextView
+                android:id="@+id/tv_videosize"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:layout_marginTop="6dp"
-                android:visibility="invisible"
-                tools:visibility="visible"
-        >
-            <TextView
-                    android:id="@+id/tv_play_load_net_speed_right_top"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/tv_sys_time"
-                    android:layout_gravity="right"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:paddingRight="10dp"
-                    android:tag="vod_control_pause_time"
-                    android:text="0Kb/s"
-                    android:textColor="@color/white" />
-            <TextView
-                    android:id="@+id/tv_sys_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="right"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:paddingRight="14dp"
-                    android:tag="vod_control_pause_time"
-                    android:text="12:00"
-                    android:textColor="@color/white" />
-
-            <com.github.tvbox.osc.ui.widget.MyBatteryView
-                    android:id="@+id/battery"
-                    android:layout_width="26dp"
-                    android:layout_height="14dp"
-                    android:layout_toEndOf="@+id/tv_sys_time" />
-        </LinearLayout>
-
-    </LinearLayout>
+                android:layout_gravity="left"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingLeft="@dimen/dp_20"
+                android:tag="vod_video_size"
+                tools:text="1024 x 768"
+                android:textColor="@color/white"
+                 />
 
     </LinearLayout>
 
@@ -124,6 +62,98 @@
         android:src="@drawable/ic_unlock"
         android:visibility="invisible"
         tools:visibility="visible"/>
+
+    <LinearLayout
+        android:id="@+id/tv_top_r_container"
+        android:layout_width="wrap_content"
+        android:layout_height="71dp"
+        android:layout_gravity="end"
+        android:layout_marginRight="@dimen/dp_20"
+        android:gravity="end"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:id="@+id/container_top_right_device_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp"
+            android:visibility="invisible"
+            tools:visibility="visible"
+            >
+            <TextView
+                android:id="@+id/tv_play_load_net_speed_right_top"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/tv_sys_time"
+                android:layout_gravity="right"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingRight="10dp"
+                android:tag="vod_control_pause_time"
+                android:text="0Kb/s"
+                android:textColor="@color/white" />
+            <TextView
+                android:id="@+id/tv_sys_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="right"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingRight="14dp"
+                android:tag="vod_control_pause_time"
+                android:text="12:00"
+                android:textColor="@color/white" />
+
+            <com.github.tvbox.osc.ui.widget.MyBatteryView
+                android:id="@+id/battery"
+                android:layout_width="26dp"
+                android:layout_height="14dp"
+                android:layout_toEndOf="@+id/tv_sys_time" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="end">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/pip"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="8dp"
+                android:padding="3dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_pip"
+                app:tint="@color/white" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/cast"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="8dp"
+                android:padding="4dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_cast"
+                android:layout_marginStart="4dp"
+                app:tint="@color/white" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/setting"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:src="@drawable/ic_player_setting"
+                android:tint="@color/white"
+                android:layout_marginStart="4dp"
+                />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
     <com.github.tvbox.osc.subtitle.widget.SimpleSubtitleView
         android:id="@+id/subtitle_view"
@@ -145,203 +175,162 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
+        tools:background="@color/black"
         android:gravity="center_vertical"
-        android:background="@drawable/bg_bottom_container"
         android:orientation="vertical"
         android:paddingTop="@dimen/dp_20"
         android:visibility="gone"
         tools:visibility="visible">
 
         <LinearLayout
-                android:layout_width="match_parent"
+            android:id="@+id/parse_root"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/dp_10"
+            android:layout_marginHorizontal="20dp"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="@dimen/dp_5"
-                android:layout_marginHorizontal="20dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-        >
-
-            <TextView
-                    android:id="@+id/curr_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:paddingEnd="@dimen/dp_10"
-                    android:paddingRight="@dimen/dp_10"
-                    android:text="00:00"
-                    android:textColor="@color/color_FFFFFF"
-                    android:layout_marginLeft="4dp"
-            />
-
-            <SeekBar
-                    android:id="@+id/seekBar"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center"
-                    android:layout_weight="1"
-                    android:background="@null"
-                    android:focusable="false"
-                    android:focusableInTouchMode="false"
-                    android:max="1000"
-                    android:maxHeight="3dp"
-                    android:minHeight="3dp"
-                    android:padding="@dimen/dp_0"
-                    android:paddingStart="@dimen/dp_0"
-                    android:paddingEnd="@dimen/dp_0"
-                    android:progressDrawable="@drawable/shape_player_control_vod_seek"
-                    android:thumb="@drawable/shape_player_control_vod_seek_thumb"
-                    android:thumbOffset="@dimen/dp_0" />
-
-            <TextView
-                    android:id="@+id/total_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:paddingStart="@dimen/dp_10"
-                    android:paddingLeft="@dimen/dp_10"
-                    android:text="00:00"
-                    android:textColor="@color/color_FFFFFF"
-                    android:layout_marginRight="4dp"
-            />
-
-        </LinearLayout>
-
-        <LinearLayout
-                android:id="@+id/parse_root"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="@dimen/dp_5"
-                android:layout_marginHorizontal="20dp"
-                android:orientation="horizontal"
-                android:visibility="gone"
-                tools:visibility="visible">
-
-            <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:layout_marginEnd="@dimen/dp_5"
-                    android:layout_marginRight="@dimen/dp_5"
-                    android:paddingRight="@dimen/dp_10"
-                    android:text="解析"
-                    android:textColor="@color/color_FFFFFF"
-            />
+                android:layout_gravity="center"
+                android:layout_marginEnd="@dimen/dp_5"
+                android:layout_marginRight="@dimen/dp_5"
+                android:paddingRight="@dimen/dp_10"
+                android:text="解析"
+                android:textColor="@color/color_FFFFFF"
+                 />
 
             <com.owen.tvrecyclerview.widget.TvRecyclerView
-                    android:id="@+id/mGridView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    app:tv_horizontalSpacingWithMargins="@dimen/dp_5"
-                    app:tv_selectedItemIsCentered="true"
-                    app:tv_verticalSpacingWithMargins="@dimen/dp_5" />
-        </LinearLayout>
-
-        <LinearLayout
+                android:id="@+id/mGridView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="@dimen/dp_20"
-                android:layout_marginHorizontal="20dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/play_pre"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:padding="4dp"
-                    android:src="@drawable/ic_play_pre"
-                    android:visibility="gone"
-                    tools:visibility="visible"
-            />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/play_status"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:padding="4dp"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:src="@drawable/ic_pause"/>
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/play_next"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:padding="4dp"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:src="@drawable/ic_play_next"
-                    android:visibility="gone"
-                    tools:visibility="visible"/>
-
-            <Space
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-            />
-
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/pip"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:padding="3dp"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/ic_pip"
-                    app:tint="@color/white" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/cast"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:padding="4dp"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/ic_cast"
-                    android:layout_marginStart="4dp"
-                    android:visibility="gone"
-                    app:tint="@color/white" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/setting"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:padding="3dp"
-                    android:src="@drawable/ic_player_setting"
-                    android:tint="@color/white"
-                    android:layout_marginLeft="@dimen/dp_10"
-            />
-
-
-            <TextView
-                    android:id="@+id/choose_series"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:padding="4dp"
-                    android:gravity="center"
-                    android:textColor="@color/white"
-                    android:visibility="gone"
-                    tools:visibility="visible"
-                    android:text="选集"
-                    android:textSize="16sp"
-            />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/iv_fullscreen"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:scaleType="centerCrop"
-                    android:padding="4dp"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:src="@drawable/ic_fullscreen"/>
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                app:tv_horizontalSpacingWithMargins="@dimen/dp_5"
+                app:tv_selectedItemIsCentered="true"
+                app:tv_verticalSpacingWithMargins="@dimen/dp_5" />
         </LinearLayout>
 
-        <HorizontalScrollView
+        <!-- 进度条单独一行, 位于按钮行上方 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:layout_marginHorizontal="20dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/curr_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingEnd="@dimen/dp_10"
+                android:paddingRight="@dimen/dp_10"
+                android:text="00:00"
+                android:textColor="@color/color_FFFFFF"
+                 />
+
+            <SeekBar
+                android:id="@+id/seekBar"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@null"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:max="1000"
+                android:maxHeight="3dp"
+                android:minHeight="3dp"
+                android:padding="@dimen/dp_0"
+                android:paddingStart="@dimen/dp_0"
+                android:paddingEnd="@dimen/dp_0"
+                android:progressDrawable="@drawable/shape_player_control_vod_seek"
+                android:thumb="@drawable/shape_player_control_vod_seek_thumb"
+                android:thumbOffset="@dimen/dp_0" />
+
+            <TextView
+                android:id="@+id/total_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="@dimen/dp_10"
+                android:paddingLeft="@dimen/dp_10"
+                android:text="00:00"
+                android:textColor="@color/color_FFFFFF"
+                 />
+        </LinearLayout>
+
+        <!-- 按钮行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:layout_marginHorizontal="20dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/play_status"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:src="@drawable/ic_pause"/>
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/play_pre"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:src="@drawable/ic_play_pre"
+                android:visibility="gone"
+                tools:visibility="visible"
+                />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/play_next"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:layout_marginLeft="4dp"
+                android:src="@drawable/ic_play_next"
+                android:visibility="gone"
+                tools:visibility="visible"/>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/choose_series"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:visibility="gone"
+                tools:visibility="visible"
+                android:text="选集"
+                android:textSize="16sp"
+                android:layout_marginLeft="4dp"
+                />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/iv_fullscreen"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:scaleType="centerCrop"
+                android:padding="4dp"
+                android:src="@drawable/ic_fullscreen"/>
+        </LinearLayout>
+
+            <HorizontalScrollView
                 android:id="@+id/container_playing_setting"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -519,7 +508,6 @@
                         android:paddingHorizontal="10dp"
                         android:paddingVertical="4dp"
                         android:text="音轨"
-                        android:visibility="gone"
                         />
 
                     <TextView
@@ -554,92 +542,10 @@
         android:gravity="center"
         android:tag="vod_control_slide_info"
         android:textAlignment="gravity"
-        tools:visibility="gone"
+        tools:visibility="visible"
         android:visibility="gone"
         android:textColor="@color/white"
         tools:text="音量+10" />
-    <!--
-
-    <LinearLayout
-            android:id="@+id/play_control"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:orientation="horizontal"
-            android:padding="@dimen/dp_15"
-            tools:visibility="visible"
-            android:visibility="gone">
-
-
-
-        <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/play_pre"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:scaleType="centerCrop"
-                android:padding="4dp"
-                android:src="@drawable/ic_play_pre"
-                android:visibility="gone"
-                tools:visibility="visible"
-        />
-
-        <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/play_status"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:scaleType="centerCrop"
-                android:padding="4dp"
-                android:layout_marginLeft="@dimen/dp_10"
-                android:src="@drawable/ic_pause"/>
-
-        <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/play_next"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:scaleType="centerCrop"
-                android:padding="4dp"
-                android:layout_marginLeft="@dimen/dp_10"
-                android:src="@drawable/ic_play_next"
-                android:visibility="gone"
-                tools:visibility="visible"/>
-
-    </LinearLayout>
-
-    -->
-
-    <LinearLayout
-            android:id="@+id/dialog_tv_slide_progress"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:background="@drawable/shape_progressbar_bg"
-            android:orientation="horizontal"
-            android:tag="dialog_slide_progress"
-            android:padding="@dimen/dp_15"
-            tools:visibility="gone"
-            android:visibility="gone">
-
-        <ImageView
-                android:id="@+id/dialog_tv_slide_progress_img"
-                android:layout_width="@dimen/dp_20"
-                android:layout_height="@dimen/dp_20"
-                android:layout_gravity="center"
-                android:layout_marginRight="@dimen/dp_20"
-                android:layout_marginEnd="@dimen/dp_20"
-                android:alpha="0.9"
-                android:tag="progressbar_slide_progress_img"
-                android:src="@drawable/play_brightness" />
-
-        <ProgressBar
-                android:id="@+id/dialog_tv_slide_progress_txt"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:progressDrawable="@drawable/play_progress_horizontal"
-                android:layout_width="@dimen/dp_120"
-                android:layout_height="@dimen/dp_3"
-                android:layout_gravity="center"
-                android:max="100"
-                android:tag="progressbar_slide_progress" />
-    </LinearLayout>
 
     <com.lihang.ShadowLayout
         android:id="@+id/tv_progress_container"
@@ -650,7 +556,7 @@
         app:hl_layoutBackground="@color/gray_darker_press_alpha"
         app:hl_cornerRadius="25dp"
         android:visibility="gone"
-        tools:visibility="gone">
+        tools:visibility="visible">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -690,9 +596,9 @@
         app:lottie_autoPlay="true"
         android:scaleType="centerCrop"
         app:lottie_fileName="anim_loading.json"
-        app:lottie_speed="1"
+        app:lottie_speed="2"
         app:lottie_loop="true"
-        app:lottie_repeatMode="restart"
+        app:lottie_repeatMode="reverse"
         android:tag="vod_control_loading"
         android:visibility="gone" />
 

@@ -6,16 +6,15 @@
     android:layout_height="wrap_content"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="horizontal"
-                android:background="@drawable/button_red_mask"
     android:padding="10dp">
 
     <CheckBox
-            android:id="@+id/cb"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="false"
-            android:checked="false"
-            android:focusable="false"/>
+        android:id="@+id/cb"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:checked="false"
+        android:focusable="false"/>
 
     <TextView
         android:id="@+id/tv_name"
@@ -27,7 +26,7 @@
         android:ellipsize="end"
         android:marqueeRepeatLimit="marquee_forever"
         tools:text="小账订阅小账订阅小账订阅"
-        android:textColor="@color/text_color"
+        android:textColor="@color/text_foreground"
         android:layout_toRightOf="@+id/cb"
         />
 

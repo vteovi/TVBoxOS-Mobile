@@ -8,15 +8,14 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.ColorUtils;
 import com.github.tvbox.osc.R;
+import com.google.android.material.checkbox.MaterialCheckBox;
 
-import com.github.tvbox.osc.util.LOG;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -84,27 +83,16 @@ public class SelectDialogAdapter<T> extends ListAdapter<T, SelectDialogAdapter.S
     @Override
     public void onBindViewHolder(@NonNull @NotNull SelectDialogAdapter.SelectViewHolder holder, @SuppressLint("RecyclerView") int position) {
         T value = data.get(position);
-        String name = dialogInterface.getDisplay(value);
-        TextView view = holder.itemView.findViewById(R.id.tvName);
-        if (position == select) {
-            // view.setTextColor(Color.WHITE);
-            view.setBackground(view.getContext().getDrawable(R.drawable.button_select_selected));
-        }else {
-            view.setBackground(view.getContext().getDrawable(R.drawable.button_select_normal));
-            // view.setTextColor(ColorUtils.getColor(R.color.colorPrimary));
-        }
-        view.setText(name);
-        holder.itemView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (position == select)
-                    return;
-                notifyItemChanged(select);
-                select = position;
-                notifyItemChanged(select);
-                v.requestFocus();
-                dialogInterface.click(value, position);
-            }
+        MaterialCheckBox view = holder.itemView.findViewById(R.id.tvName);
+        view.setChecked(position == select);
+        view.setText(dialogInterface.getDisplay(value));
+        holder.itemView.setOnClickListener(v -> {
+            if (position == select)
+                return;
+            notifyItemChanged(select);
+            select = position;
+            notifyItemChanged(select);
+            dialogInterface.click(value, position);
         });
     }
 }

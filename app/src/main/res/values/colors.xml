@@ -3,24 +3,23 @@
 
 
     <!--应用的主要色调,actionBar默认使用该颜色,Toolbar导航栏的底色-->
-    <color name="colorPrimary">#B3D81F26</color>
+    <color name="colorPrimary">#567df4</color>
     <!--CheckBox,RadioButton,SwitchCompat等一般控件的选中效果默认采用该颜色-->
-    <color name="colorAccent">#B3CD1C22</color>
+    <color name="colorAccent">#3e4fb1</color>
     <!--    默认window窗口(activity)背景颜色-->
     <color name="windowBackground">#fff</color>
 
-    <color name="bg_gray">#f0f0f0</color>
-    <color name="bg_gray_deep">#e0e0e0</color>
-    <color name="text_color">#181818</color>
-    <color name="gray_darker">#303030</color>
+    <color name="bg_gray">#80FFFFFF</color>
+    <color name="bg_bottom_navigation">#FFFFFFFF</color>
+    <color name="gray_darker">#7f7b79</color>
     <!--    深灰点击透明度-->
     <color name="gray_darker_press_alpha">#3C808080</color>
 
     <!--    通用颜色-->
     <color name="white">#FFFFFF</color>
-    <color name="transparent">#00000000</color>
     <color name="black">#000000</color>
-    <color name="text_gray">#FF302F2D</color>
+    <color name="text_foreground">#050505</color>
+    <color name="text_sub_foreground">#787878</color>
     <color name="light_gray_color">#e6e6e6</color>
     <!--    警示黄色-->
     <color name="warn">#ffcb6b</color>
@@ -29,7 +28,7 @@
     <color name="disable_text">#b3b3b3</color>
 
     <!--    带点透明度(e6 90/100不透明)的pop-->
-    <color name="bg_popup">#f2FFFFFF</color>
+    <color name="bg_popup">#FFFFFF</color>
 
     <!--    制定颜色-->
     <!--    页面背景色,activity.fragment等-->
@@ -43,9 +42,7 @@
     <color name="color_3700B3">#3700B3</color>
     <color name="color_03DAC5">#03DAC5</color>
     <color name="title_fouse_n">#ffce7900</color>
-    <color name="color_CC006ED6">#CC006ED6</color>
     <color name="color_1890FF">#1890FF</color>
-    <color name="color_801890FF">#801890FF</color>
     <color name="color_FFB800">#FF6600</color>
     <color name="color_00FF0A">#00FF0A</color>
     <color name="color_CBF46A">#CBF46A</color>

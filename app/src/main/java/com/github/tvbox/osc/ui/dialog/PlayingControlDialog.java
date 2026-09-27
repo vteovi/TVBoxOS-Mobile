@@ -1,12 +1,10 @@
 package com.github.tvbox.osc.ui.dialog;
 
 import android.content.Context;
-import android.view.View;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
-import androidx.core.content.ContextCompat;
 import com.blankj.utilcode.util.ColorUtils;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.databinding.DialogPlayingControlBinding;
@@ -69,6 +67,32 @@ public class PlayingControlDialog extends BottomPopupView {
         mBinding.scale.setOnClickListener(view -> changeAndUpdateText(mBinding.scale,mController.mPlayerScaleBtn));
         mBinding.playTimeStart.setOnClickListener(view -> changeAndUpdateText(mBinding.playTimeStart,mController.mPlayerTimeStartBtn));
         mBinding.playTimeEnd.setOnClickListener(view -> changeAndUpdateText(mBinding.playTimeEnd,mController.mPlayerTimeSkipBtn));
+        mBinding.playTimeStart.setOnLongClickListener(view -> {
+            mController.mPlayerTimeStartBtn.performLongClick();
+            mBinding.playTimeStart.setText(mController.mPlayerTimeStartBtn.getText());
+            return true;
+        });
+        mBinding.playTimeEnd.setOnLongClickListener(view -> {
+            mController.mPlayerTimeSkipBtn.performLongClick();
+            mBinding.playTimeEnd.setText(mController.mPlayerTimeSkipBtn.getText());
+            return true;
+        });
+        mBinding.increaseStart.setOnClickListener(view -> {
+            mController.increaseTime("st");
+            updateSkipText(true);
+        });
+        mBinding.decreaseStart.setOnClickListener(view -> {
+            mController.decreaseTime("st");
+            updateSkipText(true);
+        });
+        mBinding.increaseEnd.setOnClickListener(view -> {
+            mController.increaseTime("et");
+            updateSkipText(false);
+        });
+        mBinding.decreaseEnd.setOnClickListener(view -> {
+            mController.decreaseTime("et");
+            updateSkipText(false);
+        });
         mBinding.player.setOnClickListener(view -> changeAndUpdateText(mBinding.player,mController.mPlayerBtn));
         mBinding.decode.setOnClickListener(view -> changeAndUpdateText(mBinding.decode,mController.mPlayerIJKBtn));
 
@@ -79,12 +103,15 @@ public class PlayingControlDialog extends BottomPopupView {
         mBinding.subtitle.setOnClickListener(view -> dismissWith(() -> changeAndUpdateText(null,mController.mZimuBtn)));
         mBinding.voice.setOnClickListener(view -> dismissWith(() -> changeAndUpdateText(null,mController.mAudioTrackBtn)));
         mBinding.download.setOnClickListener(view -> dismissWith(mDetailActivity::use1DMDownload));
-        mBinding.subtitle.setOnLongClickListener(view -> {
-            mController.hideSubtitle();
-            return true;
-        });
     }
 
+    private void updateSkipText(boolean start){
+        if (start){
+            mBinding.playTimeStart.setText(mController.mPlayerTimeStartBtn.getText());
+        }else {
+            mBinding.playTimeEnd.setText(mController.mPlayerTimeSkipBtn.getText());
+        }
+    }
     /**
      * 点击直接调用controller里面声明好的点击事件,(不改动原逻辑,隐藏controller里的设置view,全由弹窗设置)
      * @param view 不为空变更配置文字,如更换播放器/缩放, 为空只操作点击之间,不需改变文字,如刷新/重播
@@ -109,9 +136,11 @@ public class PlayingControlDialog extends BottomPopupView {
         for (int i = 0; i <mBinding.containerSpeed.getChildCount(); i++) {
             TextView tv= (TextView) mBinding.containerSpeed.getChildAt(i);
             if (String.valueOf(mPlayer.getSpeed()).equals(tv.getText().toString().replace("x",""))){
-                tv.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.button_select_selected));
+                tv.setBackground(getResources().getDrawable(R.drawable.bg_r_common_solid_primary));
+                tv.setTextColor(ColorUtils.getColor(R.color.white));
             }else {
-                tv.setBackground(getResources().getDrawable(R.drawable.button_select_normal));
+                tv.setBackground(getResources().getDrawable(R.drawable.bg_r_common_stroke_primary));
+                tv.setTextColor(ColorUtils.getColor(R.color.text_foreground));
             }
         }
     }
@@ -121,7 +150,6 @@ public class PlayingControlDialog extends BottomPopupView {
      */
     public void updateAboutIjkVisible(){
         mBinding.decode.setVisibility(mController.mPlayerIJKBtn.getVisibility());
-        mBinding.voice.setVisibility(mController.mAudioTrackBtn.getVisibility());
     }
 
     /**

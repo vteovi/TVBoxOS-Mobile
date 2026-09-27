@@ -16,7 +16,6 @@ public class HawkConfig {
     public static final String HOME_API = "home_api";
     public static final String DEFAULT_PARSE = "parse_default";
     public static final String DEBUG_OPEN = "debug_open";
-    public static final String PARSE_WEBVIEW = "parse_webview"; // true 系统 false xwalk
     public static final String IJK_CODEC = "ijk_codec";
     public static final String PLAY_TYPE = "play_type";//0 系统 1 ijk 2 exo 10 MXPlayer
     public static final String PLAY_RENDER = "play_render"; //0 texture 2
@@ -54,7 +53,17 @@ public class HawkConfig {
      */
     public static final String BACKGROUND_PLAY_TYPE = "background_play_type";
     /**
-     * TMDB请求token
+     * 广告过滤
      */
-    public static final String TOKEN_TMDB = "token_tmdb";
+    public static final String VIDEO_PURIFY = "video_purify";
+    /**
+     * 长按的倍速播放设置
+     */
+    public static final String VIDEO_SPEED = "video_speed";
+    public static final String WALLPAPER_URL = "wallpaper_url";
+    public static final String WALLPAPER_HISTORY = "wallpaper_history";
+    /**
+     * 搜索记录
+     */
+    public static final String HISTORY_SEARCH = "history_search";
 }

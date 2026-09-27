@@ -37,6 +37,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -143,6 +144,28 @@ public class ApiConfig {
                 th.printStackTrace();
             }
         }
+        if (apiUrl.startsWith("assets://")) {
+            try {
+                parseJson(apiUrl, readAssetConfig(apiUrl.substring("assets://".length())));
+                callback.success();
+            } catch (Throwable th) {
+                th.printStackTrace();
+                callback.error("加载内置配置失败");
+            }
+            return;
+        }
+        if (apiUrl.startsWith("content://")) {
+            try {
+                String json = readContentConfig(Uri.parse(apiUrl));
+                parseJson(apiUrl, json);
+                writeConfigCache(cache, json);
+                callback.success();
+            } catch (Throwable th) {
+                th.printStackTrace();
+                callback.error("无法读取本地配置文件");
+            }
+            return;
+        }
         String TempKey = null, configUrl = "", pk = ";pk;";
         if (apiUrl.contains(pk)) {
             String[] a = apiUrl.split(pk);
@@ -172,15 +195,7 @@ public class ApiConfig {
                             String json = response.body();
                             parseJson(apiUrl, json);
                             try {
-                                File cacheDir = cache.getParentFile();
-                                if (!cacheDir.exists())
-                                    cacheDir.mkdirs();
-                                if (cache.exists())
-                                    cache.delete();
-                                FileOutputStream fos = new FileOutputStream(cache);
-                                fos.write(json.getBytes("UTF-8"));
-                                fos.flush();
-                                fos.close();
+                                writeConfigCache(cache, json);
                             } catch (Throwable th) {
                                 th.printStackTrace();
                             }
@@ -235,15 +250,18 @@ public class ApiConfig {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
                 if (jarLoader.load(cache.getAbsolutePath())) {
                     callback.success();
-                } else {
-                    callback.error("");
+                    return;
                 }
-                return;
+                // 缓存里的 csp.jar 已损坏(下载不全, 或拿到的是错误页而非真正的 jar),
+                // 删掉后走下面的下载流程重新拉一次。
+                // 否则会被坏缓存一直卡住, 每次启动都提示"更新订阅失败"且首页没有分类。
+                cache.delete();
             }
         }
 
         boolean isJarInImg = jarUrl.startsWith("img+");
         jarUrl = jarUrl.replace("img+", "");
+        final String jarUrlLog = jarUrl;
         OkGo.<File>get(jarUrl)
                 .headers("User-Agent", userAgent)
                 .headers("Accept", requestAccept)
@@ -275,6 +293,9 @@ public class ApiConfig {
                     if (jarLoader.load(response.body().getAbsolutePath())) {
                         callback.success();
                     } else {
+                        // 便于定位: 若是错误页而非 jar, 这里的大小/文件头会很明显
+                        System.out.println("csp.jar 加载失败: " + response.body().getAbsolutePath()
+                                + " 大小=" + response.body().length() + " 来源=" + jarUrlLog);
                         callback.error("");
                     }
                 } else {
@@ -285,6 +306,8 @@ public class ApiConfig {
             @Override
             public void onError(Response<File> response) {
                 super.onError(response);
+                System.out.println("csp.jar 下载失败: " + jarUrlLog + " -> "
+                        + (response.getException() != null ? response.getException().getMessage() : ""));
                 callback.error("");
             }
         });
@@ -300,6 +323,44 @@ public class ApiConfig {
         }
         bReader.close();
         parseJson(apiUrl, sb.toString());
+    }
+
+    private String readAssetConfig(String assetPath) throws Throwable {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(
+                App.getInstance().getAssets().open(assetPath), "UTF-8"));
+        StringBuilder content = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            content.append(line).append('\n');
+        }
+        reader.close();
+        return content.toString();
+    }
+
+    private String readContentConfig(Uri uri) throws Throwable {
+        try (InputStream input = App.getInstance().getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                throw new IllegalStateException("Unable to open local config");
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+                StringBuilder content = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append('\n');
+                }
+                return content.toString();
+            }
+        }
+    }
+
+    private void writeConfigCache(File cache, String json) throws Throwable {
+        File cacheDir = cache.getParentFile();
+        if (!cacheDir.exists())
+            cacheDir.mkdirs();
+        try (FileOutputStream output = new FileOutputStream(cache)) {
+            output.write(json.getBytes("UTF-8"));
+            output.flush();
+        }
     }
 
     private void parseJson(String apiUrl, String jsonStr) {
@@ -442,9 +503,23 @@ public class ApiConfig {
                     if (!lives.contains("type")) {
                         loadLives(infoJson.get("lives").getAsJsonArray());
                     } else {
-                        JsonObject fengMiLives = infoJson.get("lives").getAsJsonArray().get(0).getAsJsonObject();
-                        String type = fengMiLives.get("type").getAsString();
-                        if (type.equals("0")) {
+                        JsonObject fengMiLives = null;
+                        for (JsonElement liveElement : infoJson.get("lives").getAsJsonArray()) {
+                            if (!liveElement.isJsonObject()) {
+                                continue;
+                            }
+                            JsonObject candidate = liveElement.getAsJsonObject();
+                            if (!candidate.has("type") || !"0".equals(candidate.get("type").getAsString())
+                                    || !candidate.has("url")) {
+                                continue;
+                            }
+                            String candidateUrl = candidate.get("url").getAsString();
+                            if (!isUnsupportedLocalLiveProxy(candidateUrl)) {
+                                fengMiLives = candidate;
+                                break;
+                            }
+                        }
+                        if (fengMiLives != null) {
                             String url = fengMiLives.get("url").getAsString();
 
                             // takagen99 : Getting EPG URL from File Config & put into Settings
@@ -482,11 +557,13 @@ public class ApiConfig {
                 if (StringUtils.isBlank(liveURL_final)) {
                     liveURL_final = liveURL;
                 }
-                liveURL_final = Base64.encodeToString(liveURL_final.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
-                liveURL_final = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL_final;
-                LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
-                liveChannelGroup.setGroupName(liveURL_final);
-                liveChannelGroupList.add(liveChannelGroup);
+                if (!StringUtils.isBlank(liveURL_final)) {
+                    liveURL_final = Base64.encodeToString(liveURL_final.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+                    liveURL_final = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL_final;
+                    LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
+                    liveChannelGroup.setGroupName(liveURL_final);
+                    liveChannelGroupList.add(liveChannelGroup);
+                }
             }
 
 
@@ -589,6 +666,20 @@ public class ApiConfig {
             if (!foundOldSelect && ijkCodes.size() > 0) {
                 ijkCodes.get(0).selected(true);
             }
+        }
+    }
+
+    private boolean isUnsupportedLocalLiveProxy(String url) {
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (!"127.0.0.1".equals(host) && !"localhost".equals(host)) {
+                return false;
+            }
+            String action = uri.getQueryParameter("do");
+            return "/proxy".equals(uri.getPath()) && !TextUtils.isEmpty(action) && !"live".equals(action);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

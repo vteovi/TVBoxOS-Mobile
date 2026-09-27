@@ -1,11 +1,6 @@
 package com.github.tvbox.osc.bean;
 
-/**
- * @Author : Liu XiaoRan
- * @Email : 592923276@qq.com
- * @Date : on 2023/8/16 17:15.
- * @Description :
- */
+
 public class Subscription {
     public Subscription() {
     }
@@ -21,6 +16,8 @@ public class Subscription {
     boolean isChecked;
     //置顶
     private boolean top;
+    // 随应用预置的订阅，必须始终保留。
+    private boolean builtIn;
 
     public boolean isTop() {
         return top;
@@ -30,12 +27,22 @@ public class Subscription {
         this.top = top;
     }
 
+    public boolean isBuiltIn() {
+        return builtIn;
+    }
+
+    public Subscription setBuiltIn(boolean builtIn) {
+        this.builtIn = builtIn;
+        return this;
+    }
+
     public boolean isChecked() {
         return isChecked;
     }
 
-    public void setChecked(boolean checked) {
+    public Subscription setChecked(boolean checked) {
         isChecked = checked;
+        return this;
     }
 
     public String getName() {

@@ -20,9 +20,9 @@
         app:lottie_autoPlay="true"
         android:scaleType="centerCrop"
         app:lottie_fileName="anim_loading.json"
-        app:lottie_speed="1"
+        app:lottie_speed="2"
         app:lottie_loop="true"
-        app:lottie_repeatMode="restart"/>
+        app:lottie_repeatMode="reverse"/>
 
     <ImageView
         android:id="@+id/play_load_error"

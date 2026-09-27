@@ -13,7 +13,8 @@
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/mGroupGridView"
-        android:layout_width="@dimen/dp_150"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:fadeScrollbars="false"
         android:listSelector="@drawable/item_bg_selector_left"
@@ -25,7 +26,8 @@
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/mChannelGridView"
-        android:layout_width="@dimen/dp_200"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="match_parent"
         android:fadeScrollbars="false"
         android:focusable="true"

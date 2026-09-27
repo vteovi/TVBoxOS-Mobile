@@ -15,6 +15,8 @@
             android:id="@+id/previewPlayerPlace"
             android:layout_width="match_parent"
             android:layout_height="250dp"
+            android:layout_gravity="center_horizontal"
+            android:maxWidth="960dp"
             android:orientation="horizontal"
             android:paddingLeft="@dimen/dp_40"
             android:paddingRight="@dimen/dp_50"
@@ -22,9 +24,11 @@
 
         </LinearLayout>
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:maxWidth="960dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -53,11 +57,10 @@
                             android:maxLines="2"
                             android:ellipsize="end"
                             android:text="鬼灭之刃鬼灭之刃鬼灭之刃鬼灭之刃鬼灭之刃鬼灭之刃"
-                            android:textSize="18sp"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:textColor="@color/text_color"
+                            android:textColor="@color/text_foreground"
                             />
-
 
                         <Space
                             android:layout_width="0dp"
@@ -88,7 +91,7 @@
                                 android:maxLines="1"
                                 android:singleLine="true"
                                 tools:text="非凡影视"
-                                android:textColor="@color/text_color"
+                                android:textColor="@color/text_foreground"
                                 android:drawableRight="@drawable/ic_change_20"
                                 android:drawablePadding="4dp"
                                 android:paddingHorizontal="12dp"
@@ -126,7 +129,7 @@
                             android:gravity="center"
                             android:paddingHorizontal="10dp"
                             android:text="投屏"
-                            android:textColor="@color/text_color" />
+                            android:textColor="@color/text_foreground" />
 
                         <View
                             android:layout_width="1dp"
@@ -143,7 +146,7 @@
                             android:gravity="center"
                             android:paddingHorizontal="10dp"
                             android:text="收藏"
-                            android:textColor="@color/text_color" />
+                            android:textColor="@color/text_foreground" />
 
                         <View
                             android:layout_width="1dp"
@@ -160,14 +163,14 @@
                             android:gravity="center"
                             android:paddingHorizontal="10dp"
                             android:text="下载"
-                            android:textColor="@color/text_color" />
+                            android:textColor="@color/text_foreground" />
                     </LinearLayout>
 
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:background="@color/bg_gray"
-                        android:layout_marginVertical="10dp"/>
+                        android:layout_marginVertical="4dp"/>
                 </LinearLayout>
 
 
@@ -198,40 +201,84 @@
                         />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:id="@+id/parse_root"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="线路"
-                    android:textColor="@color/text_color"
-                    android:layout_marginLeft="14dp"
-                    android:layout_marginTop="14dp"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    />
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="解析"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:layout_marginLeft="14dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_centerVertical="true"
+                        />
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rv_parse"
+                        android:layout_marginHorizontal="10dp"
+                        android:layout_marginVertical="4dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        android:orientation="horizontal"
+                        tools:listitem="@layout/item_select_flag" />
+                </LinearLayout>
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="14dp"
+                    android:layout_marginTop="14dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="线路"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:layout_centerVertical="true"
+                        />
+                    <TextView
+                        android:id="@+id/tvChangeLine"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="快捷换线"
+                        android:drawableRight="@drawable/ic_change_20"
+                        android:textColor="@color/text_foreground"
+                        android:drawablePadding="4dp"
+                        android:paddingVertical="6dp"
+                        android:paddingLeft="20dp"
+                        android:layout_alignParentRight="true"
+                        />
+                </RelativeLayout>
                 <!--        线路列表-->
-                <com.owen.tvrecyclerview.widget.TvRecyclerView
+                <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/mGridViewFlag"
                     android:layout_width="match_parent"
-                    android:layout_height="30dp"
-                    android:layout_margin="10dp"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
-                    app:tv_selectedItemIsCentered="true"
-                    tools:listitem="@layout/item_series_flag" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="10dp"
+                    android:layout_marginVertical="4dp"
+                    tools:listitem="@layout/item_select_flag"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    android:orientation="horizontal"/>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginHorizontal="14dp"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:gravity="center_vertical"
                     >
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="选集"
-                        android:textColor="@color/text_color"
+                        android:textColor="@color/text_foreground"
                         android:textSize="16sp"
                         android:layout_centerVertical="true"
                         android:textStyle="bold"
@@ -247,7 +294,7 @@
                         android:layout_height="wrap_content"
                         android:text="倒序"
                         android:drawableRight="@drawable/ic_sort_18"
-                        android:textColor="@color/text_color"
+                        android:textColor="@color/text_foreground"
                         android:drawablePadding="4dp"
                         android:paddingVertical="6dp"
                         />
@@ -264,29 +311,28 @@
                         android:layout_height="wrap_content"
                         android:text="全部"
                         android:drawableRight="@drawable/ic_expand_all_18"
-                        android:textColor="@color/text_color"
+                        android:textColor="@color/text_foreground"
                         android:drawablePadding="4dp"
                         android:paddingVertical="6dp"
                         />
                 </LinearLayout>
                 <!--        集数列表-->
                 <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/mGridView"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="10dp"
-                        android:layout_marginTop="16dp"
-                        android:layout_marginBottom="16dp"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
-                        app:tv_selectedItemIsCentered="true"
-                        app:tv_verticalSpacingWithMargins="@dimen/dp_10"
-                        tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-                        tools:orientation="vertical"
-                        tools:listitem="@layout/item_series"/>
+                    android:id="@+id/mGridView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="10dp"
+                    android:layout_marginVertical="16dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
+                    app:tv_selectedItemIsCentered="true"
+                    app:tv_verticalSpacingWithMargins="@dimen/dp_10"
+                    tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    tools:orientation="horizontal"
+                    tools:listitem="@layout/item_series"/>
             </LinearLayout>
-        </LinearLayout>
+        </ScrollView>
 
     </LinearLayout>
 

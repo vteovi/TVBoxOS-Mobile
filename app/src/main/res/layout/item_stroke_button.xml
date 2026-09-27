@@ -7,7 +7,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="horizontal"
     android:paddingHorizontal="10dp"
-    android:background="@drawable/button_red_mask">
+    android:background="@drawable/bg_r_25_stroke_primary">
 
     <TextView
         android:id="@+id/tvName"
@@ -21,7 +21,7 @@
         android:singleLine="true"
         android:text="@{name}"
         tools:text="11111111111111"
-        android:textColor="@color/text_color"/>
+        android:textColor="@color/text_foreground"/>
 
     <ImageView
         android:id="@+id/tvDel"
