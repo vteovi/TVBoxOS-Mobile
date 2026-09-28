@@ -6,7 +6,10 @@
 - 构建：`cd /d/GitHub/TVBoxOS-Mobile && export JAVA_HOME="C:\\Java\\jdk-17" && export ANDROID_HOME="C:\\Android\\Sdk" && ./gradlew assembleDebug --console=plain > build_out.log 2>&1`
   - 用 `--console=plain` 并把输出重定向到文件，否则失败时真正的错误会被截断。首次（含 NDK）构建约 25 分钟，之后增量约 1–3 分钟。
   - **必须在沙箱外执行**（Bash 工具 `dangerouslyDisableSandbox: true`）：Gradle 缓存 `C:\Users\VTE\.gradle\...` 在工作区之外，沙箱会拦截读取，报 `AAPT: error: failed to open file` / `processDebugResources` 失败，看着像代码错误其实是权限拦截。
-- 产物路径（两个 variant 同名，注意目录）：`app/build/outputs/apk/{debug,release}/TVBox-Mobile-v<versionName>.apk`
+- 产物路径（两个 variant **同名**，靠目录区分）：`app/build/outputs/apk/{debug,release}/TVBox-Mobile-v<versionName>.apk`（release **41MB** / debug **44MB**）。
+- **release 构建**：`./gradlew assembleRelease`。`minifyEnabled false` → 代码逻辑与 debug 完全一致（仅非 debuggable），`System.out` 诊断日志照样能在 logcat 看到。
+  - ⏱️ **切 build type 要付一次全量代价**：`assembleRelease` 实测 **20m56s**（debug 增量才 1–3 分钟）。因为 `player`/`TabLayout`/`ViewPager1Delegate` 三个子模块要重建 release AAR，且 CMake native 输出在 `build/intermediates/cmake/release/`，与 debug 目录不共享。
+  - 读 APK 元信息：`"C:/Android/Sdk/build-tools/35.0.0/aapt2.exe" dump badging <apk> | grep -E "^package|native-code"`。
 - **签名**：`app/build.gradle` 期望根目录 `TVBoxOSC.jks`（alias/key/store 口令默认均为 `TVBoxOSC`）；文件缺失时会回退到 Android 调试证书（`CN=Android Debug`），导致与官方 release 包签名不一致、无法覆盖安装。本仓库已生成 `TVBoxOSC.jks`（PKCS12，SHA-256 `4a568ad4...`），debug/release 共用一个身份。
   - 注意：`.gitignore` 含 `*.jks`，该密钥不会入库（本地文件，不要提交）。
 - 安装：`adb install -r <apk>`；签名不一致时先 `adb uninstall com.github.tvbox.osc`（会清数据）。Git Bash 下 adb 路径含 `$`/反斜杠需注意，截图拉取要 `export MSYS_NO_PATHCONV=1`。

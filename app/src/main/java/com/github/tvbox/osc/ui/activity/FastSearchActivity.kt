@@ -87,6 +87,13 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         initHistorySearch()
         // 热门搜索
         hotWords
+        // 从首页搜索框进入(无 title)时, 自动聚焦输入框并弹出键盘, 直接进入输入态, 无需再点一次
+        if (intent == null || !intent.hasExtra("title")) {
+            mBinding.etSearch.post {
+                mBinding.etSearch.requestFocus()
+                KeyboardUtils.showSoftInput(mBinding.etSearch)
+            }
+        }
     }
 
     override fun onResume() {
