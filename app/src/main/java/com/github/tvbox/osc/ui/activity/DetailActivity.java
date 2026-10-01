@@ -869,35 +869,15 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     }
 
     /**
-     * 弹出已安装的第三方播放器列表, 选定后把当前集数交给外部播放器播放
+     * 用系统播放器打开当前集数: 直接通过 ACTION_VIEW 拉起系统"用以下应用打开"面板,
+     * 面板内已包含系统播放器 / MX 播放器 / VLC 等, 由用户自行选择, 无需再单独列出各播放器
      */
     private void showExternalPlayerChooser() {
         if (playFragment == null) {
             ToastUtils.showShort("请开启预览后再用外部播放器");
             return;
         }
-        ArrayList<Integer> exist = PlayerHelper.getExistPlayerTypes();
-        ArrayList<Integer> external = new ArrayList<>();
-        for (Integer t : exist) {
-            // 10 及以上为第三方播放器; 0 为系统播放器(ACTION_VIEW 调起系统选择器)
-            if (t >= 10 || t == 0) external.add(t);
-        }
-        if (external.isEmpty()) {
-            ToastUtils.showShort("未检测到可用的播放器");
-            return;
-        }
-        if (external.size() == 1) {
-            playFragment.playExternal(external.get(0));
-            return;
-        }
-        String[] names = new String[external.size()];
-        for (int i = 0; i < external.size(); i++) {
-            names[i] = PlayerHelper.getPlayerName(external.get(i));
-        }
-        new XPopup.Builder(this)
-                .isDarkTheme(Utils.isDarkTheme())
-                .asCenterList("选择外部播放器", names, null, (position, text) -> playFragment.playExternal(external.get(position)))
-                .show();
+        playFragment.playExternal(0);
     }
 
     /**
