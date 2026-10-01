@@ -2,6 +2,9 @@ package com.github.tvbox.osc.util;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.bean.IJKCode;
@@ -192,7 +195,17 @@ public class PlayerHelper {
     public static HashMap<Integer, Boolean> getPlayersExistInfo() {
         if (mPlayersExistInfo == null) {
             HashMap<Integer, Boolean> playersExist = new HashMap<>();
-            playersExist.put(0, false);
+            // 系统播放器: 只要系统里存在能处理 video/* 的任意应用(系统播放器/MX/VLC 等), 即可通过 ACTION_VIEW 调起
+            boolean systemPlayerExist = true;
+            try {
+                PackageManager pm = App.getInstance().getPackageManager();
+                Intent test = new Intent(Intent.ACTION_VIEW);
+                test.setType("video/*");
+                systemPlayerExist = !pm.queryIntentActivities(test, 0).isEmpty();
+            } catch (Throwable th) {
+                systemPlayerExist = true;
+            }
+            playersExist.put(0, systemPlayerExist);
             playersExist.put(1, true);
             playersExist.put(2, true);
             playersExist.put(10, MXPlayer.getPackageInfo() != null);
@@ -232,6 +245,11 @@ public class PlayerHelper {
     public static Boolean runExternalPlayer(int playerType, Activity activity, String url, String title, String subtitle, HashMap<String, String> headers, long progress) {
         boolean callResult = false;
         switch (playerType) {
+            case 0: {
+                // 系统播放器: 用 ACTION_VIEW 拉起系统"用以下应用打开"面板, 由用户选择系统播放器/MX/VLC 等
+                callResult = runSystemPlayer(activity, url, title, subtitle);
+                break;
+            }
             case 10: {
                 callResult = MXPlayer.run(activity, url, title, subtitle, headers);
                 break;
@@ -254,6 +272,26 @@ public class PlayerHelper {
             }
         }
         return callResult;
+    }
+
+    /**
+     * 通用系统播放器: 通过 ACTION_VIEW 调起系统选择器, 列出所有能播放该视频的已装应用
+     * (系统播放器 / MX Player / VLC 等), 由用户自行选择, 行为与"打开一个视频文件"一致。
+     * 注意: ACTION_VIEW 无法携带自定义 HTTP 头, 需要 Referer/UA 等鉴权的直链可能播放失败。
+     */
+    public static Boolean runSystemPlayer(Activity activity, String url, String title, String subtitle) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(Uri.parse(url), "video/*");
+            intent.putExtra("title", title);
+            intent.putExtra("android.intent.extra.TITLE", title);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            activity.startActivity(Intent.createChooser(intent, "选择播放器"));
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public static String getRenderName(int renderType) {

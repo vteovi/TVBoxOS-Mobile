@@ -879,10 +879,11 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         ArrayList<Integer> exist = PlayerHelper.getExistPlayerTypes();
         ArrayList<Integer> external = new ArrayList<>();
         for (Integer t : exist) {
-            if (t >= 10) external.add(t);
+            // 10 及以上为第三方播放器; 0 为系统播放器(ACTION_VIEW 调起系统选择器)
+            if (t >= 10 || t == 0) external.add(t);
         }
         if (external.isEmpty()) {
-            ToastUtils.showShort("未检测到可用的第三方播放器(MX/Reex/Kodi/VLC)");
+            ToastUtils.showShort("未检测到可用的播放器");
             return;
         }
         if (external.size() == 1) {

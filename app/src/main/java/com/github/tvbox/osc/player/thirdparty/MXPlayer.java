@@ -19,6 +19,7 @@ public class MXPlayer {
 
     private static final String PACKAGE_NAME_PRO = "com.mxtech.videoplayer.pro";
     private static final String PACKAGE_NAME_AD = "com.mxtech.videoplayer.ad";
+    private static final String PACKAGE_NAME_BETA = "com.mxtech.videoplayer.beta";
     private static final String PLAYBACK_ACTIVITY_PRO = "com.mxtech.videoplayer.ActivityScreen";
     private static final String PLAYBACK_ACTIVITY_AD = "com.mxtech.videoplayer.ad.ActivityScreen";
 
@@ -35,6 +36,7 @@ public class MXPlayer {
     private static final MXPackageInfo[] PACKAGES = {
             new MXPackageInfo(PACKAGE_NAME_PRO, PLAYBACK_ACTIVITY_PRO),
             new MXPackageInfo(PACKAGE_NAME_AD, PLAYBACK_ACTIVITY_AD),
+            new MXPackageInfo(PACKAGE_NAME_BETA, PLAYBACK_ACTIVITY_PRO),
     };
 
     /**
