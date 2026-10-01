@@ -136,6 +136,24 @@
                             android:layout_height="14dp"
                             android:background="@color/gray_darker"
                             android:layout_marginHorizontal="6dp"/>
+
+                        <TextView
+                            android:id="@+id/tvExternalPlay"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/dp_40"
+                            android:drawableRight="@drawable/ic_external_play_18"
+                            android:drawablePadding="6dp"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:paddingHorizontal="10dp"
+                            android:text="外部播放"
+                            android:textColor="@color/text_foreground" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="14dp"
+                            android:background="@color/gray_darker"
+                            android:layout_marginHorizontal="6dp"/>
                         <TextView
                             android:id="@+id/tvCollect"
                             android:layout_width="wrap_content"

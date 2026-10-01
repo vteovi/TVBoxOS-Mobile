@@ -1640,6 +1640,35 @@ public class PlayFragment extends BaseLazyFragment {
         return TextUtils.isEmpty(mCurrentUrl) || !RegexUtils.isURL(mCurrentUrl) ?"":mCurrentUrl;
     }
 
+    /**
+     * 用第三方播放器播放当前集数(详情页"外部播放"按钮调用)
+     * @param playerType 第三方播放器类型(10=MX 11=Reex 12=Kodi 13=附近TVBox 14=VLC)
+     */
+    public void playExternal(int playerType) {
+        if (mVodInfo == null || mVodInfo.seriesMap.get(mVodInfo.playFlag) == null
+                || mVodInfo.seriesMap.get(mVodInfo.playFlag).size() <= mVodInfo.playIndex) {
+            ToastUtils.showShort("暂无可播放的集数");
+            return;
+        }
+        // 优先使用已解析好的最终地址(预览正在播放时即为当前集的可播放地址)
+        String url = getFinalUrl();
+        if (TextUtils.isEmpty(url)) {
+            // 预览未加载时, 退而使用当前集原始地址(直链源可直接播, 解析源需先播放预览)
+            try {
+                url = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex).url;
+            } catch (Throwable th) { }
+        }
+        if (TextUtils.isEmpty(url)) {
+            ToastUtils.showShort("请先播放预览后再用外部播放器");
+            return;
+        }
+        VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
+        String playTitle = mVodInfo.name + " " + vs.name;
+        long progress = getSavedProgress(progressKey);
+        boolean ok = PlayerHelper.runExternalPlayer(playerType, requireActivity(), url, playTitle, playSubtitle, webHeaderMap, progress);
+        ToastUtils.showShort(ok ? "已调用 " + PlayerHelper.getPlayerName(playerType) : "调用失败, 请确认已安装 " + PlayerHelper.getPlayerName(playerType));
+    }
+
     boolean checkVideoFormat(String url) {
         try {
             if (url.contains("url=http") || url.contains(".html")) {

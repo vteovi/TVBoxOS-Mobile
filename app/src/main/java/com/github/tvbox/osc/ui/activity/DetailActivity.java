@@ -63,6 +63,7 @@ import com.github.tvbox.osc.ui.fragment.PlayFragment;
 import com.github.tvbox.osc.ui.widget.LinearSpacingItemDecoration;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.PlayerHelper;
 import com.github.tvbox.osc.util.ScreenShotListenManager;
 import com.github.tvbox.osc.util.SearchHelper;
 import com.github.tvbox.osc.util.SubtitleHelper;
@@ -204,6 +205,13 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             }
         });
         mBinding.tvCast.setVisibility(View.GONE);
+        mBinding.tvExternalPlay.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FastClickCheckUtil.check(v);
+                showExternalPlayerChooser();
+            }
+        });
         mBinding.tvCollect.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -808,6 +816,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         //全屏下禁用详情页几个按键的焦点 防止上键跑过来
         mBinding.tvSort.setFocusable(!fullWindows);
         mBinding.tvCollect.setFocusable(!fullWindows);
+        mBinding.tvExternalPlay.setFocusable(!fullWindows);
         toggleSubtitleTextSize();
     }
 
@@ -857,6 +866,37 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         } else {
             ToastUtils.showShort("资源异常,请稍后重试");
         }
+    }
+
+    /**
+     * 弹出已安装的第三方播放器列表, 选定后把当前集数交给外部播放器播放
+     */
+    private void showExternalPlayerChooser() {
+        if (playFragment == null) {
+            ToastUtils.showShort("请开启预览后再用外部播放器");
+            return;
+        }
+        ArrayList<Integer> exist = PlayerHelper.getExistPlayerTypes();
+        ArrayList<Integer> external = new ArrayList<>();
+        for (Integer t : exist) {
+            if (t >= 10) external.add(t);
+        }
+        if (external.isEmpty()) {
+            ToastUtils.showShort("未检测到可用的第三方播放器(MX/Reex/Kodi/VLC)");
+            return;
+        }
+        if (external.size() == 1) {
+            playFragment.playExternal(external.get(0));
+            return;
+        }
+        String[] names = new String[external.size()];
+        for (int i = 0; i < external.size(); i++) {
+            names[i] = PlayerHelper.getPlayerName(external.get(i));
+        }
+        new XPopup.Builder(this)
+                .isDarkTheme(Utils.isDarkTheme())
+                .asCenterList("选择外部播放器", names, null, (position, text) -> playFragment.playExternal(external.get(position)))
+                .show();
     }
 
     /**
