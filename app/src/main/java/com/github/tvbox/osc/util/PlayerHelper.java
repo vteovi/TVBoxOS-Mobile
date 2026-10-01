@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 
 import com.github.tvbox.osc.api.ApiConfig;
+import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.IJKCode;
 import com.github.tvbox.osc.player.EXOmPlayer;
 import com.github.tvbox.osc.player.IjkMediaPlayer;
