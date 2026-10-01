@@ -146,10 +146,10 @@ body {
 }
 @media (prefers-color-scheme: dark) {
   body:not([data-weui-theme="light"]) {
-    --weui-BG-0: #111;
-    --weui-BG-1: #1e1e1e;
-    --weui-BG-2: #191919;
-    --weui-BG-3: #202020;
+    --weui-BG-0: #000000;
+    --weui-BG-1: #000000;
+    --weui-BG-2: #000000;
+    --weui-BG-3: #000000;
     --weui-BG-4: #404040;
     --weui-BG-5: #2c2c2c;
     --weui-FG-0: hsla(0, 0%, 100%, 0.8);
@@ -183,10 +183,10 @@ body {
   }
 }
 body[data-weui-theme="dark"] {
-  --weui-BG-0: #111;
-  --weui-BG-1: #1e1e1e;
-  --weui-BG-2: #191919;
-  --weui-BG-3: #202020;
+  --weui-BG-0: #000000;
+  --weui-BG-1: #000000;
+  --weui-BG-2: #000000;
+  --weui-BG-3: #000000;
   --weui-BG-4: #404040;
   --weui-BG-5: #2c2c2c;
   --weui-FG-0: hsla(0, 0%, 100%, 0.8);
@@ -256,10 +256,10 @@ body[data-weui-mode="care"] {
 }
 @media (prefers-color-scheme: dark) {
   body[data-weui-mode="care"]:not([data-weui-theme="light"]) {
-    --weui-BG-0: #111;
-    --weui-BG-1: #1e1e1e;
-    --weui-BG-2: #191919;
-    --weui-BG-3: #202020;
+    --weui-BG-0: #000000;
+    --weui-BG-1: #000000;
+    --weui-BG-2: #000000;
+    --weui-BG-3: #000000;
     --weui-BG-4: #404040;
     --weui-BG-5: #2c2c2c;
     --weui-FG-0: hsla(0, 0%, 100%, 0.85);
@@ -293,10 +293,10 @@ body[data-weui-mode="care"] {
   }
 }
 body[data-weui-mode="care"][data-weui-theme="dark"] {
-  --weui-BG-0: #111;
-  --weui-BG-1: #1e1e1e;
-  --weui-BG-2: #191919;
-  --weui-BG-3: #202020;
+  --weui-BG-0: #000000;
+  --weui-BG-1: #000000;
+  --weui-BG-2: #000000;
+  --weui-BG-3: #000000;
   --weui-BG-4: #404040;
   --weui-BG-5: #2c2c2c;
   --weui-FG-0: hsla(0, 0%, 100%, 0.85);

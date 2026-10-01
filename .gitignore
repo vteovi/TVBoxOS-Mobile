@@ -98,3 +98,6 @@ lint/tmp/
 /app/release/
 /.idea/
 *.jks
+
+# 构建/发布产物压缩包，不入库
+/*.zip

@@ -79,6 +79,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     private var resultVods = HashMap<String, MutableList<Movie.Video>>()
     private var pauseRunnable: MutableList<Runnable>? = null
     private var mSearchSuggestionsDialog: SearchSuggestionsDialog? = null
+    private var entryKeyboardShown = false
     override fun init() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         initView()
@@ -87,11 +88,10 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         initHistorySearch()
         // 热门搜索
         hotWords
-        // 从首页搜索框进入(无 title)时, 自动聚焦输入框并弹出键盘, 直接进入输入态, 无需再点一次
+        // 从首页搜索框进入(无 title)时, 自动聚焦输入框; 键盘弹出交由 onWindowFocusChanged + windowSoftInputMode=stateVisible 处理
         if (intent == null || !intent.hasExtra("title")) {
             mBinding.etSearch.post {
                 mBinding.etSearch.requestFocus()
-                KeyboardUtils.showSoftInput(mBinding.etSearch)
             }
         }
     }
@@ -106,6 +106,16 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
             }
             pauseRunnable!!.clear()
             pauseRunnable = null
+        }
+    }
+
+    // 窗口真正获得焦点后再弹键盘(此时 InputMethodManager 才会受理 showSoftInput, MIUI 上也可靠);
+    // 仅首次进入无 title 时弹一次, 避免从详情返回时再次强制弹出。
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !entryKeyboardShown && (intent == null || !intent.hasExtra("title"))) {
+            entryKeyboardShown = true
+            KeyboardUtils.showSoftInput(mBinding.etSearch)
         }
     }
 

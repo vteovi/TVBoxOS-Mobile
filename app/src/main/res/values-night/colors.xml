@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <color name="bg_gray">#212121</color>
-    <color name="bg_popup">#2a2d32</color>
+    <!-- 深色模式背景尽量使用纯黑 #000000：OLED 屏幕下像素完全不发光，更省电、更纯粹 -->
+    <color name="bg_gray">#000000</color>
+    <color name="bg_popup">#000000</color>
+    <!-- 窗口/页面底色，浅色下为 #fff，深色下必须覆盖为纯黑，避免跳转/回退时闪白 -->
+    <color name="windowBackground">#000000</color>
 
     <color name="text_foreground">#FFFFFF</color>
     <color name="text_sub_foreground">#AFAFAF</color>

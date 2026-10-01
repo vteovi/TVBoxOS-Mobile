@@ -105,6 +105,14 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
         openDestination(intent.getIntExtra(EXTRA_START_DESTINATION, R.id.navigation_home))
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 小米/红米平板: 播放页留下的竖屏锁定请求会让 MIUI 在横屏下把整个应用切成
+        // "竖屏内容兼容显示"(居中小窗+两侧黑边), 且返回首页后不自动恢复。
+        // 回到首页时复位为系统自适应方向, 兜底清除任何遗留的固定方向请求。
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
     private fun openDestination(destination: Int) {
         when (destination) {
             R.id.navigation_dashboard -> bottomNavigation.selectedItemId = R.id.navigation_dashboard

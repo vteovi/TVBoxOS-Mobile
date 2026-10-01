@@ -10,10 +10,13 @@
 - **release 构建**：`./gradlew assembleRelease`。`minifyEnabled false` → 代码逻辑与 debug 完全一致（仅非 debuggable），`System.out` 诊断日志照样能在 logcat 看到。
   - ⏱️ **切 build type 要付一次全量代价**：`assembleRelease` 实测 **20m56s**（debug 增量才 1–3 分钟）。因为 `player`/`TabLayout`/`ViewPager1Delegate` 三个子模块要重建 release AAR，且 CMake native 输出在 `build/intermediates/cmake/release/`，与 debug 目录不共享。
   - 读 APK 元信息：`"C:/Android/Sdk/build-tools/35.0.0/aapt2.exe" dump badging <apk> | grep -E "^package|native-code"`。
+  - **交付 APK 前必须校验**（尤其 TaskStop 杀过构建之后）：删产物重跑 assembleRelease → 校验 `zipfile.testzip()` 无损坏 + `apksigner verify` 退出码 0 + `sha256sum` 告知用户，防止拿到写了一半的包（2026-09-28 用户装到半成品包报"用不了"）。
 - **签名**：`app/build.gradle` 期望根目录 `TVBoxOSC.jks`（alias/key/store 口令默认均为 `TVBoxOSC`）；文件缺失时会回退到 Android 调试证书（`CN=Android Debug`），导致与官方 release 包签名不一致、无法覆盖安装。本仓库已生成 `TVBoxOSC.jks`（PKCS12，SHA-256 `4a568ad4...`），debug/release 共用一个身份。
   - 注意：`.gitignore` 含 `*.jks`，该密钥不会入库（本地文件，不要提交）。
 - 安装：`adb install -r <apk>`；签名不一致时先 `adb uninstall com.github.tvbox.osc`（会清数据）。Git Bash 下 adb 路径含 `$`/反斜杠需注意，截图拉取要 `export MSYS_NO_PATHCONV=1`。
 - 校验签名：`apksigner verify --print-certs <apk>`（build-tools 35.0.0）。
+- **构建内存/防卡（2026-09-30 起）**：项目根 `gradle.properties` 已限制 `org.gradle.jvmargs=-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`（7.9G 内存机器）+ `org.gradle.workers.max=2`；`build_apk.bat` 的 `:run_build` 开头已加 `call gradlew.bat --stop` 清残留 daemon。
+  - **不要再用 `kotlin.compiler.execution.strategy=in_process`**：Kotlin 插件只认大写枚举 `IN_PROCESS`，且旧 daemon 缓存小写值会报 `Unknown value 'in_process'`（改了文件仍复现）。已移除，改用 `kotlin.daemon.jvmargs=-Xmx1024m` 限制独立 Kotlin 守护进程内存（与 Gradle 主 JVM 双上限）。
 
 ## 架构要点（改代码会用到）
 - `MainActivity`(Kotlin)：外层 `androidx.viewpager2.widget.ViewPager2`(`mBinding.vp`)，仅 2 页 = HomeFragment(0)/MyFragment(1)；已设 `isUserInputEnabled=false` 关闭整页手势滑动。
@@ -55,6 +58,12 @@
 - **异步回调晚于 Activity 销毁 → 空指针（直播页崩溃根因）**：`LiveActivity.onDestroy()` 会把 `mVideoView` release 并置 null，而 `loadProxyLives()` 的 OkGo 回调（以及 `content://` 分支里子线程的 `runOnUiThread`）可能在销毁之后才回来 → `parseProxyLiveContent → initLiveState → livePlayerManager.init(null) → PlayerHelper.updateCfg` 第 90 行 `setPlayerFactory` NPE。用户现场日志：崩溃时间戳与 `LiveActivity destroyed` **同一秒**。
   - 已做三层防护：① `PlayerHelper.updateCfg(VideoView[, JSONObject])` 开头 `if (videoView == null) return;`；② `LivePlayerManager.getDefaultLiveChannelPlayer/getLiveChannelPlayer` 判空（后者另判 `currentPlayerConfig == null`）；③ `LiveActivity` 的 `parseProxyLiveContent/initLiveState/showNoLiveChannels` 开头 `if (isFinishing() || isDestroyed()) return;`（`initLiveState` 另加 `mVideoView == null`），并给 `loadProxyLives` 的请求加 `.tag(this)`、在 `onDestroy` 里 `OkGo.getInstance().cancelTag(this)`。
   - **规则：Activity 中任何「网络/子线程 → 主线程 → 改 View 或播放器」的回来路径，都要先判 `isFinishing() || isDestroyed()` 并判空 View；网络请求在 onDestroy 里取消。**（minSdk 24，`isDestroyed()` 可用。）
+
+## 深色模式 / 主题（改配色会用到）
+- 切换：`util/Utils.java` 的 `isDarkTheme()` + `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES/NO/FOLLOW_SYSTEM)`。
+- 深色覆盖资源：`app/src/main/res/values-night/colors.xml`（**无** `drawable-night`）。深色只覆盖少量 color（`bg_gray`/`bg_popup`/`windowBackground`/`text_*`），其余沿用 `values/colors.xml`——**改深色配色要在 values-night 里新增同名 color 覆盖**，否则深色下会沿用浅色值（如 `windowBackground` 浅色是 #fff，深色不覆盖就闪白）。
+- 2026-10-01 起深色背景统一纯黑 `#000000`（OLED 不发光）；webview 深色主题在 `res/raw/style.css`（weui `--weui-BG-*` 变量）。
+- **底部导航 `bg_bottom_navigation`（白色）用户要求勿动**。
 
 ## 用户偏好
 - 用中文沟通，会发手机崩溃截图/日志，逐条报 bug。改完需**编出 APK 并尽量 adb 装上**再让其测试。

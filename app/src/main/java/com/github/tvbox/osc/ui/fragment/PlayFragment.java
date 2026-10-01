@@ -376,7 +376,16 @@ public class PlayFragment extends BaseLazyFragment {
                     .fitsSystemWindows(false)
                     .init();
         }else {//非全屏统一设置竖屏,activity处理为小的预览尺寸
-            mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            // 平板(小米/红米Pad等MIUI系统)横屏下请求竖屏会触发系统"竖屏内容兼容显示"
+            // (居中小窗+两侧黑边),且返回首页后该兼容状态不会自动恢复,只能重启应用。
+            // 平板改为 UNSPECIFIED 交由系统/传感器决定方向; 手机保持原有竖屏预览行为。
+            // 注意: 用 Android 标准 smallestScreenWidthDp>=600 判定平板(blankj 的 ScreenUtils 无 isTablet())
+            boolean isTablet = mActivity.getResources().getConfiguration().smallestScreenWidthDp >= 600;
+            if (isTablet) {
+                mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            } else {
+                mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            }
 
             ImmersionBar.with(mActivity)
                     .hideBar(BarHide.FLAG_SHOW_BAR)
