@@ -4,6 +4,18 @@
     <!-- 在 Android 11 中，应用程序需要声明它们要使用的其他应用程序的包名 -->
     <queries>
         <package android:name="idm.internet.download.manager.plus" />
+        <!-- 外部/第三方播放器: 让 getApplicationInfo 能检测到已安装包, 以便\"外部播放\"列出它们 -->
+        <package android:name="com.mxtech.videoplayer.pro" />
+        <package android:name="com.mxtech.videoplayer.ad" />
+        <package android:name="com.mxtech.videoplayer.beta" />
+        <package android:name="xyz.re.player.ex" />
+        <package android:name="org.xbmc.kodi" />
+        <package android:name="org.videolan.vlc" />
+        <!-- 让 queryIntentActivities(ACTION_VIEW, video/*) 能返回系统播放器等结果, 作为\"系统播放器\"检测依据 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
     </queries>
 
     <uses-feature
