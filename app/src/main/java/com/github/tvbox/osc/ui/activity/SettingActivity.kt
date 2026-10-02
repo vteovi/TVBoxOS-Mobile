@@ -18,7 +18,6 @@ import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter.SelectDialogInterface
 import com.github.tvbox.osc.ui.dialog.BackupDialog
 import com.github.tvbox.osc.ui.dialog.LiveApiDialog
 import com.github.tvbox.osc.ui.dialog.SelectDialog
-import com.github.tvbox.osc.ui.dialog.WallpaperDialog
 import com.github.tvbox.osc.util.FastClickCheckUtil
 import com.github.tvbox.osc.util.FileUtils
 import com.github.tvbox.osc.util.HawkConfig
@@ -26,7 +25,6 @@ import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.OkGoHelper
 import com.github.tvbox.osc.util.PlayerHelper
 import com.github.tvbox.osc.util.Utils
-import com.github.tvbox.osc.util.WallpaperManager
 import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.Permission
 import com.hjq.permissions.XXPermissions
@@ -45,7 +43,6 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
     private companion object {
         const val REQUEST_IMPORT_LIVE_SOURCE = 9203
-        const val REQUEST_IMPORT_WALLPAPER = 9202
     }
 
     private var homeRec = Hawk.get(HawkConfig.HOME_REC, 0)
@@ -67,11 +64,6 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
         mBinding.tvVodApi.text = shortSourceName(Hawk.get(HawkConfig.API_URL, ""), "未选择")
         mBinding.tvLiveApi.text = shortSourceName(currentLiveApi, "跟随订阅")
-        mBinding.tvWallpaper.text = if (Hawk.get(HawkConfig.WALLPAPER_URL, "").isEmpty()) {
-            "未设置"
-        } else {
-            "已设置"
-        }
 
         mBinding.llVodApi.setOnClickListener {
             jumpActivity(SubscriptionActivity::class.java)
@@ -88,12 +80,6 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             XPopup.Builder(mContext)
                 .autoFocusEditText(false)
                 .asCustom(LiveApiDialog(this) { pickLiveSource() })
-                .show()
-        }
-
-        mBinding.llWallpaper.setOnClickListener {
-            XPopup.Builder(mContext)
-                .asCustom(WallpaperDialog(this) { pickWallpaper() })
                 .show()
         }
 
@@ -476,13 +462,6 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
         }
     }
 
-    private fun pickWallpaper() {
-        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
-        }, REQUEST_IMPORT_WALLPAPER)
-    }
-
     private fun pickLiveSource() {
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -496,15 +475,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        if (requestCode == REQUEST_IMPORT_WALLPAPER) {
-            if (WallpaperManager.get().importWallpaper(uri).isEmpty()) {
-                ToastUtils.showShort("图片导入失败，请选择有效图片")
-            } else {
-                WallpaperManager.get().applyToActivity(this)
-                mBinding.tvWallpaper.text = "已设置"
-                ToastUtils.showShort("壁纸已导入并应用")
-            }
-        } else if (requestCode == REQUEST_IMPORT_LIVE_SOURCE) {
+        if (requestCode == REQUEST_IMPORT_LIVE_SOURCE) {
             try {
                 val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
                 if (flags != 0) contentResolver.takePersistableUriPermission(uri, flags)
