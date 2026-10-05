@@ -27,8 +27,7 @@
             android:background="@android:color/transparent"
             app:title="订阅管理"
             app:leftIcon="@null"
-            app:rightIcon="@drawable/ic_add_24"
-            app:titleGravity="left">
+            app:rightIcon="@drawable/ic_add_24">
 
             <ImageView
                 android:id="@+id/iv_use_tip"
