@@ -35,6 +35,7 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.base.BaseActivity;
+import com.github.tvbox.osc.callback.LiveEmptyCallback;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LivePlayerManager;
@@ -893,13 +894,9 @@ public class LiveActivity extends BaseActivity {
             return;
         }
         noLiveChannelsShown = true;
-        showEmpty();
-        new XPopup.Builder(this)
-                .asConfirm("暂无直播频道", "当前订阅未提供可用直播频道，请切换或导入包含直播内容的订阅。", () -> {
-                    jumpActivity(SubscriptionActivity.class);
-                    finish();
-                })
-                .show();
+        if (mLoadService != null) {
+            mLoadService.showCallback(LiveEmptyCallback.class);
+        }
     }
 
     private void initLiveState() {

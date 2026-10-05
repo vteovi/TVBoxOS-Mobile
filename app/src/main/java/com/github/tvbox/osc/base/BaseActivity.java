@@ -49,7 +49,7 @@ import me.jessyan.autosize.AutoSize;
 
 public abstract class BaseActivity extends AppCompatActivity implements CustomAdapt, OnTitleBarListener {
     protected Context mContext;
-    private LoadService mLoadService;
+    protected LoadService mLoadService;
 
     private ImmersionBar mImmersionBar;
     private TitleBar mTitleBar;

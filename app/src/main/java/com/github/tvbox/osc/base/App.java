@@ -58,6 +58,7 @@ public class App extends MultiDexApplication {
         LoadSir.beginBuilder()
                 .addCallback(new EmptyCallback())
                 .addCallback(new LoadingCallback())
+                .addCallback(new LiveEmptyCallback())
                 .commit();
         AutoSizeConfig.getInstance()
                 .setExcludeFontScale(true)
