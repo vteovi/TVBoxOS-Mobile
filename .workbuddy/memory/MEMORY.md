@@ -7,7 +7,8 @@
 - 签名：根目录 `TVBoxOSC.jks`（alias/key/store口令均 `TVBoxOSC`），debug/release共用；`minifyEnabled false`。**.gitignore含 *.jks 不入库**。缺失会回退调试证书→无法覆盖安装。校验：`apksigner verify --print-certs <apk>`。
 - 安装：`adb install -r <apk>`；签名不符先 `adb uninstall com.github.tvbox.osc`。
 - **交付APK前必校验**（TaskStop杀过构建后）：删产物重跑 assembleRelease → `testzip()` 无损坏 + `apksigner verify` 退出码0 + `sha256sum`，防半成品包。
-- **构建防卡配置**(gradle.properties)：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC` + `org.gradle.workers.max=2`；`build_apk.bat` 开头 `call gradlew.bat --stop` 清残留daemon。**勿用 `kotlin.compiler.execution.strategy=in_process`**（Kotlin只认`IN_PROCESS`枚举，旧daemon缓存小写值报 `Unknown value 'in_process'`）。
+- **构建防卡配置**(gradle.properties)：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC` + `org.gradle.workers.max=2`。**勿用 `kotlin.compiler.execution.strategy=in_process`**（Kotlin只认`IN_PROCESS`枚举，旧daemon缓存小写值报 `Unknown value 'in_process'`）。
+- **一键编译脚本**：`build_apk.ps1`（纯 ASCII PowerShell，已重写可用；原 `.ps1` 只是 `.bat` 副本不能用）。功能：自动读 `versionName` 命名、**构建前后均 `gradlew --stop`** 清残留 daemon、产物存在性自检、`$LASTEXITCODE` 退出码检查；成功后把 APK 复制到**项目根目录**命名 `TVBox-Mobile-v<ver>-<debug|release>.apk`，release 还跑 `apksigner verify` 并输出 SHA256。`.bat` 版本仍存在但未复制产物，优先用 `.ps1`。
 
 ## 架构要点（改代码用）
 - `MainActivity`(Kt)：ViewPager2 仅2页 Home(0)/My(1)，`isUserInputEnabled=false`。`HomeFragment`(Kt)内旧ViewPager+DslTabLayout由ViewPager1Delegate绑定=首页分栏。底部导航4项：首页/我的走vp；直播/订阅独立Activity。
