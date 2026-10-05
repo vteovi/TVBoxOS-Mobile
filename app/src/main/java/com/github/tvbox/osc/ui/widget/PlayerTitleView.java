@@ -66,12 +66,13 @@ public class PlayerTitleView extends FrameLayout implements IControlComponent {
                 Activity activity = PlayerUtils.scanForActivity(getContext());
                 if (activity != null) {
                     if (mControlWrapper.isFullScreen()){
-                        // 平板横屏下强制竖屏会触发 MIUI 兼容显示(黑边小窗)且无法自行恢复,
-                        // 原因见 PlayFragment.changedLandscape 的注释
+                        // 平板(含小米平板5及以上)横屏下: 退出全屏必须保持横屏, 用 SENSOR_LANDSCAPE 而非 UNSPECIFIED,
+                        // 否则在小米平板上会被解析成竖屏, 触发 MIUI 兼容显示(两侧大黑边小窗)且无法自行恢复
+                        // 手机仍按原逻辑回退竖屏
                         // 用 Android 标准 smallestScreenWidthDp>=600 判定平板(blankj 的 ScreenUtils 无 isTablet())
                         boolean isTablet = activity.getResources().getConfiguration().smallestScreenWidthDp >= 600;
                         if (isTablet) {
-                            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
                         } else {
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
                         }

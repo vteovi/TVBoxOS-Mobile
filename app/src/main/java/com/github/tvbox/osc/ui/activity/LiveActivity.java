@@ -6,6 +6,7 @@ import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -167,6 +168,15 @@ public class LiveActivity extends BaseActivity {
 
         setLoadSir(findViewById(R.id.live_root));
         initBottomNavigation();
+        // 直播入口已移入"我的"页，进入直播页即全屏：隐藏应用内导航栏（手机底部 / 平板左侧），不再占用播放区域
+        View bottomNav = findViewById(R.id.bottom_nav);
+        if (bottomNav != null) {
+            bottomNav.setVisibility(View.GONE);
+        }
+        // 平板(含小米平板5及以上)锁定横屏：避免"全屏返回"翻成竖屏导致两侧大黑边(MIUI 兼容小窗)
+        if (getResources().getConfiguration().smallestScreenWidthDp >= 600) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        }
         mVideoView = findViewById(R.id.mVideoView);
 
         tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
