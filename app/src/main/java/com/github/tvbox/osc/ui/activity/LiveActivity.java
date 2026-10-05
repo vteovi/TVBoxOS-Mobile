@@ -280,6 +280,44 @@ public class LiveActivity extends BaseActivity {
     }
 
 
+    /**
+     * 平板(含小米平板5及以上)直播页全程锁定横屏。
+     * 播放器退出全屏的各条路径(返回键 / 标题栏返回 / 库内控制条按钮 / 方向传感器)最终都会调用
+     * activity.setRequestedOrientation(), 这里统一拦截任何"可能变成竖屏"的请求并改写为横屏,
+     * 避免"全屏 -> 半屏"时翻成竖屏触发 MIUI 兼容显示(内容居中、两侧大块空白)。
+     * 手机端行为完全不变。
+     */
+    @Override
+    public void setRequestedOrientation(int requestedOrientation) {
+        if (isTabletLandscapeLock() && mayBecomePortrait(requestedOrientation)) {
+            super.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            return;
+        }
+        super.setRequestedOrientation(requestedOrientation);
+    }
+
+    /**
+     * 用 Android 标准 smallestScreenWidthDp>=600 判定平板(blankj 的 ScreenUtils 无 isTablet())
+     */
+    private boolean isTabletLandscapeLock() {
+        return getResources().getConfiguration().smallestScreenWidthDp >= 600;
+    }
+
+    /**
+     * 这些取值在小米平板上都可能被解析成竖屏(尤其是 UNSPECIFIED)
+     */
+    private static boolean mayBecomePortrait(int orientation) {
+        return orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT;
+    }
+
     @Override
     public void onBackPressed() {
         if (tvRightSettingLayout.getVisibility() == View.VISIBLE) {
