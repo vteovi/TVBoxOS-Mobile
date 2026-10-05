@@ -5,7 +5,7 @@
 - 构建：export JAVA_HOME/ANDROID_HOME 后 `./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`。首次(含NDK)约25分钟，debug增量1–3分钟。**必须沙箱外执行(dangerouslyDisableSandbox:true)**，否则Gradle缓存读不到报 AAPT 错误（看着像代码错误实为权限拦截）。
 - 产物：`app/build/outputs/apk/{debug,release}/TVBox-Mobile-v<versionName>.apk`（同名靠目录分）。release约41MB。
 - 签名：根目录 `TVBoxOSC.jks`（alias/key/store口令均 `TVBoxOSC`），debug/release共用；`minifyEnabled false`。**.gitignore含 *.jks 不入库**。缺失会回退调试证书→无法覆盖安装。校验：`apksigner verify --print-certs <apk>`。
-- 安装：`adb install -r <apk>`；签名不符先 `adb uninstall com.github.tvbox.osc`。
+- 安装：`adb install -r <apk>`；本改版 applicationId 已改为 `com.github.tvbox.osc.mobile`（区别于官方 TVBox 与 mbox 的 `com.github.tvbox.osc`，可三者并存、互不覆盖）。签名不符先 `adb uninstall com.github.tvbox.osc.mobile`（旧官方/mbox 才是 `com.github.tvbox.osc`）。
 - **交付APK前必校验**（TaskStop杀过构建后）：删产物重跑 assembleRelease → `testzip()` 无损坏 + `apksigner verify` 退出码0 + `sha256sum`，防半成品包。
 - **构建防卡配置**(gradle.properties)：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC` + `org.gradle.workers.max=2`。**勿用 `kotlin.compiler.execution.strategy=in_process`**（Kotlin只认`IN_PROCESS`枚举，旧daemon缓存小写值报 `Unknown value 'in_process'`）。
 - **一键编译脚本**：`build_apk.ps1`（纯 ASCII PowerShell，已重写可用；原 `.ps1` 只是 `.bat` 副本不能用）。功能：自动读 `versionName` 命名、**构建前后均 `gradlew --stop`** 清残留 daemon、产物存在性自检、`$LASTEXITCODE` 退出码检查；成功后把 APK 复制到**项目根目录**命名 `TVBox-Mobile-v<ver>-<debug|release>.apk`，release 还跑 `apksigner verify` 并输出 SHA256。`.bat` 版本仍存在但未复制产物，优先用 `.ps1`。
