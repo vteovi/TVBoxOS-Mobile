@@ -9,7 +9,7 @@
 
     <include
         android:id="@+id/bottom_nav"
-        android:layout_width="88dp"
+        android:layout_width="64dp"
         android:layout_height="match_parent"
         layout="@layout/include_bottom_navigation" />
 
