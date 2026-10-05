@@ -49,6 +49,7 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
                 }
                 R.id.navigation_subscription -> {
                     startActivity(Intent(this, SubscriptionActivity::class.java))
+                    overridePendingTransition(0, 0)
                     finish()
                     false
                 }
