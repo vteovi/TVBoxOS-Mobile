@@ -16,7 +16,7 @@
 - **动态dex(csp.jar/js.jar)按SDK分支**：`SDK>=34` 用 `InMemoryDexClassLoader`(读 classes*.dex 进 ByteBuffer)；`SDK<34` 用 `DexClassLoader+setReadOnly()`。`InMemoryDexClassLoader` 是 final 类且无 jar 路径→`getResourceAsStream` 返回null，需 `JarResourceClassLoader` 作 parent 补资源。dex能否加载=订阅是否可用，`Init.init()` 异常降级不误报。
 - **spThreadPool 单线程池自锁**：跑在 spThreadPool 的任务内部不要再往 spThreadPool 提交任务（`getHomeRecList` 已改 `homeRecThreadPool`）。
 - 底部导航 `include_bottom_navigation.xml`（三处include：MainActivity/LiveActivity/SubscriptionActivity）；高58dp图标24dp，背景 `bg_bottom_navigation=#FFFFFFFF` 纯白（用户要求勿动）。Material2主题，item高度低于~56dp图标文字必重叠。
-- **大屏宽屏左侧导航**：`res/layout-sw600dp/`（4文件）把导航移到左侧——`include_bottom_navigation.xml` 用 `BottomNavigationView app:orientation="vertical"`(宽88dp)，三页 activity_* 根改 `horizontal`、导航在左内容在右。**纯XML、Java零改**（BottomNavigationView类型/id不变，live_root id保留）。sw600dp=较短边≥600dp触发，手机不触发。
+- **大屏宽屏左侧导航**：`res/layout-sw600dp/`（4文件）把导航移到左侧。`include_bottom_navigation.xml` 用 `NavigationRailView`(`com.google.android.material.navigationrail.NavigationRailView`，竖向左导航，宽88dp)；三页 activity_* 根改 `horizontal`、导航在左内容在右，live_root id保留。⚠️ `BottomNavigationView` 没有 `app:orientation` 属性（链接期报 not found），不能靠它做竖排。**三页 Activity 把 `bottom_nav` 强转类型由 `BottomNavigationView` 改为公共基类 `NavigationBarView`**（手机端仍是 BottomNavigationView，大屏为 NavigationRailView，二者都继承 NavigationBarView）。sw600dp=较短边≥600dp触发，手机不触发。
 - adb限制(MIUI/HyperOS)：`input tap` 被拒无法模拟点击；验证用 `am force-stop`+`monkey` 后 `screencap`。debug包配置 `adb shell run-as ... cat shared_prefs/Hawk2.xml`。
 - **Edit工具会把CRLF改LF致diff噪音**：用Python bytes级替换并保留行尾 `replace(b'\r\n',b'\n').replace(b'\n',b'\r\n')`。
 - **异步回调晚于Activity销毁→NPE**（直播页崩溃根因）：所有「网络/子线程→主线程→改View/播放器」路径先判 `isFinishing()||isDestroyed()` 并判空View；网络请求onDestroy取消。
