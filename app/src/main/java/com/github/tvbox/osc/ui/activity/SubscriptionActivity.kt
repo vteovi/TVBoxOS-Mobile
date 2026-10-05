@@ -490,9 +490,13 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
         bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_subscription -> true
+                R.id.navigation_collect -> {
+                    startActivity(Intent(this, CollectActivity::class.java))
+                    finish()
+                    false
+                }
                 R.id.navigation_home,
-                R.id.navigation_dashboard,
-                R.id.navigation_live -> {
+                R.id.navigation_dashboard -> {
                     destinationAfterFinish = item.itemId
                     finish()
                     false

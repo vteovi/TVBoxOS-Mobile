@@ -210,7 +210,7 @@ public class LiveActivity extends BaseActivity {
 
     private void initBottomNavigation() {
         NavigationBarView bottomNavigation = findViewById(R.id.bottom_nav);
-        bottomNavigation.setSelectedItemId(R.id.navigation_live);
+        bottomNavigation.setSelectedItemId(R.id.navigation_dashboard);
         bottomNavigation.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.navigation_home || itemId == R.id.navigation_dashboard) {
@@ -222,7 +222,12 @@ public class LiveActivity extends BaseActivity {
                 finish();
                 return false;
             }
-            return itemId == R.id.navigation_live;
+            if (itemId == R.id.navigation_collect) {
+                startActivity(new Intent(this, CollectActivity.class));
+                finish();
+                return false;
+            }
+            return itemId == R.id.navigation_dashboard;
         });
     }
 

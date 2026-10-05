@@ -14,6 +14,7 @@ import com.github.tvbox.osc.cache.RoomDataManger
 import com.github.tvbox.osc.cache.VodCollect
 import com.github.tvbox.osc.databinding.ActivityCollectBinding
 import com.github.tvbox.osc.ui.adapter.CollectAdapter
+import com.google.android.material.navigation.NavigationBarView
 import com.github.tvbox.osc.util.FastClickCheckUtil
 import com.github.tvbox.osc.util.Utils
 import com.lxj.xpopup.XPopup
@@ -25,9 +26,46 @@ import kotlinx.coroutines.withContext
 class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
 
     private var collectAdapter  = CollectAdapter()
+    private var destinationAfterFinish: Int? = null
+
     override fun init() {
         initView()
         initData()
+        initBottomNavigation()
+    }
+
+    private fun initBottomNavigation() {
+        val bottomNavigation = findViewById<NavigationBarView>(R.id.bottom_nav)
+        bottomNavigation.selectedItemId = R.id.navigation_collect
+        bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_collect -> true
+                R.id.navigation_home,
+                R.id.navigation_dashboard -> {
+                    destinationAfterFinish = item.itemId
+                    finish()
+                    false
+                }
+                R.id.navigation_subscription -> {
+                    startActivity(Intent(this, SubscriptionActivity::class.java))
+                    finish()
+                    false
+                }
+                else -> false
+            }
+        }
+    }
+
+    override fun finish() {
+        val destination = destinationAfterFinish
+        if (destination != null) {
+            val intent = Intent(this, MainActivity::class.java)
+            intent.putExtra(MainActivity.EXTRA_START_DESTINATION, destination)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            startActivity(intent)
+            overridePendingTransition(0, 0)
+        }
+        super.finish()
     }
 
     private fun initView() {

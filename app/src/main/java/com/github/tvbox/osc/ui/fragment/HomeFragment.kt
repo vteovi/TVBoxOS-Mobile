@@ -28,7 +28,6 @@ import com.github.tvbox.osc.cache.RoomDataManger
 import com.github.tvbox.osc.constant.IntentKey
 import com.github.tvbox.osc.databinding.FragmentHomeBinding
 import com.github.tvbox.osc.server.ControlManager
-import com.github.tvbox.osc.ui.activity.CollectActivity
 import com.github.tvbox.osc.ui.activity.FastSearchActivity
 import com.github.tvbox.osc.ui.activity.HistoryActivity
 import com.github.tvbox.osc.ui.activity.MainActivity
@@ -109,9 +108,6 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         }
         mBinding.ivHistory.setOnClickListener {
             jumpActivity(HistoryActivity::class.java)
-        }
-        mBinding.ivCollect.setOnClickListener {
-            jumpActivity(CollectActivity::class.java)
         }
         setLoadSir(mBinding.contentLayout)
         initViewModel()
