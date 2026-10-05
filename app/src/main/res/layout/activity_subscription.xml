@@ -17,7 +17,6 @@
         app:leftIcon="@null"
         app:rightIcon="@drawable/ic_add_24"
         app:titleGravity="left"
-        app:titleSize="20sp"
         >
 
         <ImageView
