@@ -62,12 +62,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
         mBinding.tvRenderType.text =
             PlayerHelper.getRenderName(Hawk.get(HawkConfig.PLAY_RENDER, 0))
 
-        mBinding.tvVodApi.text = shortSourceName(Hawk.get(HawkConfig.API_URL, ""), "未选择")
         mBinding.tvLiveApi.text = shortSourceName(currentLiveApi, "跟随订阅")
-
-        mBinding.llVodApi.setOnClickListener {
-            jumpActivity(SubscriptionActivity::class.java)
-        }
 
         mBinding.switchPrivateBrowsing.setChecked(Hawk.get(HawkConfig.PRIVATE_BROWSING, false))
         mBinding.llPrivateBrowsing.setOnClickListener { view: View? ->
