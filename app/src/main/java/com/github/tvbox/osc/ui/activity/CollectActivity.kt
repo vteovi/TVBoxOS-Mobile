@@ -1,5 +1,6 @@
 package com.github.tvbox.osc.ui.activity
 
+import com.github.tvbox.osc.R
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
