@@ -25,7 +25,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
 
 import com.blankj.utilcode.util.ConvertUtils;
 import com.blankj.utilcode.util.ScreenUtils;
@@ -208,7 +208,7 @@ public class LiveActivity extends BaseActivity {
     }
 
     private void initBottomNavigation() {
-        BottomNavigationView bottomNavigation = findViewById(R.id.bottom_nav);
+        NavigationBarView bottomNavigation = findViewById(R.id.bottom_nav);
         bottomNavigation.setSelectedItemId(R.id.navigation_live);
         bottomNavigation.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();

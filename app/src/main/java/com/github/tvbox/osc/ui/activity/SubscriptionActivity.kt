@@ -22,7 +22,7 @@ import com.github.tvbox.osc.ui.dialog.SubsciptionDialog
 import com.github.tvbox.osc.ui.dialog.SubsciptionDialog.OnSubsciptionListener
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.Utils
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.navigation.NavigationBarView
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.lxj.xpopup.XPopup
@@ -485,7 +485,7 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
     }
 
     private fun initBottomNavigation() {
-        val bottomNavigation = findViewById<BottomNavigationView>(R.id.bottom_nav)
+        val bottomNavigation = findViewById<NavigationBarView>(R.id.bottom_nav)
         bottomNavigation.selectedItemId = R.id.navigation_subscription
         bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {

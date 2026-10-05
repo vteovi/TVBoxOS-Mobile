@@ -6,7 +6,7 @@ import android.os.Process
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.navigation.NavigationBarView
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.github.tvbox.osc.R
@@ -29,7 +29,7 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
     }
 
     private val fragments = listOf(HomeFragment(), MyFragment())
-    private lateinit var bottomNavigation: BottomNavigationView
+    private lateinit var bottomNavigation: NavigationBarView
     var useCacheConfig = false
     private var exitTime = 0L
 
