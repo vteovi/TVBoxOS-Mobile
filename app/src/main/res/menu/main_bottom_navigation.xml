@@ -9,7 +9,7 @@
 
     <item
         android:id="@+id/navigation_collect"
-        android:icon="@drawable/ic_collect_48"
+        android:icon="@drawable/ic_nav_collect"
         android:orderInCategory="1"
         android:title="收藏"/>
 
