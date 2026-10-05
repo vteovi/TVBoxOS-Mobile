@@ -78,10 +78,12 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
                 }
                 R.id.navigation_live -> {
                     jumpActivity(LiveActivity::class.java)
+                    overridePendingTransition(0, 0)
                     false
                 }
                 R.id.navigation_subscription -> {
                     jumpActivity(SubscriptionActivity::class.java)
+                    overridePendingTransition(0, 0)
                     false
                 }
                 else -> false
@@ -116,8 +118,14 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
     private fun openDestination(destination: Int) {
         when (destination) {
             R.id.navigation_dashboard -> bottomNavigation.selectedItemId = R.id.navigation_dashboard
-            R.id.navigation_live -> jumpActivity(LiveActivity::class.java)
-            R.id.navigation_subscription -> jumpActivity(SubscriptionActivity::class.java)
+            R.id.navigation_live -> {
+                jumpActivity(LiveActivity::class.java)
+                overridePendingTransition(0, 0)
+            }
+            R.id.navigation_subscription -> {
+                jumpActivity(SubscriptionActivity::class.java)
+                overridePendingTransition(0, 0)
+            }
             else -> bottomNavigation.selectedItemId = R.id.navigation_home
         }
     }

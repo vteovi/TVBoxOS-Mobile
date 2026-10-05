@@ -233,6 +233,12 @@ public class LiveActivity extends BaseActivity {
         finish();
     }
 
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(0, 0);
+    }
+
     //显示底部EPG
     private void showBottomEpg() {
         if (isSHIYI)

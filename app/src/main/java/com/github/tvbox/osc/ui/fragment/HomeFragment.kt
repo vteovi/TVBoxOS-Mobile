@@ -257,6 +257,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                     override fun onTitleClick() {
                         errorTipDialog?.hide()
                         jumpActivity(SubscriptionActivity::class.java)
+                        requireActivity().overridePendingTransition(0, 0)
                     }
                 })
         }
