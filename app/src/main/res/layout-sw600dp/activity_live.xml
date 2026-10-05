@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:tools="http://schemas.android.com/tools" android:id="@+id/live_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal">
 
-    <include android:id="@+id/bottom_nav" layout="@layout/include_bottom_navigation" android:layout_width="88dp" android:layout_height="match_parent" />
+    <include android:id="@+id/bottom_nav" layout="@layout/include_bottom_navigation" android:layout_width="72dp" android:layout_height="match_parent" />
 
 <android:LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical"><RelativeLayout android:layout_width="match_parent" android:layout_height="240dp">
 

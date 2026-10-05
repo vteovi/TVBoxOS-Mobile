@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 深色模式下导航图标仍用浅灰(disable_gray)，仅浅色模式改为与文字同色(black) -->
+    <item android:color="@color/colorPrimary" android:state_checked="true" />
+    <item android:color="@color/disable_gray" android:state_checked="false" />
+</selector>
