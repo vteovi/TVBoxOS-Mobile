@@ -39,6 +39,7 @@ import com.github.tvbox.osc.base.BaseActivity;
 import com.github.tvbox.osc.callback.LiveEmptyCallback;
 import com.github.tvbox.osc.ui.dialog.ApiHistoryDialog;
 import com.kingja.loadsir.callback.Callback;
+import com.kingja.loadsir.core.Transport;
 import com.lxj.xpopup.interfaces.OnInputConfirmListener;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
@@ -171,9 +172,9 @@ public class LiveActivity extends BaseActivity {
 
         setLoadSir(findViewById(R.id.live_root));
         // 空状态(暂无直播频道)里提供"切换直播源"入口, 避免无源时卡在空页无法操作
-        mLoadService.setCallBack(LiveEmptyCallback.class, new Callback.OnHandleListener() {
+        mLoadService.setCallBack(LiveEmptyCallback.class, new Transport() {
             @Override
-            public void onCallback(View view, Callback callback) {
+            public void order(Context context, View view) {
                 View switchBtn = view.findViewById(R.id.btn_switch_source);
                 if (switchBtn != null) {
                     switchBtn.setOnClickListener(v -> showLiveSourceDialog());
