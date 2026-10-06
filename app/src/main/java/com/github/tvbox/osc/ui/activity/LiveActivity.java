@@ -37,6 +37,9 @@ import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.base.BaseActivity;
 import com.github.tvbox.osc.callback.LiveEmptyCallback;
+import com.github.tvbox.osc.ui.dialog.ApiHistoryDialog;
+import com.kingja.loadsir.callback.Callback;
+import com.lxj.xpopup.interfaces.OnInputConfirmListener;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LivePlayerManager;
@@ -167,6 +170,16 @@ public class LiveActivity extends BaseActivity {
             epgStringAddress = "http://epg.51zmt.top:8000/api/diyp/";
 
         setLoadSir(findViewById(R.id.live_root));
+        // 空状态(暂无直播频道)里提供"切换直播源"入口, 避免无源时卡在空页无法操作
+        mLoadService.setCallBack(LiveEmptyCallback.class, new Callback.OnHandleListener() {
+            @Override
+            public void onCallback(View view, Callback callback) {
+                View switchBtn = view.findViewById(R.id.btn_switch_source);
+                if (switchBtn != null) {
+                    switchBtn.setOnClickListener(v -> showLiveSourceDialog());
+                }
+            }
+        });
         initBottomNavigation();
         // 直播入口已移入"我的"页，进入直播页即全屏：隐藏应用内导航栏（手机底部 / 平板左侧），不再占用播放区域
         View bottomNav = findViewById(R.id.bottom_nav);
@@ -208,6 +221,8 @@ public class LiveActivity extends BaseActivity {
         //投屏/设置
         findViewById(R.id.ic_setting).setOnClickListener(view -> showSettingDialog(false));
         findViewById(R.id.ic_cast).setVisibility(View.GONE);
+        //切换直播源
+        findViewById(R.id.ic_live_source).setOnClickListener(view -> showLiveSourceDialog());
 
         initVideoView();
         initChannelGroupView();
@@ -949,6 +964,37 @@ public class LiveActivity extends BaseActivity {
         noLiveChannelsShown = true;
         if (mLoadService != null) {
             mLoadService.showCallback(LiveEmptyCallback.class);
+        }
+    }
+
+    /**
+     * 打开历史直播源列表, 选择一个即可切换当前直播源并重新拉取频道。
+     */
+    private void showLiveSourceDialog() {
+        String current = Hawk.get(HawkConfig.LIVE_URL, "");
+        new XPopup.Builder(this)
+                .asCustom(new ApiHistoryDialog(this, current, url -> switchLiveSource(url)))
+                .show();
+    }
+
+    /**
+     * 切换直播源: 写入当前直播源配置并重新拉取频道列表。
+     * 复用 ApiConfig 的代理地址格式(http://127.0.0.1:9978/proxy?do=live&type=txt&ext=Base64(url)),
+     * 直接走已有的 loadProxyLives 流程解析并刷新页面。
+     */
+    private void switchLiveSource(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return;
+        }
+        Hawk.put(HawkConfig.LIVE_URL, url);
+        noLiveChannelsShown = false;
+        try {
+            String ext = new String(Base64.encode(url.getBytes("UTF-8"),
+                    Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP), "UTF-8");
+            String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + ext;
+            loadProxyLives(proxyUrl);
+        } catch (Throwable e) {
+            showNoLiveChannels();
         }
     }
 

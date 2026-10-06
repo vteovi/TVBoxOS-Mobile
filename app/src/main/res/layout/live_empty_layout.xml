@@ -36,6 +36,19 @@
             android:text="当前订阅未提供可用直播频道，请切换或导入包含直播内容的订阅。"
             android:textColor="@color/text_sub_foreground"
             android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_switch_source"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/bg_large_round_gray"
+            android:paddingHorizontal="28dp"
+            android:paddingVertical="10dp"
+            android:text="切换直播源"
+            android:textColor="@color/text_foreground"
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
 </FrameLayout>
