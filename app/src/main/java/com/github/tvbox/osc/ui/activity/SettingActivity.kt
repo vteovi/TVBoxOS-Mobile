@@ -29,6 +29,7 @@ import com.github.tvbox.osc.util.PlayerHelper
 import com.github.tvbox.osc.util.Utils
 import android.app.Activity
 import android.content.Context
+import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import com.blankj.utilcode.util.AppUtils
@@ -79,7 +80,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
     ) { uri -> uri?.let { doBackupToUri(it) } }
 
     private val restoreSaf = registerForActivityResult(
-        ActivityResultContracts.OpenDocument(arrayOf("application/zip", "application/octet-stream"))
+        ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { doRestoreFromUri(it) } }
 
     private fun doBackupToUri(uri: Uri) {
@@ -303,7 +304,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 }
 
                 override fun onRestore() {
-                    restoreSaf.launch(arrayOf("application/zip", "application/octet-stream"))
+                    restoreSaf.launch(null)
                 }
             })
             dialog.show()
