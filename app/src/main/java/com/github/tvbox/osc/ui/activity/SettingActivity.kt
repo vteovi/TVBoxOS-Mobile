@@ -26,10 +26,12 @@ import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.OkGoHelper
 import com.github.tvbox.osc.util.PlayerHelper
+import com.github.tvbox.osc.util.LocalImport
 import com.github.tvbox.osc.util.Utils
 import android.app.Activity
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.result.contract.ActivityResultContract
 import com.blankj.utilcode.util.AppUtils
 import com.github.tvbox.osc.base.App
@@ -631,15 +633,33 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         if (requestCode == REQUEST_IMPORT_LIVE_SOURCE) {
-            try {
-                val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-                if (flags != 0) contentResolver.takePersistableUriPermission(uri, flags)
-            } catch (_: SecurityException) {
+            val name = getDisplayName(uri)
+            // 复制到 App 内部私有目录, 以 file:// 路径存储, 重启后仍可读, 无需任何存储权限
+            val privateUrl = LocalImport.copyToPrivate(this, uri, "lives", name)
+            if (privateUrl == null) {
+                ToastUtils.showShort("直播源文件复制失败")
+                return
             }
-            Hawk.put(HawkConfig.LIVE_URL, uri.toString())
+            Hawk.put(HawkConfig.LIVE_URL, privateUrl)
             mBinding.tvLiveApi.text = "本地文件"
             ToastUtils.showShort("直播源已导入")
         }
+    }
+
+    private fun getDisplayName(uri: Uri): String {
+        var name: String? = null
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) name = cursor.getString(idx)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        if (name.isNullOrEmpty()) name = uri.lastPathSegment
+        if (name.isNullOrEmpty()) name = "live.txt"
+        return name!!
     }
 
     private fun onClickClearCache(v: View) {

@@ -21,6 +21,7 @@ import com.github.tvbox.osc.ui.dialog.SubsTipDialog
 import com.github.tvbox.osc.ui.dialog.SubsciptionDialog
 import com.github.tvbox.osc.ui.dialog.SubsciptionDialog.OnSubsciptionListener
 import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.LocalImport
 import com.github.tvbox.osc.util.Utils
 import com.google.android.material.navigation.NavigationBarView
 import com.google.gson.JsonObject
@@ -198,20 +199,18 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
         }
         val resultIntent = data ?: return
         val uri = resultIntent.data ?: return
-        try {
-            val flags = resultIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-            if (flags != 0) {
-                contentResolver.takePersistableUriPermission(uri, flags)
-            }
-        } catch (_: SecurityException) {
-            // Some providers do not support persistent grants; the current session still has read access.
+        val name = getDocumentName(uri)
+        // 复制到 App 内部私有目录, 以 file:// 路径存储, 重启后仍可读, 无需任何存储权限
+        val privateUrl = LocalImport.copyToPrivate(this, uri, "subscriptions", name)
+        if (privateUrl == null) {
+            ToastUtils.showLong("本地文件复制失败")
+            return
         }
-        val url = uri.toString()
-        if (hasDuplicateSubscription(url)) {
+        if (hasDuplicateSubscription(privateUrl)) {
             ToastUtils.showLong("订阅地址已存在")
             return
         }
-        addSubscription(getDocumentName(uri), url, pendingLocalChecked)
+        addSubscription(name, privateUrl, pendingLocalChecked)
         mSubscriptionAdapter.setNewData(mSubscriptions)
     }
 
@@ -228,7 +227,7 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
     }
 
     private fun addSubscription(name: String, url: String, checked: Boolean) {
-        if (url.startsWith("clan://") || url.startsWith("content://")) {
+        if (url.startsWith("clan://") || url.startsWith("content://") || url.startsWith("file://")) {
             addSub2List(name, url, checked)
             mSubscriptionAdapter.setNewData(mSubscriptions)
         } else if (url.startsWith("http")) {
@@ -462,7 +461,7 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
 
     private fun isLocalSubscription(url: String): Boolean {
         val value = url.trim()
-        return value.startsWith("clan://") || value.startsWith("content://")
+        return value.startsWith("clan://") || value.startsWith("content://") || value.startsWith("file://")
     }
 
     private fun isRemoteSubscription(url: String): Boolean {

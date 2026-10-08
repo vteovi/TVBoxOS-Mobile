@@ -154,7 +154,7 @@ public class ApiConfig {
             }
             return;
         }
-        if (apiUrl.startsWith("content://")) {
+        if (apiUrl.startsWith("content://") || apiUrl.startsWith("file://")) {
             try {
                 String json = readContentConfig(Uri.parse(apiUrl));
                 parseJson(apiUrl, json);
@@ -338,11 +338,16 @@ public class ApiConfig {
     }
 
     private String readContentConfig(Uri uri) throws Throwable {
-        try (InputStream input = App.getInstance().getContentResolver().openInputStream(uri)) {
-            if (input == null) {
-                throw new IllegalStateException("Unable to open local config");
-            }
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+        InputStream input;
+        if ("file".equals(uri.getScheme())) {
+            input = new FileInputStream(uri.getPath());
+        } else {
+            input = App.getInstance().getContentResolver().openInputStream(uri);
+        }
+        if (input == null) {
+            throw new IllegalStateException("Unable to open local config");
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
                 StringBuilder content = new StringBuilder();
                 String line;
                 while ((line = reader.readLine()) != null) {

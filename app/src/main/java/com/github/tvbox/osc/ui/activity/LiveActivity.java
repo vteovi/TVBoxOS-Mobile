@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
+import java.io.FileInputStream;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
@@ -904,15 +905,22 @@ public class LiveActivity extends BaseActivity {
             return;
         }
         showLoading();
-        if (url.startsWith("content://")) {
+        if (url.startsWith("content://") || url.startsWith("file://")) {
             final String localUrl = url;
             new Thread(() -> {
-                try (InputStream input = getContentResolver().openInputStream(Uri.parse(localUrl));
-                     BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
-                    StringBuilder content = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) content.append(line).append('\n');
-                    runOnUiThread(() -> parseProxyLiveContent(content.toString()));
+                try {
+                    InputStream input;
+                    if (localUrl.startsWith("file://")) {
+                        input = new FileInputStream(Uri.parse(localUrl).getPath());
+                    } else {
+                        input = getContentResolver().openInputStream(Uri.parse(localUrl));
+                    }
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+                        StringBuilder content = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) content.append(line).append('\n');
+                        runOnUiThread(() -> parseProxyLiveContent(content.toString()));
+                    }
                 } catch (Throwable error) {
                     runOnUiThread(this::showNoLiveChannels);
                 }
