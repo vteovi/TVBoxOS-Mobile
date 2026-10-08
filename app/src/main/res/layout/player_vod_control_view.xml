@@ -10,20 +10,21 @@
 
     <LinearLayout
             android:id="@+id/tv_top_l_container"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
             tools:visibility="visible"
             android:layout_marginStart="@dimen/dp_20"
             android:layout_marginLeft="@dimen/dp_20"
+            android:layout_marginEnd="@dimen/dp_220"
+            android:layout_marginRight="@dimen/dp_220"
             android:layout_marginTop="22dp"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/tv_info_name1"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:maxWidth="200dp"
                 android:ellipsize="marquee"
                 android:singleLine="true"
                 tools:text="http://http://http://http://http://http://http://"
