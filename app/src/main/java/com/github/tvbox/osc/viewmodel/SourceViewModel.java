@@ -91,6 +91,12 @@ public class SourceViewModel extends ViewModel {
             return;
         }
         SourceBean sourceBean = ApiConfig.get().getSource(sourceKey);
+        if (sourceBean == null) {
+            // homeSourceBean 指向的 key 在 sourceBeanList 中找不到(如切换/删除数据源后列表尚未同步),
+            // 直接回退空结果避免 NPE 崩溃, 首页将走空布局/兜底而非闪退。
+            sortResult.postValue(null);
+            return;
+        }
         int type = sourceBean.getType();
         if (type == 3) {
             Runnable waitResponse = new Runnable() {
