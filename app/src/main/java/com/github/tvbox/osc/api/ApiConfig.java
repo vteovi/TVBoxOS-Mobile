@@ -356,7 +356,6 @@ public class ApiConfig {
                 return content.toString();
             }
         }
-    }
 
     private void writeConfigCache(File cache, String json) throws Throwable {
         File cacheDir = cache.getParentFile();
