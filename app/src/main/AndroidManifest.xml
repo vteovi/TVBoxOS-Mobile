@@ -32,7 +32,6 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -57,18 +56,6 @@
             android:name=".ui.activity.SubscriptionActivity"
             android:configChanges="orientation|screenSize"
             android:exported="false" />
-        <activity
-            android:name=".ui.activity.VideoListActivity"
-            android:configChanges="orientation|screenSize"/>
-        <activity
-            android:name=".ui.activity.MovieFoldersActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="false"/>
-        <activity
-            android:name=".ui.activity.LocalPlayActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:exported="false"
-            android:screenOrientation="landscape" />
         <activity
             android:name=".ui.activity.MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
