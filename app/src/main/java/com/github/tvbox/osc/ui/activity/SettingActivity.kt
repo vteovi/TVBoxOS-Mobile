@@ -4,6 +4,8 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.recyclerview.widget.DiffUtil
 import com.blankj.utilcode.util.ToastUtils
@@ -25,14 +27,31 @@ import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.OkGoHelper
 import com.github.tvbox.osc.util.PlayerHelper
 import com.github.tvbox.osc.util.Utils
-import com.hjq.permissions.OnPermissionCallback
-import com.hjq.permissions.Permission
-import com.hjq.permissions.XXPermissions
+import android.app.Activity
+import android.content.Context
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
+import com.blankj.utilcode.util.AppUtils
+import com.github.tvbox.osc.base.App
+import com.github.tvbox.osc.data.AppDataManager
 import com.lxj.xpopup.XPopup
 import com.orhanobut.hawk.Hawk
 import okhttp3.HttpUrl
+import org.json.JSONObject
 import tv.danmaku.ijk.media.player.IjkMediaPlayer
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 /**
  * @author pj567
@@ -43,6 +62,153 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
     private companion object {
         const val REQUEST_IMPORT_LIVE_SOURCE = 9203
+    }
+
+    private val backupSaf = registerForActivityResult(
+        object : ActivityResultContract<String, Uri?>() {
+            override fun createIntent(context: Context, input: String): Intent =
+                Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    setType("application/zip")
+                    putExtra(Intent.EXTRA_TITLE, input)
+                }
+
+            override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+                if (resultCode == Activity.RESULT_OK) intent?.data else null
+        }
+    ) { uri -> uri?.let { doBackupToUri(it) } }
+
+    private val restoreSaf = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(arrayOf("application/zip", "application/octet-stream"))
+    ) { uri -> uri?.let { doRestoreFromUri(it) } }
+
+    private fun doBackupToUri(uri: Uri) {
+        try {
+            val tmpZip = File(cacheDir, "tvbox_backup_tmp.zip")
+            if (buildBackupZip(tmpZip)) {
+                contentResolver.openOutputStream(uri)?.use { os ->
+                    FileInputStream(tmpZip).use { it.copyTo(os) }
+                }
+                ToastUtils.showShort("备份成功")
+            } else {
+                ToastUtils.showShort("备份失败")
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            ToastUtils.showShort("备份失败: ${e.message}")
+        } finally {
+            File(cacheDir, "tvbox_backup_tmp.zip").delete()
+        }
+    }
+
+    private fun doRestoreFromUri(uri: Uri) {
+        val tmpRoot = File(cacheDir, "tvbox_restore_tmp")
+        try {
+            FileUtils.recursiveDelete(tmpRoot)
+            tmpRoot.mkdirs()
+            contentResolver.openInputStream(uri)?.use { input ->
+                unzipTo(input, tmpRoot)
+            }
+            val db = File(tmpRoot, "sqlite")
+            val hawk = File(tmpRoot, "hawk")
+            if (!db.exists()) {
+                ToastUtils.showShort("备份文件无效:缺少数据库")
+                return
+            }
+            if (AppDataManager.restore(db)) {
+                if (hawk.exists()) {
+                    restoreHawk(hawk)
+                    ToastUtils.showShort("恢复成功,即将重启应用!")
+                    Handler(Looper.getMainLooper()).postDelayed({ AppUtils.relaunchApp(true) }, 2000)
+                } else {
+                    ToastUtils.showShort("Hawk恢复失败!")
+                }
+            } else {
+                ToastUtils.showShort("DB文件恢复失败!")
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            ToastUtils.showShort("恢复失败: ${e.message}")
+        } finally {
+            FileUtils.recursiveDelete(tmpRoot)
+        }
+    }
+
+    private fun restoreHawk(hawkFile: File) {
+        val data = FileUtils.readSimple(hawkFile) ?: return
+        val json = JSONObject(String(data, Charsets.UTF_8))
+        val it = json.keys()
+        val sp = App.getInstance().getSharedPreferences("Hawk2", Context.MODE_PRIVATE)
+        val spCrypto = App.getInstance().getSharedPreferences("crypto.KEY_256", Context.MODE_PRIVATE)
+        while (it.hasNext()) {
+            val key = it.next()
+            val value = json.getString(key)
+            if (key == "cipher_key") {
+                spCrypto.edit().putString(key, value).commit()
+            } else {
+                sp.edit().putString(key, value).commit()
+            }
+        }
+    }
+
+    private fun buildBackupZip(destZip: File): Boolean {
+        return try {
+            val tmpRoot = File(cacheDir, "tvbox_backup_tmp")
+            FileUtils.recursiveDelete(tmpRoot)
+            val dataDir = File(tmpRoot, "data")
+            dataDir.mkdirs()
+            val db = File(dataDir, "sqlite")
+            if (!AppDataManager.backup(db)) return false
+            val sp = App.getInstance().getSharedPreferences("Hawk2", Context.MODE_PRIVATE)
+            val json = JSONObject()
+            for (key in sp.all.keys) json.put(key, sp.getString(key, ""))
+            val spCrypto = App.getInstance().getSharedPreferences("crypto.KEY_256", Context.MODE_PRIVATE)
+            for (key in spCrypto.all.keys) json.put(key, spCrypto.getString(key, ""))
+            if (!FileUtils.writeSimple(json.toString().toByteArray(Charsets.UTF_8), File(dataDir, "hawk")))
+                return false
+            zipFolder(dataDir, destZip)
+            true
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            false
+        } finally {
+            FileUtils.recursiveDelete(File(cacheDir, "tvbox_backup_tmp"))
+        }
+    }
+
+    private fun zipFolder(folder: File, dest: File) {
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(dest))).use { zos ->
+            folder.walkTopDown().forEach { file ->
+                if (file.isFile) {
+                    val name = (file.relativeTo(folder)?.path ?: file.name).replace("\\", "/")
+                    zos.putNextEntry(ZipEntry(name))
+                    FileInputStream(file).use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+            }
+        }
+    }
+
+    private fun unzipTo(input: InputStream, destDir: File) {
+        destDir.mkdirs()
+        val destPath = destDir.canonicalPath
+        ZipInputStream(BufferedInputStream(input)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                val outFile = File(destDir, entry.name)
+                if (!outFile.canonicalPath.startsWith(destPath)) {
+                    throw IOException("非法的压缩项: ${entry.name}")
+                }
+                if (entry.isDirectory) {
+                    outFile.mkdirs()
+                } else {
+                    outFile.parentFile?.mkdirs()
+                    FileOutputStream(outFile).use { zis.copyTo(it) }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
     }
 
     private var homeRec = Hawk.get(HawkConfig.HOME_REC, 0)
@@ -129,33 +295,18 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
         mBinding.llBackup.setOnClickListener { v: View? ->
             FastClickCheckUtil.check(v)
-            if (XXPermissions.isGranted(this@SettingActivity, Permission.MANAGE_EXTERNAL_STORAGE)) {
-                val dialog = BackupDialog(this@SettingActivity)
-                dialog.show()
-            } else {
-                XXPermissions.with(this@SettingActivity)
-                    .permission(Permission.MANAGE_EXTERNAL_STORAGE)
-                    .request(object : OnPermissionCallback {
-                        override fun onGranted(permissions: List<String>, all: Boolean) {
-                            if (all) {
-                                val dialog = BackupDialog(this@SettingActivity)
-                                dialog.show()
-                            }
-                        }
+            val dialog = BackupDialog(this@SettingActivity, object : BackupDialog.OnActionListener {
+                override fun onBackup() {
+                    val name = "TVBox-Backup-" +
+                        SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date()) + ".zip"
+                    backupSaf.launch(name)
+                }
 
-                        override fun onDenied(permissions: List<String>, never: Boolean) {
-                            if (never) {
-                                ToastUtils.showLong("获取存储权限失败,请在系统设置中开启")
-                                XXPermissions.startPermissionActivity(
-                                    this@SettingActivity,
-                                    permissions
-                                )
-                            } else {
-                                ToastUtils.showShort("获取存储权限失败")
-                            }
-                        }
-                    })
-            }
+                override fun onRestore() {
+                    restoreSaf.launch(arrayOf("application/zip", "application/octet-stream"))
+                }
+            })
+            dialog.show()
         }
 
         mBinding.llDns.setOnClickListener { v: View? ->
