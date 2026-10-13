@@ -242,17 +242,34 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (mGridView != null) {
-            // 复用现有 LayoutManager，只更新 spanCount；
-            // 直接 new 一个会让所有 item 销毁重建，横竖屏切换时海报高度会先闪一下再跳变。
-            int spanCount = Utils.getPosterSpanCount(this.mContext);
-            RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-            if (lm instanceof V7GridLayoutManager) {
-                ((V7GridLayoutManager) lm).setSpanCount(spanCount);
-            } else {
-                mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+        applySpanCount();
+    }
+
+    /**
+     * 校正当前 GridLayoutManager 的列数并强制重新布局。
+     * 在配置变化(横竖屏切换)和 Fragment 重新可见时各调一次，避免：
+     * 1) 不可见分栏的 setSpanCount 不触发 relayout；
+     * 2) 滑回分栏时先按旧列数布局一帧、再跳变的闪烁。
+     */
+    private void applySpanCount() {
+        if (mGridView == null) return;
+        int spanCount = Utils.getPosterSpanCount(this.mContext);
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        if (lm instanceof V7GridLayoutManager) {
+            V7GridLayoutManager glm = (V7GridLayoutManager) lm;
+            if (glm.getSpanCount() != spanCount) {
+                glm.setSpanCount(spanCount);
             }
+        } else {
+            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
         }
+        mGridView.requestLayout();
+    }
+
+    @Override
+    protected void onFragmentResume() {
+        super.onFragmentResume();
+        applySpanCount();
     }
 
     private void initViewModel() {
