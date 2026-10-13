@@ -68,30 +68,24 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
     }
 
     private void applyPosterRatio(final View itemView) {
-        if (itemView.getWidth() > 0) {
-            int h = itemView.getWidth() * 3 / 2;
-            ViewGroup.LayoutParams lp = itemView.getLayoutParams();
-            if (lp != null && lp.height != h) {
-                lp.height = h;
-                itemView.setLayoutParams(lp);
-            }
-        } else {
-            // 首次绑定时宽度尚未测量，等首次 layout 完成后再设一次
-            itemView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-                @Override
-                public void onLayoutChange(View v, int l, int t, int r, int b,
-                                           int oldL, int oldT, int oldR, int oldB) {
-                    if (r - l > 0) {
-                        v.removeOnLayoutChangeListener(this);
-                        int h = (r - l) * 3 / 2;
-                        ViewGroup.LayoutParams lp = v.getLayoutParams();
-                        if (lp != null && lp.height != h) {
-                            lp.height = h;
-                            v.setLayoutParams(lp);
-                        }
-                    }
+        // 每个 itemView 只挂一次 OnLayoutChangeListener；之后每次 layout（首次测量、
+        // 旋转、列数变化、复用到不同宽度）都按当前宽度统一重设为 2:3 高度，
+        // 避免 convert() 时直接 setLayoutParams 被 RecyclerView 忽略导致高度不一致。
+        if (itemView.getTag(R.id.tag_poster_ratio_listener) != null) return;
+        itemView.setTag(R.id.tag_poster_ratio_listener, Boolean.TRUE);
+        itemView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b,
+                                       int oldL, int oldT, int oldR, int oldB) {
+                int w = r - l;
+                if (w <= 0) return;
+                int h = w * 3 / 2;
+                ViewGroup.LayoutParams lp = v.getLayoutParams();
+                if (lp != null && lp.height != h) {
+                    lp.height = h;
+                    v.setLayoutParams(lp);
                 }
-            });
-        }
+            }
+        });
     }
 }

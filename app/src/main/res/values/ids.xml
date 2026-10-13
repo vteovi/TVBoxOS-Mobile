@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- tag key: 标记 item_grid 是否已挂过海报比例监听器 -->
+    <item name="tag_poster_ratio_listener" type="id"/>
+</resources>
