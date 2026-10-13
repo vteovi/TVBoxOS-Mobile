@@ -243,7 +243,15 @@ public class GridFragment extends BaseLazyFragment {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (mGridView != null) {
-            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, Utils.getPosterSpanCount(this.mContext)));
+            // 复用现有 LayoutManager，只更新 spanCount；
+            // 直接 new 一个会让所有 item 销毁重建，横竖屏切换时海报高度会先闪一下再跳变。
+            int spanCount = Utils.getPosterSpanCount(this.mContext);
+            RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+            if (lm instanceof V7GridLayoutManager) {
+                ((V7GridLayoutManager) lm).setSpanCount(spanCount);
+            } else {
+                mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+            }
         }
     }
 

@@ -30,8 +30,9 @@ public class RatioShadowLayout extends ShadowLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int widthMode = MeasureSpec.getMode(widthMeasureSpec);
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
-        // 网格 LayoutManager 给的宽度是 EXACTLY（列宽），此时按 2:3 定高
-        if (widthMode == MeasureSpec.EXACTLY && widthSize > 0) {
+        // 只要拿到了有限宽度（EXACTLY 列宽，或 AT_MOST 上限），就按 2:3 定高，
+        // 避免第一次测量走默认分支渲染成错误高度后再跳变。
+        if (widthSize > 0 && widthMode != MeasureSpec.UNSPECIFIED) {
             int height = widthSize * 3 / 2;
             super.onMeasure(widthMeasureSpec,
                     MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
