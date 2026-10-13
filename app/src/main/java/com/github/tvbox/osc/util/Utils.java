@@ -27,31 +27,25 @@ public class Utils {
 
     public static int getPosterSpanCount(Context context) {
         int widthDp = context.getResources().getConfiguration().screenWidthDp;
-        // 横屏 + 开启横版卡片：用较小目标列宽，让一行多放几个 16:9 横版卡片
-        boolean landscapeCard = Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
-        boolean landscape = context.getResources().getConfiguration().orientation
-                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
-        if (landscapeCard && landscape) {
-            // 横版 16:9 卡片，目标列宽同样跟随海报尺寸偏好
-            // 0 小=160dp  1 中=200dp(默认)  2 大=260dp
-            int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);
-            float colWidth;
-            switch (posterSize) {
-                case 0: colWidth = 160f; break;
-                case 2: colWidth = 260f; break;
-                default: colWidth = 200f; break;
-            }
-            int span = Math.round(widthDp / colWidth);
-            return Math.max(2, span);
-        }
         // 目标列宽由用户在设置页选择的海报尺寸决定
-        // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
         int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);
         float targetColWidth;
-        switch (posterSize) {
-            case 0: targetColWidth = 150f; break;
-            case 2: targetColWidth = 220f; break;
-            default: targetColWidth = 180f; break;
+        if (Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) {
+            // 横版 16:9 卡片：列宽跟随海报尺寸偏好
+            // 0 小=160dp  1 中=200dp(默认)  2 大=260dp
+            switch (posterSize) {
+                case 0: targetColWidth = 160f; break;
+                case 2: targetColWidth = 260f; break;
+                default: targetColWidth = 200f; break;
+            }
+        } else {
+            // 竖版 2:3 卡片
+            // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
+            switch (posterSize) {
+                case 0: targetColWidth = 150f; break;
+                case 2: targetColWidth = 220f; break;
+                default: targetColWidth = 180f; break;
+            }
         }
         int span = Math.round(widthDp / targetColWidth);
         return Math.max(2, span);
