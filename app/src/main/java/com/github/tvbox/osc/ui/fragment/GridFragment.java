@@ -239,9 +239,13 @@ public class GridFragment extends BaseLazyFragment {
         setLoadSir2(mGridView);
     }
 
+    /** 标记配置(横竖屏)是否发生了变化，用于 onFragmentResume 时判断是否需要重建 LayoutManager */
+    private boolean mConfigChanged = false;
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        mConfigChanged = true;
         applySpanCount(false);
     }
 
@@ -277,11 +281,14 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     protected void onFragmentResume() {
         super.onFragmentResume();
-        // 每次重新可见都按当前配置新建 LayoutManager：
-        // 横竖屏切换后再滑回本页时，第一帧就用正确列数，不会先按旧列数布局再跳变。
-        if (mGridView != null) {
-            int spanCount = Utils.getPosterSpanCount(this.mContext);
-            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+        // 只有横竖屏切换后才重建 LayoutManager（保证第一帧列数正确）；
+        // 普通从详情页返回不重建，保留滚动位置。
+        if (mConfigChanged) {
+            mConfigChanged = false;
+            if (mGridView != null) {
+                int spanCount = Utils.getPosterSpanCount(this.mContext);
+                mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+            }
         }
     }
 
