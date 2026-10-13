@@ -119,6 +119,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
             mHandler.removeCallbacks(sortTimeoutTask)
             showSuccess()
+            val oldSortIds = mSortDataList.map { it.id }
             mSortDataList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
                     DefaultConfig.adjustSort(
@@ -137,7 +138,13 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                     Hawk.put(cacheKey + "_rec", com.blankj.utilcode.util.GsonUtils.toJson(absXml.videoList))
                 }
             } catch (ignore: Exception) {}
-            initViewPager(absXml)
+            // 已用缓存渲染过 ViewPager，且分栏 id 序列没变，就不重建（避免跳回顶部/闪烁）
+            val newSortIds = mSortDataList.map { it.id }
+            val alreadyRendered = fragments.isNotEmpty()
+            val sameStructure = oldSortIds.size == newSortIds.size && oldSortIds.zip(newSortIds).all { it.first == it.second }
+            if (!alreadyRendered || !sameStructure) {
+                initViewPager(absXml)
+            }
         }
     }
 
