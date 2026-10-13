@@ -32,10 +32,12 @@ import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
+import com.google.gson.reflect.TypeToken;
 import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
 import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
+import java.util.List;
 import java.util.Stack;
 import android.view.ViewGroup;
 import android.widget.Toast;
@@ -280,6 +282,10 @@ public class GridFragment extends BaseLazyFragment {
                         showSuccess();
                         isLoad = true;
                         gridAdapter.setNewData(absXml.movie.videoList);
+                        // 写本地缓存，下次打开立即显示
+                        try {
+                            Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
+                        } catch (Exception ignore) {}
                     } else {
                         gridAdapter.addData(absXml.movie.videoList);
                     }
@@ -316,10 +322,39 @@ public class GridFragment extends BaseLazyFragment {
             showEmpty();
             return;
         }
-        showLoading();
         isLoad = false;
         scrollTop();
+
+        // 第一页先读本地缓存，立即显示上次内容，后台再发网络请求刷新
+        if (page == 1) {
+            try {
+                String cacheKey = cacheKey();
+                String cacheJson = Hawk.get(cacheKey, "");
+                if (!cacheJson.isEmpty()) {
+                    List<Movie.Video> cached = GsonUtils.fromJson(cacheJson,
+                            new TypeToken<List<Movie.Video>>(){}.getType());
+                    if (cached != null && !cached.isEmpty()) {
+                        showSuccess();
+                        isLoad = true;
+                        gridAdapter.setNewData(cached);
+                    }
+                }
+            } catch (Exception ignore) {}
+        }
+        // 没有缓存数据时才显示加载动画，有缓存则后台静默刷新
+        if (page == 1 && !isLoad) {
+            showLoading();
+        }
         sourceViewModel.getList(sortData, page);
+    }
+
+    private String cacheKey() {
+        try {
+            String sourceKey = ApiConfig.get().getHomeSourceBean().getKey();
+            return "grid_cache_" + sourceKey + "_" + (sortData != null ? sortData.id : "");
+        } catch (Exception e) {
+            return "grid_cache_unknown";
+        }
     }
 
     public boolean isTop() {
