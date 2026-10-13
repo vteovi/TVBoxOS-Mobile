@@ -31,21 +31,22 @@ public class Utils {
         int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);
         float targetColWidth;
         if (Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) {
-            // 横版 16:9 卡片：列宽跟随海报尺寸偏好
-            // 0 小=160dp  1 中=200dp(默认)  2 大=260dp
+            // 横版 16:9 卡片：列宽放大，手机竖屏一行一张(整行宽)，平板按宽度自动排 2-3 列
+            // 0 小=300dp  1 中=400dp(默认)  2 大=720dp(手机上整行一张,平板 2 列)
             switch (posterSize) {
-                case 0: targetColWidth = 160f; break;
-                case 2: targetColWidth = 260f; break;
-                default: targetColWidth = 200f; break;
+                case 0: targetColWidth = 300f; break;
+                case 2: targetColWidth = 720f; break;
+                default: targetColWidth = 400f; break;
             }
-        } else {
-            // 竖版 2:3 卡片
-            // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
-            switch (posterSize) {
-                case 0: targetColWidth = 150f; break;
-                case 2: targetColWidth = 220f; break;
-                default: targetColWidth = 180f; break;
-            }
+            int span = Math.round(widthDp / targetColWidth);
+            return Math.max(1, span);
+        }
+        // 竖版 2:3 卡片
+        // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
+        switch (posterSize) {
+            case 0: targetColWidth = 150f; break;
+            case 2: targetColWidth = 220f; break;
+            default: targetColWidth = 180f; break;
         }
         int span = Math.round(widthDp / targetColWidth);
         return Math.max(2, span);
