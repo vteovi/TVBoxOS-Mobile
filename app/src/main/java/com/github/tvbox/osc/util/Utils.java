@@ -27,6 +27,14 @@ public class Utils {
 
     public static int getPosterSpanCount(Context context) {
         int widthDp = context.getResources().getConfiguration().screenWidthDp;
+        // 横屏 + 开启横版卡片：用较小目标列宽，让一行多放几个 16:9 横版卡片
+        boolean landscapeCard = Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
+        boolean landscape = context.getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        if (landscapeCard && landscape) {
+            int span = Math.round(widthDp / 200f);
+            return Math.max(2, span);
+        }
         // 目标列宽由用户在设置页选择的海报尺寸决定
         // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
         int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);

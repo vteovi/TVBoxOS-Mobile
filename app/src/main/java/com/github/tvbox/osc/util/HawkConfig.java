@@ -70,4 +70,8 @@ public class HawkConfig {
      * 首页海报尺寸 0 小 1 中 2 大
      */
     public static final String POSTER_SIZE = "poster_size";
+    /**
+     * 横屏时是否使用横版(16:9)卡片
+     */
+    public static final String LANDSCAPE_CARD = "landscape_card";
 }
