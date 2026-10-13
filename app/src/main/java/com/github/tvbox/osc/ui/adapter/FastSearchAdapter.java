@@ -41,7 +41,6 @@ public class FastSearchAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHol
                             .centerCorp(true)
                             .override(AutoSizeUtils.dp2px(mContext, 110), AutoSizeUtils.dp2px(mContext, 160))
                             .roundRadius(AutoSizeUtils.dp2px(mContext, 20), RoundTransformation.RoundType.ALL))
-                    .placeholder(R.drawable.img_loading_placeholder)
                     .error(R.drawable.img_loading_placeholder)
                     .into(ivThumb);
         } else {

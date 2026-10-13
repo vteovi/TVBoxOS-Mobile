@@ -40,7 +40,6 @@ public class CollectAdapter extends BaseQuickAdapter<VodCollect, BaseViewHolder>
         if (!TextUtils.isEmpty(item.pic)) {
             Picasso.get()
                     .load(DefaultConfig.checkReplaceProxy(item.pic))
-                    .placeholder(R.drawable.img_loading_placeholder)
                     .error(R.drawable.img_loading_placeholder)
                     .into(ivThumb);
         } else {
