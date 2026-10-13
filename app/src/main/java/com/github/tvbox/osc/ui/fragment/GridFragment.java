@@ -242,22 +242,30 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        applySpanCount();
+        applySpanCount(false);
     }
 
     /**
-     * 校正当前 GridLayoutManager 的列数并强制重新布局。
-     * 在配置变化(横竖屏切换)和 Fragment 重新可见时各调一次，避免：
-     * 1) 不可见分栏的 setSpanCount 不触发 relayout；
-     * 2) 滑回分栏时先按旧列数布局一帧、再跳变的闪烁。
+     * 校正当前 GridLayoutManager 的列数。
+     *
+     * @param forceNewLayoutManager true 时如果列数不一致，直接 new 一个 LayoutManager
+     *                              （用于 Fragment 重新可见时，此时第一帧还没布局，
+     *                              不会出现"先旧列数再跳新列数"的闪烁）；
+     *                              false 时只 setSpanCount（用于配置变化时 Fragment 可见，
+     *                              平滑过渡不销毁 item）。
      */
-    private void applySpanCount() {
+    private void applySpanCount(boolean forceNewLayoutManager) {
         if (mGridView == null) return;
         int spanCount = Utils.getPosterSpanCount(this.mContext);
         RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
         if (lm instanceof V7GridLayoutManager) {
             V7GridLayoutManager glm = (V7GridLayoutManager) lm;
-            if (glm.getSpanCount() != spanCount) {
+            if (glm.getSpanCount() == spanCount) {
+                return;
+            }
+            if (forceNewLayoutManager) {
+                mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+            } else {
                 glm.setSpanCount(spanCount);
             }
         } else {
@@ -269,7 +277,12 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     protected void onFragmentResume() {
         super.onFragmentResume();
-        applySpanCount();
+        // 每次重新可见都按当前配置新建 LayoutManager：
+        // 横竖屏切换后再滑回本页时，第一帧就用正确列数，不会先按旧列数布局再跳变。
+        if (mGridView != null) {
+            int spanCount = Utils.getPosterSpanCount(this.mContext);
+            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+        }
     }
 
     private void initViewModel() {
