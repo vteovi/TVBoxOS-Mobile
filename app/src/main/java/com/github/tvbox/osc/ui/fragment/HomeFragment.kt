@@ -162,7 +162,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 val cacheJson = Hawk.get(cacheKey, "")
                 if (!cacheJson.isEmpty() && mSortDataList.isEmpty()) {
                     try {
-                        val cachedList = com.blankj.utilcode.util.GsonUtils.fromJson(
+                        val cachedList: ArrayList<SortData>? = com.blankj.utilcode.util.GsonUtils.fromJson(
                             cacheJson,
                             object : com.google.gson.reflect.TypeToken<ArrayList<SortData>>() {}.type
                         )
@@ -170,7 +170,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                             mSortDataList = cachedList
                             // 读缓存的主页推荐数据
                             val recJson = Hawk.get(cacheKey + "_rec", "")
-                            val recList = if (recJson.isEmpty()) null else
+                            val recList: ArrayList<com.github.tvbox.osc.bean.Movie.Video>? = if (recJson.isEmpty()) null else
                                 com.blankj.utilcode.util.GsonUtils.fromJson(
                                     recJson,
                                     object : com.google.gson.reflect.TypeToken<ArrayList<com.github.tvbox.osc.bean.Movie.Video>>() {}.type
