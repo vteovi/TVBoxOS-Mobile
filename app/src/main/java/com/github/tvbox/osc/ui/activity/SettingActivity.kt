@@ -225,6 +225,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
     private var homeRec = Hawk.get(HawkConfig.HOME_REC, 0)
     private var dnsOpt = Hawk.get(HawkConfig.DOH_URL, 0)
     private var currentLiveApi = Hawk.get(HawkConfig.LIVE_URL, "")
+    private var posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1)
     override fun init() {
 
         mBinding.titleBar.leftView.setOnClickListener { onBackPressed() }
@@ -232,6 +233,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
         mBinding.tvDns.text = OkGoHelper.dnsHttpsList[Hawk.get(HawkConfig.DOH_URL, 0)]
         mBinding.tvHomeRec.text = getHomeRecName(Hawk.get(HawkConfig.HOME_REC, 0))
+        mBinding.tvPosterSize.text = getPosterSizeName(Hawk.get(HawkConfig.POSTER_SIZE, 1))
         mBinding.tvHistoryNum.text =
             HistoryHelper.getHistoryNumName(Hawk.get(HawkConfig.HISTORY_NUM, 0))
         mBinding.tvScaleType.text = PlayerHelper.getScaleName(Hawk.get(HawkConfig.PLAY_SCALE, 0))
@@ -504,6 +506,36 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             }, types, defaultPos)
             dialog.show()
         }
+
+        mBinding.llPosterSize.setOnClickListener { v: View? ->
+            FastClickCheckUtil.check(v)
+            val defaultPos = Hawk.get(HawkConfig.POSTER_SIZE, 1)
+            val types = ArrayList<Int>()
+            types.add(0)
+            types.add(1)
+            types.add(2)
+            val dialog = SelectDialog<Int>(this@SettingActivity)
+            dialog.setTip("海报尺寸")
+            dialog.setAdapter(object : SelectDialogInterface<Int?> {
+                override fun click(value: Int?, pos: Int) {
+                    Hawk.put(HawkConfig.POSTER_SIZE, value)
+                    mBinding.tvPosterSize.text = getPosterSizeName(value?:1)
+                }
+
+                override fun getDisplay(value: Int?): String {
+                    return getPosterSizeName(value?:1)
+                }
+            }, object : DiffUtil.ItemCallback<Int>() {
+                override fun areItemsTheSame(oldItem: Int, newItem: Int): Boolean {
+                    return oldItem == newItem
+                }
+
+                override fun areContentsTheSame(oldItem: Int, newItem: Int): Boolean {
+                    return oldItem == newItem
+                }
+            }, types, defaultPos)
+            dialog.show()
+        }
         
         mBinding.llHistoryNum.setOnClickListener { v: View? ->
             FastClickCheckUtil.check(v)
@@ -604,7 +636,8 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 HawkConfig.DOH_URL,
                 0
             ) || currentLiveApi != Hawk.get(HawkConfig.LIVE_URL, "")
-        ) { // 首页类型/dns/doh/直播源有更改,需重载页面
+            || posterSize != Hawk.get(HawkConfig.POSTER_SIZE, 1)
+        ) { // 首页类型/dns/doh/直播源/海报尺寸有更改,需重载页面
             //AppManager.getInstance().finishAllActivity()
             if (currentLiveApi == Hawk.get(HawkConfig.LIVE_URL, "")) { //未更改直播源,不需重载api等
                 val bundle = Bundle()
@@ -682,6 +715,14 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             0 -> "豆瓣热播"
             1 -> "站点推荐"
             else -> "关闭"
+        }
+    }
+
+    private fun getPosterSizeName(type: Int): String {
+        return when (type) {
+            0 -> "小"
+            2 -> "大"
+            else -> "中"
         }
     }
 

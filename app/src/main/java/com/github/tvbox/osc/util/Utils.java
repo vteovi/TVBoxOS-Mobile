@@ -27,9 +27,16 @@ public class Utils {
 
     public static int getPosterSpanCount(Context context) {
         int widthDp = context.getResources().getConfiguration().screenWidthDp;
-        // 目标列宽 ~180dp（手机竖屏 2 列时的列宽），按屏宽反推列数，
-        // 让横竖屏切换时每列物理宽度基本一致，海报不会明显变大/变小。
-        int span = Math.round(widthDp / 180f);
+        // 目标列宽由用户在设置页选择的海报尺寸决定
+        // 0 小=150dp(列多/海报小)  1 中=180dp(默认)  2 大=220dp(列少/海报大)
+        int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);
+        float targetColWidth;
+        switch (posterSize) {
+            case 0: targetColWidth = 150f; break;
+            case 2: targetColWidth = 220f; break;
+            default: targetColWidth = 180f; break;
+        }
+        int span = Math.round(widthDp / targetColWidth);
         return Math.max(2, span);
     }
 

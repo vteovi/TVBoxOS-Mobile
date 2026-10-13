@@ -66,4 +66,8 @@ public class HawkConfig {
      * 搜索记录
      */
     public static final String HISTORY_SEARCH = "history_search";
+    /**
+     * 首页海报尺寸 0 小 1 中 2 大
+     */
+    public static final String POSTER_SIZE = "poster_size";
 }
