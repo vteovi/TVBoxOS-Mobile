@@ -27,10 +27,10 @@ public class Utils {
 
     public static int getPosterSpanCount(Context context) {
         int widthDp = context.getResources().getConfiguration().screenWidthDp;
-        // 目标列宽 ~120dp（竖屏 3 列时的列宽），按屏宽反推列数，
+        // 目标列宽 ~180dp（手机竖屏 2 列时的列宽），按屏宽反推列数，
         // 让横竖屏切换时每列物理宽度基本一致，海报不会明显变大/变小。
-        int span = Math.round(widthDp / 120f);
-        return Math.max(3, span);
+        int span = Math.round(widthDp / 180f);
+        return Math.max(2, span);
     }
 
     public static boolean supportsPiPMode() {
