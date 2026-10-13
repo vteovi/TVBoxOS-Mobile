@@ -2,6 +2,7 @@ package com.github.tvbox.osc.ui.adapter;
 
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -33,6 +34,10 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
     @Override
     protected void convert(BaseViewHolder helper, Movie.Video item) {
 
+        // 按 2:3 (宽:高) 动态调整 item 高度，保证手机/横屏/平板下都是标准海报比例
+        final View itemView = helper.itemView;
+        applyPosterRatio(itemView);
+
         TextView tvYear = helper.getView(R.id.tvYear);
         if (item.year <= 0) {
             tvYear.setVisibility(View.GONE);
@@ -59,6 +64,34 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
                     .into(ivThumb);
         } else {
             ivThumb.setImageResource(R.drawable.img_loading_placeholder);
+        }
+    }
+
+    private void applyPosterRatio(final View itemView) {
+        if (itemView.getWidth() > 0) {
+            int h = itemView.getWidth() * 3 / 2;
+            ViewGroup.LayoutParams lp = itemView.getLayoutParams();
+            if (lp != null && lp.height != h) {
+                lp.height = h;
+                itemView.setLayoutParams(lp);
+            }
+        } else {
+            // 首次绑定时宽度尚未测量，等首次 layout 完成后再设一次
+            itemView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View v, int l, int t, int r, int b,
+                                           int oldL, int oldT, int oldR, int oldB) {
+                    if (r - l > 0) {
+                        v.removeOnLayoutChangeListener(this);
+                        int h = (r - l) * 3 / 2;
+                        ViewGroup.LayoutParams lp = v.getLayoutParams();
+                        if (lp != null && lp.height != h) {
+                            lp.height = h;
+                            v.setLayoutParams(lp);
+                        }
+                    }
+                }
+            });
         }
     }
 }
