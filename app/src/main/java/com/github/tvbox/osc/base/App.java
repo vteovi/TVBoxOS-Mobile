@@ -26,19 +26,28 @@ import com.github.tvbox.osc.util.Utils;
 import com.kingja.loadsir.core.LoadSir;
 import com.orhanobut.hawk.Hawk;
 import com.p2p.P2PClass;
+import com.squareup.picasso.Downloader;
 import com.squareup.picasso.OkHttp3Downloader;
 import com.squareup.picasso.Picasso;
 import com.whl.quickjs.android.QuickJSLoader;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
 import cat.ereza.customactivityoncrash.config.CaocConfig;
 import me.jessyan.autosize.AutoSizeConfig;
 import me.jessyan.autosize.unit.Subunits;
-import okhttp3.Cache;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class App extends MultiDexApplication {
     private static App instance;
@@ -85,28 +94,77 @@ public class App extends MultiDexApplication {
     }
 
     private void initPicasso() {
-        // 用 OkHttp3 作为图片下载器并开启 100MB 磁盘缓存，
-        // 海报图按 URL 持久化到本地，下次打开直接读缓存，不重复下载。
+        // 自建文件缓存：按 URL MD5 作为 key 存到 cache/picasso/，
+        // 命中直接返回本地文件，未命中走网络再落盘。
+        // 不依赖 OkHttp Cache（源站无 Cache-Control 时不可靠）。
         try {
-            File cacheDir = new File(getCacheDir(), "picasso");
-            Cache diskCache = new Cache(cacheDir, 100L * 1024 * 1024);
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .cache(diskCache)
-                    // 源站图片响应头通常不带 Cache-Control，OkHttp 默认不写磁盘缓存。
-                    // 这里强制把响应标记为可缓存 7 天，让所有海报图都落盘。
-                    .addNetworkInterceptor(chain -> {
-                        okhttp3.Response original = chain.proceed(chain.request());
-                        return original.newBuilder()
-                                .header("Cache-Control", "public, max-age=604800")
+            final File cacheDir = new File(getCacheDir(), "picasso");
+            if (!cacheDir.exists()) cacheDir.mkdirs();
+            final OkHttpClient client = new OkHttpClient.Builder().build();
+
+            Downloader downloader = new Downloader() {
+                @Override
+                public Response load(Request request) throws IOException {
+                    String url = request.url().toString();
+                    String key = md5(url);
+                    File file = new File(cacheDir, key);
+
+                    // 命中本地缓存
+                    if (file.exists() && file.length() > 0) {
+                        byte[] bytes = Files.readAllBytes(file.toPath());
+                        ResponseBody body = ResponseBody.create(
+                                MediaType.parse("image/*"), bytes);
+                        return new Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK (file cache)")
+                                .body(body)
                                 .build();
-                    })
-                    .build();
+                    }
+
+                    // 未命中，走网络
+                    Response response = client.newCall(request).execute();
+                    ResponseBody body = response.body();
+                    if (response.isSuccessful() && body != null) {
+                        byte[] bytes = body.bytes();
+                        // 写入本地缓存
+                        File tmp = new File(cacheDir, key + ".tmp");
+                        try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                            fos.write(bytes);
+                        }
+                        tmp.renameTo(file);
+                        // 返回新的 Response（body 已消费）
+                        ResponseBody newBody = ResponseBody.create(
+                                body.contentType(), bytes);
+                        return response.newBuilder().body(newBody).build();
+                    }
+                    return response;
+                }
+
+                @Override
+                public void shutdown() {
+                }
+            };
+
             Picasso picasso = new Picasso.Builder(this)
-                    .downloader(new OkHttp3Downloader(client))
+                    .downloader(downloader)
                     .build();
             Picasso.setSingletonInstance(picasso);
         } catch (Throwable ignore) {
             // 初始化失败回退到默认 Picasso，不影响启动
+        }
+    }
+
+    private static String md5(String s) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] d = md.digest(s.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : d) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(s.hashCode());
         }
     }
 
