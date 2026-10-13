@@ -129,6 +129,14 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 } else {
                     DefaultConfig.adjustSort(ApiConfig.get().homeSourceBean.key, ArrayList(), true)
                 }
+            // 缓存分栏列表，下次打开立即渲染
+            try {
+                val cacheKey = "sort_cache_" + ApiConfig.get().homeSourceBean.key
+                Hawk.put(cacheKey, com.blankj.utilcode.util.GsonUtils.toJson(mSortDataList))
+                if (absXml?.videoList != null) {
+                    Hawk.put(cacheKey + "_rec", com.blankj.utilcode.util.GsonUtils.toJson(absXml.videoList))
+                }
+            } catch (ignore: Exception) {}
             initViewPager(absXml)
         }
     }
@@ -148,6 +156,33 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             dataInitOk && jarInitOk -> {
                 //正常初始化会先加载,最终到这,此时数据有以下几种情况
                 // 1. api/jar/spider等均加载完,正常显示数据。2. 缺失spider(存疑?)/api配置有问题同样加载(最后空布局 或 只有豆瓣首页)
+
+                // 先读本地缓存的分栏列表，立即渲染，不转圈；后台再拉新数据刷新
+                val cacheKey = "sort_cache_" + ApiConfig.get().homeSourceBean.key
+                val cacheJson = Hawk.get(cacheKey, "")
+                if (!cacheJson.isEmpty() && mSortDataList.isEmpty()) {
+                    try {
+                        val cachedList = com.blankj.utilcode.util.GsonUtils.fromJson(
+                            cacheJson,
+                            object : com.google.gson.reflect.TypeToken<ArrayList<SortData>>() {}.type
+                        )
+                        if (cachedList != null && cachedList.isNotEmpty()) {
+                            mSortDataList = cachedList
+                            // 读缓存的主页推荐数据
+                            val recJson = Hawk.get(cacheKey + "_rec", "")
+                            val recList = if (recJson.isEmpty()) null else
+                                com.blankj.utilcode.util.GsonUtils.fromJson(
+                                    recJson,
+                                    object : com.google.gson.reflect.TypeToken<ArrayList<com.github.tvbox.osc.bean.Movie.Video>>() {}.type
+                                )
+                            val fakeXml = AbsSortXml()
+                            if (recList != null) fakeXml.videoList = recList
+                            showSuccess()
+                            initViewPager(fakeXml)
+                        }
+                    } catch (ignore: Exception) {}
+                }
+
                 sourceViewModel?.getSort(ApiConfig.get().homeSourceBean.key)
                 // 分类还没渲染出来时上一道保险, 超时就直接渲染"主页"栏
                 if (mSortDataList.isEmpty()) {
