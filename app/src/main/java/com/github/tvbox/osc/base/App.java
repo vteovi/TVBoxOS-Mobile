@@ -26,28 +26,15 @@ import com.github.tvbox.osc.util.Utils;
 import com.kingja.loadsir.core.LoadSir;
 import com.orhanobut.hawk.Hawk;
 import com.p2p.P2PClass;
-import com.squareup.picasso.Downloader;
-import com.squareup.picasso.OkHttp3Downloader;
-import com.squareup.picasso.Picasso;
 import com.whl.quickjs.android.QuickJSLoader;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
 import cat.ereza.customactivityoncrash.config.CaocConfig;
 import me.jessyan.autosize.AutoSizeConfig;
 import me.jessyan.autosize.unit.Subunits;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Protocol;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 
 public class App extends MultiDexApplication {
     private static App instance;
@@ -84,88 +71,12 @@ public class App extends MultiDexApplication {
         PlayerHelper.init();
         QuickJSLoader.init();
         FileUtils.cleanPlayerCache();
-        initPicasso();
         initCrashConfig();
         Utils.initTheme();
         // 启动前清理上次可能残留的损坏原生库(远程 spider 下载失败产生的 XML 错误页)
         cleanCorruptNativeLibs();
         // 加载订阅源
         loadSubscriptions();
-    }
-
-    private void initPicasso() {
-        // 自建文件缓存：按 URL MD5 作为 key 存到 cache/picasso/，
-        // 命中直接返回本地文件，未命中走网络再落盘。
-        // 不依赖 OkHttp Cache（源站无 Cache-Control 时不可靠）。
-        try {
-            final File cacheDir = new File(getCacheDir(), "picasso");
-            if (!cacheDir.exists()) cacheDir.mkdirs();
-            final OkHttpClient client = new OkHttpClient.Builder().build();
-
-            Downloader downloader = new Downloader() {
-                @Override
-                public Response load(Request request) throws IOException {
-                    String url = request.url().toString();
-                    String key = md5(url);
-                    File file = new File(cacheDir, key);
-
-                    // 命中本地缓存
-                    if (file.exists() && file.length() > 0) {
-                        byte[] bytes = Files.readAllBytes(file.toPath());
-                        ResponseBody body = ResponseBody.create(
-                                MediaType.parse("image/*"), bytes);
-                        return new Response.Builder()
-                                .request(request)
-                                .protocol(Protocol.HTTP_1_1)
-                                .code(200)
-                                .message("OK (file cache)")
-                                .body(body)
-                                .build();
-                    }
-
-                    // 未命中，走网络
-                    Response response = client.newCall(request).execute();
-                    ResponseBody body = response.body();
-                    if (response.isSuccessful() && body != null) {
-                        byte[] bytes = body.bytes();
-                        // 写入本地缓存
-                        File tmp = new File(cacheDir, key + ".tmp");
-                        try (FileOutputStream fos = new FileOutputStream(tmp)) {
-                            fos.write(bytes);
-                        }
-                        tmp.renameTo(file);
-                        // 返回新的 Response（body 已消费）
-                        ResponseBody newBody = ResponseBody.create(
-                                body.contentType(), bytes);
-                        return response.newBuilder().body(newBody).build();
-                    }
-                    return response;
-                }
-
-                @Override
-                public void shutdown() {
-                }
-            };
-
-            Picasso picasso = new Picasso.Builder(this)
-                    .downloader(downloader)
-                    .build();
-            Picasso.setSingletonInstance(picasso);
-        } catch (Throwable ignore) {
-            // 初始化失败回退到默认 Picasso，不影响启动
-        }
-    }
-
-    private static String md5(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] d = md.digest(s.getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : d) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (Exception e) {
-            return String.valueOf(s.hashCode());
-        }
     }
 
     private void initParams() {

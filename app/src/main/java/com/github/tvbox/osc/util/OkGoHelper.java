@@ -169,7 +169,7 @@ public class OkGoHelper {
 
     static void initPicasso(OkHttpClient client) {
         client.dispatcher().setMaxRequestsPerHost(32);
-        MyOkhttpDownLoader downloader = new MyOkhttpDownLoader(client);
+        MyOkhttpDownLoader downloader = new MyOkhttpDownLoader(client, App.getInstance());
         Picasso picasso = new Picasso.Builder(App.getInstance())
                 .downloader(downloader)
                 .executor(HeavyTaskUtil.getBigTaskExecutorService())
