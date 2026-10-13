@@ -92,6 +92,14 @@ public class App extends MultiDexApplication {
             Cache diskCache = new Cache(cacheDir, 100L * 1024 * 1024);
             OkHttpClient client = new OkHttpClient.Builder()
                     .cache(diskCache)
+                    // 源站图片响应头通常不带 Cache-Control，OkHttp 默认不写磁盘缓存。
+                    // 这里强制把响应标记为可缓存 7 天，让所有海报图都落盘。
+                    .addNetworkInterceptor(chain -> {
+                        okhttp3.Response original = chain.proceed(chain.request());
+                        return original.newBuilder()
+                                .header("Cache-Control", "public, max-age=604800")
+                                .build();
+                    })
                     .build();
             Picasso picasso = new Picasso.Builder(this)
                     .downloader(new OkHttp3Downloader(client))
