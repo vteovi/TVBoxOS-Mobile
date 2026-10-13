@@ -26,11 +26,11 @@ public class Utils {
     }
 
     public static int getPosterSpanCount(Context context) {
-        if (!isTablet(context)) return 3;
         int widthDp = context.getResources().getConfiguration().screenWidthDp;
         if (widthDp >= 1200) return 6;
         if (widthDp >= 900) return 5;
-        return 4;
+        if (widthDp >= 600) return 4;
+        return 3;
     }
 
     public static boolean supportsPiPMode() {
