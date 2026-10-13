@@ -32,7 +32,16 @@ public class Utils {
         boolean landscape = context.getResources().getConfiguration().orientation
                 == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         if (landscapeCard && landscape) {
-            int span = Math.round(widthDp / 200f);
+            // 横版 16:9 卡片，目标列宽同样跟随海报尺寸偏好
+            // 0 小=160dp  1 中=200dp(默认)  2 大=260dp
+            int posterSize = Hawk.get(HawkConfig.POSTER_SIZE, 1);
+            float colWidth;
+            switch (posterSize) {
+                case 0: colWidth = 160f; break;
+                case 2: colWidth = 260f; break;
+                default: colWidth = 200f; break;
+            }
+            int span = Math.round(widthDp / colWidth);
             return Math.max(2, span);
         }
         // 目标列宽由用户在设置页选择的海报尺寸决定
