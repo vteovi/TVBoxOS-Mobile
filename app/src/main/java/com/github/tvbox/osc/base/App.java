@@ -26,6 +26,8 @@ import com.github.tvbox.osc.util.Utils;
 import com.kingja.loadsir.core.LoadSir;
 import com.orhanobut.hawk.Hawk;
 import com.p2p.P2PClass;
+import com.squareup.picasso.OkHttp3Downloader;
+import com.squareup.picasso.Picasso;
 import com.whl.quickjs.android.QuickJSLoader;
 
 import java.io.File;
@@ -35,6 +37,8 @@ import java.util.List;
 import cat.ereza.customactivityoncrash.config.CaocConfig;
 import me.jessyan.autosize.AutoSizeConfig;
 import me.jessyan.autosize.unit.Subunits;
+import okhttp3.Cache;
+import okhttp3.OkHttpClient;
 
 public class App extends MultiDexApplication {
     private static App instance;
@@ -71,12 +75,31 @@ public class App extends MultiDexApplication {
         PlayerHelper.init();
         QuickJSLoader.init();
         FileUtils.cleanPlayerCache();
+        initPicasso();
         initCrashConfig();
         Utils.initTheme();
         // 启动前清理上次可能残留的损坏原生库(远程 spider 下载失败产生的 XML 错误页)
         cleanCorruptNativeLibs();
         // 加载订阅源
         loadSubscriptions();
+    }
+
+    private void initPicasso() {
+        // 用 OkHttp3 作为图片下载器并开启 100MB 磁盘缓存，
+        // 海报图按 URL 持久化到本地，下次打开直接读缓存，不重复下载。
+        try {
+            File cacheDir = new File(getCacheDir(), "picasso");
+            Cache diskCache = new Cache(cacheDir, 100L * 1024 * 1024);
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .cache(diskCache)
+                    .build();
+            Picasso picasso = new Picasso.Builder(this)
+                    .downloader(new OkHttp3Downloader(client))
+                    .build();
+            Picasso.setSingletonInstance(picasso);
+        } catch (Throwable ignore) {
+            // 初始化失败回退到默认 Picasso，不影响启动
+        }
     }
 
     private void initParams() {
