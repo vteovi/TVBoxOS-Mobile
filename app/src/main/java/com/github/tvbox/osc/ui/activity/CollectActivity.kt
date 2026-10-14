@@ -29,16 +29,16 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
     private var destinationAfterFinish: Int? = null
 
     override fun init() {
-        mBinding.viewPager.adapter = object : androidx.viewpager2.adapter.FragmentStateAdapter(this) {
+        mBinding.viewPager!!.adapter = object : androidx.viewpager2.adapter.FragmentStateAdapter(this) {
             override fun getItemCount() = tabs.size
             override fun createFragment(position: Int): Fragment = fragments[position]
         }
-        TabLayoutMediator(mBinding.tabLayout, mBinding.viewPager) { tab, position ->
+        TabLayoutMediator(mBinding.tabLayout!!, mBinding.viewPager!!) { tab, position ->
             tab.text = tabs[position]
         }.attach()
 
         mBinding.titleBar.rightView.setOnClickListener {
-            val pos = mBinding.viewPager.currentItem
+            val pos = mBinding.viewPager!!.currentItem
             val title = if (pos == 0) "收藏" else "历史记录"
             XPopup.Builder(this)
                 .isDarkTheme(Utils.isDarkTheme())
