@@ -271,6 +271,14 @@ public class GridFragment extends BaseLazyFragment {
                 mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
             }
         }
+        // 从其他分栏切回来时，兜底重置加载状态，防止之前的请求回调丢失导致永久卡住
+        if (mLoading) {
+            mLoading = false;
+            if (gridAdapter != null) {
+                gridAdapter.loadMoreComplete();
+                gridAdapter.setEnableLoadMore(true);
+            }
+        }
     }
 
     private void initViewModel() {
