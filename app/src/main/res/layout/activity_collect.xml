@@ -15,23 +15,22 @@
         app:leftIcon="@null"
         app:rightIcon="@drawable/ic_clear" />
 
-    <TextView
-        android:id="@+id/top_tip"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginVertical="10dp"
-        android:visibility="gone"
-        tools:visibility="visible"
-        android:text="长按取消收藏" />
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        app:tabMode="fixed"
+        app:tabGravity="fill"
+        app:tabIndicatorHeight="3dp"
+        app:tabTextColor="#888888"
+        app:tabSelectedTextColor="@android:color/black"
+        app:tabIndicatorColor="@color/colorPrimary" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/mGridView"
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingHorizontal="10dp"
-        android:paddingTop="10dp" />
+        android:layout_weight="1" />
 
     <include
         android:id="@+id/bottom_nav"
