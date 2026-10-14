@@ -1,9 +1,7 @@
 package com.github.tvbox.osc.ui.activity
 
 import android.os.Bundle
-import android.view.View
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentStateAdapter
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.github.tvbox.osc.base.BaseVbActivity
@@ -11,6 +9,7 @@ import com.github.tvbox.osc.cache.RoomDataManger
 import com.github.tvbox.osc.databinding.ActivityHistoryBinding
 import com.github.tvbox.osc.ui.fragment.RecordListFragment
 import com.github.tvbox.osc.util.Utils
+import com.google.android.material.tabs.TabLayoutMediator
 import com.lxj.xpopup.XPopup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,14 +24,13 @@ class HistoryActivity : BaseVbActivity<ActivityHistoryBinding>() {
     )
 
     override fun init() {
-        mBinding.viewPager.adapter = object : FragmentStateAdapter(this) {
+        mBinding.viewPager.adapter = object : androidx.viewpager2.adapter.FragmentStateAdapter(this) {
             override fun getItemCount() = tabs.size
             override fun createFragment(position: Int): Fragment = fragments[position]
         }
-        mBinding.tabLayout.setupWithViewPager(mBinding.viewPager)
-        for (i in tabs.indices) {
-            mBinding.tabLayout.getTabAt(i)?.text = tabs[i]
-        }
+        TabLayoutMediator(mBinding.tabLayout, mBinding.viewPager) { tab, position ->
+            tab.text = tabs[position]
+        }.attach()
 
         mBinding.titleBar.rightView.setOnClickListener {
             val pos = mBinding.viewPager.currentItem
