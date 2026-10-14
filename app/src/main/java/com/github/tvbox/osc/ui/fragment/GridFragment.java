@@ -290,13 +290,20 @@ public class GridFragment extends BaseLazyFragment {
 //                if(mGridView != null) mGridView.requestFocus();
                 if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
                     if (page == 1) {
-                        showSuccess();
-                        isLoad = true;
-                        gridAdapter.setNewData(absXml.movie.videoList);
-                        // 写本地缓存，下次打开立即显示
-                        try {
-                            Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
-                        } catch (Exception ignore) {}
+                        // 如果已经从本地缓存显示过数据，后台返回时只更新缓存文件，不重绘列表（避免卡顿/闪烁）
+                        boolean shownFromCache = isLoad && gridAdapter.getData().size() > 0;
+                        if (shownFromCache) {
+                            try {
+                                Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
+                            } catch (Exception ignore) {}
+                        } else {
+                            showSuccess();
+                            isLoad = true;
+                            gridAdapter.setNewData(absXml.movie.videoList);
+                            try {
+                                Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
+                            } catch (Exception ignore) {}
+                        }
                     } else {
                         gridAdapter.addData(absXml.movie.videoList);
                     }
