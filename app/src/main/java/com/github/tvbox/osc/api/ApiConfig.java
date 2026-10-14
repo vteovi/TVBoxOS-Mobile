@@ -136,16 +136,17 @@ public class ApiConfig {
         }
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl));
         // 冷启动也先读本地缓存立即回调，让 UI 快速显示；后台继续下载新配置刷新
-        boolean cacheHit = false;
+        boolean cacheHitRaw = false;
         if (cache.exists()) {
             try {
                 parseJson(apiUrl, cache);
                 callback.success();
-                cacheHit = true;
+                cacheHitRaw = true;
             } catch (Throwable th) {
                 th.printStackTrace();
             }
         }
+        final boolean cacheHit = cacheHitRaw;
         if (useCache && cacheHit) {
             return;
         }
