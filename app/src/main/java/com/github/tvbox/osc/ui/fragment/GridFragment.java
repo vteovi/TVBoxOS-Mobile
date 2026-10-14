@@ -58,6 +58,7 @@ public class GridFragment extends BaseLazyFragment {
     private int page = 1;
     private int maxPage = 1;
     private boolean isLoad = false;
+    private boolean mLoading = false; // 防止分页请求重复/竞争
     private boolean isTop = true;
     private View focusedView = null;
     private class GridInfo{
@@ -187,7 +188,9 @@ public class GridFragment extends BaseLazyFragment {
         gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
             @Override
             public void onLoadMoreRequested() {
+                if (mLoading) return; // 上一页还在加载中，跳过
                 gridAdapter.setEnableLoadMore(true);
+                mLoading = true;
                 sourceViewModel.getList(sortData, page);
             }
         }, mGridView);
@@ -309,6 +312,7 @@ public class GridFragment extends BaseLazyFragment {
                     }
                     gridAdapter.setEnableLoadMore(false);
                 }
+                mLoading = false;
             }
         });
     }
@@ -345,6 +349,7 @@ public class GridFragment extends BaseLazyFragment {
         if (page == 1 && !isLoad) {
             showLoading();
         }
+        mLoading = true;
         sourceViewModel.getList(sortData, page);
     }
 

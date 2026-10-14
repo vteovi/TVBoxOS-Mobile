@@ -1,0 +1,10 @@
+{
+  "remotes": {
+    "D:/Project/TVBoxOS-Mobile": "https://github.com/vteovi/TVBoxOS-Mobile.git"
+  },
+  "window": {
+    "width": 1100,
+    "height": 700
+  },
+  "last_repo": "D:/Project/TVBoxOS-Mobile"
+}
