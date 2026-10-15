@@ -144,6 +144,17 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             val sameStructure = oldSortIds.size == newSortIds.size && oldSortIds.zip(newSortIds).all { it.first == it.second }
             if (!alreadyRendered || !sameStructure) {
                 initViewPager(absXml)
+            } else {
+                // 分栏结构没变不重建，但要把最新的站点推荐数据更新到主页 UserFragment
+                if (Hawk.get(HawkConfig.HOME_REC, 0) == 1 && absXml?.videoList != null && absXml.videoList.isNotEmpty()) {
+                    for (f in fragments) {
+                        if (f is com.github.tvbox.osc.ui.fragment.UserFragment) {
+                            f.setHomeSourceRec(absXml.videoList)
+                            f.refreshHomeRec()
+                            break
+                        }
+                    }
+                }
             }
         }
     }

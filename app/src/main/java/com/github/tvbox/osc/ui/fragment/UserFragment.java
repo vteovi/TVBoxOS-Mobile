@@ -143,6 +143,16 @@ public class UserFragment extends BaseLazyFragment {
         initHomeHotVod(homeHotVodAdapter);
     }
 
+    public void setHomeSourceRec(List<Movie.Video> rec) {
+        this.homeSourceRec = rec;
+    }
+
+    public void refreshHomeRec() {
+        if (homeHotVodAdapter != null) {
+            initHomeHotVod(homeHotVodAdapter);
+        }
+    }
+
     private void initHomeHotVod(GridAdapter adapter) {
         if (Hawk.get(HawkConfig.HOME_REC, 0) == 1) {
             if (homeSourceRec != null && homeSourceRec.size() > 0) {
