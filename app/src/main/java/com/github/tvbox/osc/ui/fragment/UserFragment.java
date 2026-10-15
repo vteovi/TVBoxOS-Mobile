@@ -61,6 +61,7 @@ public class UserFragment extends BaseLazyFragment {
 
     private GridAdapter homeHotVodAdapter;
     private List<Movie.Video> homeSourceRec;
+    private int lastHomeRec = -1;
     RecyclerView tvHotList1;
 
     public static UserFragment newInstance(List<Movie.Video> recVod) {
@@ -78,6 +79,13 @@ public class UserFragment extends BaseLazyFragment {
 
         tvHotList1.setHasFixedSize(true);
         tvHotList1.setLayoutManager(new GridLayoutManager(this.mContext, Utils.getPosterSpanCount(this.mContext)));
+
+        // 设置里切换了主页内容模式时，重新加载
+        int curHomeRec = Hawk.get(HawkConfig.HOME_REC, 0);
+        if (lastHomeRec != -1 && lastHomeRec != curHomeRec && homeHotVodAdapter != null) {
+            initHomeHotVod(homeHotVodAdapter);
+        }
+        lastHomeRec = curHomeRec;
     }
 
     @Override
