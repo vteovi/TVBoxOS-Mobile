@@ -305,7 +305,19 @@ public class GridFragment extends BaseLazyFragment {
                             gridAdapter.setNewData(absXml.movie.videoList);
                         }
                     } else {
-                        gridAdapter.addData(absXml.movie.videoList);
+                        // 加载更多：按影片 id 去重，避免分页边界数据重叠导致重复显示
+                        List<Movie.Video> existing = gridAdapter.getData();
+                        java.util.Set<String> seen = new java.util.HashSet<>();
+                        for (Movie.Video v : existing) {
+                            if (v != null && !TextUtils.isEmpty(v.id)) seen.add(v.id);
+                        }
+                        List<Movie.Video> fresh = new java.util.ArrayList<>();
+                        for (Movie.Video v : absXml.movie.videoList) {
+                            if (v != null && !TextUtils.isEmpty(v.id) && seen.add(v.id)) {
+                                fresh.add(v);
+                            }
+                        }
+                        if (!fresh.isEmpty()) gridAdapter.addData(fresh);
                     }
                     page++;
                     maxPage = absXml.movie.pagecount;
