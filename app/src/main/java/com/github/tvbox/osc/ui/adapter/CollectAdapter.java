@@ -36,6 +36,8 @@ public class CollectAdapter extends BaseQuickAdapter<VodCollect, BaseViewHolder>
         }
         helper.setText(R.id.tvName, item.name);
         ImageView ivThumb = helper.getView(R.id.ivThumb);
+        Picasso.get().cancelRequest(ivThumb);
+        ivThumb.setImageDrawable(null);
         //由于部分电视机使用glide报错
         if (!TextUtils.isEmpty(item.pic)) {
             Picasso.get()

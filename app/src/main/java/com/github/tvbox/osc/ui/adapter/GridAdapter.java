@@ -45,7 +45,8 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
         }
         helper.setText(R.id.tvName, item.name);
         ImageView ivThumb = helper.getView(R.id.ivThumb);
-        // 快速滑动时先清空旧图，避免复用时显示上一个位置的海报
+        // 快速滑动时取消之前的请求并清空旧图，避免复用时显示上一个位置的海报
+        Picasso.get().cancelRequest(ivThumb);
         ivThumb.setImageDrawable(null);
         //由于部分电视机使用glide报错
         if (!TextUtils.isEmpty(item.pic)) {
