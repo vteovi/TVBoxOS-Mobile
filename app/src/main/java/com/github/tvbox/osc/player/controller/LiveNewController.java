@@ -63,4 +63,15 @@ public class LiveNewController extends BaseController {
         }
         return super.onBackPressed();
     }
+
+    /**
+     * 双击直播画面切换全屏（直播页已关闭双击播放，故双击统一用于全屏切换）
+     */
+    @Override
+    public boolean onDoubleTap(MotionEvent e) {
+        if (isInPlaybackState()) {
+            toggleFullScreen();
+        }
+        return true;
+    }
 }
