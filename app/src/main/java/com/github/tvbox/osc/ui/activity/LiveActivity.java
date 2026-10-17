@@ -241,11 +241,13 @@ public class LiveActivity extends BaseActivity {
         findViewById(R.id.ic_live_source).setOnClickListener(view -> showLiveSourceDialog());
         //画中画(小窗)模式
         ImageView icPip = findViewById(R.id.ic_pip);
-        if (Utils.supportsPiPMode()) {
-            icPip.setVisibility(View.VISIBLE);
-            icPip.setOnClickListener(view -> enterPip());
-        } else {
-            icPip.setVisibility(View.GONE);
+        if (icPip != null) {
+            if (Utils.supportsPiPMode()) {
+                icPip.setVisibility(View.VISIBLE);
+                icPip.setOnClickListener(view -> enterPip());
+            } else {
+                icPip.setVisibility(View.GONE);
+            }
         }
 
         initVideoView();
