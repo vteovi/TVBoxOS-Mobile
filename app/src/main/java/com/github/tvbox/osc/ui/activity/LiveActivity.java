@@ -771,7 +771,10 @@ public class LiveActivity extends BaseActivity {
         }
         RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) switchBar.getLayoutParams();
         if (land) {
+            // 注意: XML 里同时声明了 alignParentRight, 不清掉它会和 LEFT_OF 冲突,
+            // RelativeLayout 里"贴右"优先级更高, 行还是会被压到图标上
             lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, 0);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
             lp.addRule(RelativeLayout.CENTER_VERTICAL);
             lp.addRule(RelativeLayout.LEFT_OF, R.id.ic_live_source);
             lp.setMargins(0, 0, dp2px(14), 0);
@@ -779,6 +782,7 @@ public class LiveActivity extends BaseActivity {
             lp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
             lp.addRule(RelativeLayout.LEFT_OF, 0);
             lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
             lp.setMargins(0, 0, dp2px(20), dp2px(10));
         }
         switchBar.setLayoutParams(lp);
