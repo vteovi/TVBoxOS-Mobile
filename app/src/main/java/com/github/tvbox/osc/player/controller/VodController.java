@@ -139,6 +139,10 @@ public class VodController extends BaseController {
     public TextView mPlayerTimeResetBtn;
     TextView mPlayPauseTime;
     TextView mPlayLoadNetSpeed;
+    LinearLayout mPlayInfoRoot;
+    TextView mPlayInfoSpeed;
+    TextView mPlayInfoProgress;
+    TextView mPlayInfoClock;
     TextView mVideoSize;
     public SimpleSubtitleView mSubtitleView;
     public TextView mZimuBtn;
@@ -177,6 +181,8 @@ public class VodController extends BaseController {
                 String height = Integer.toString(mControlWrapper.getVideoSize()[1]);
                 mVideoSize.setText(width + " x " + height);
             }
+
+            refreshPlayInfo();
 
             mHandler.postDelayed(this, 1000);
         }
@@ -232,6 +238,13 @@ public class VodController extends BaseController {
         mIvPlayStatus = findViewById(R.id.play_status);
         mChooseSeries = findViewById(R.id.choose_series);
         mLockView = findViewById(R.id.iv_lock);
+        mPlayInfoRoot = findViewById(R.id.container_play_info);
+        mPlayInfoSpeed = findViewById(R.id.tv_play_info_speed);
+        mPlayInfoProgress = findViewById(R.id.tv_play_info_progress);
+        mPlayInfoClock = findViewById(R.id.tv_play_info_clock);
+        Boolean playInfoShow = Hawk.get(HawkConfig.PLAY_INFO_SHOW, false);
+        mPlayInfoRoot.setVisibility(playInfoShow != null && playInfoShow ? VISIBLE : GONE);
+        refreshPlayInfo();
 
         initSubtitleInfo();
 
@@ -724,6 +737,55 @@ public class VodController extends BaseController {
 
     public void setTitle(String playTitleInfo) {
         mPlayTitle1.setText(playTitleInfo);
+    }
+
+    /**
+     * 播放信息浮层(网速/播放进度/北京时间)当前是否显示
+     */
+    public boolean isPlayInfoVisible() {
+        return mPlayInfoRoot != null && mPlayInfoRoot.getVisibility() == VISIBLE;
+    }
+
+    /**
+     * 切换播放信息浮层, 返回切换后的状态
+     */
+    public boolean togglePlayInfo() {
+        boolean show = !isPlayInfoVisible();
+        setPlayInfoVisible(show);
+        return show;
+    }
+
+    /**
+     * 设置播放信息浮层显示状态, 并持久化, 下次进播放页保持
+     */
+    public void setPlayInfoVisible(boolean show) {
+        Hawk.put(HawkConfig.PLAY_INFO_SHOW, show);
+        if (mPlayInfoRoot == null) return;
+        mPlayInfoRoot.setVisibility(show ? VISIBLE : GONE);
+        if (show) refreshPlayInfo();
+    }
+
+    /**
+     * 刷新播放信息浮层: 网速 / 当前播放时间与影片时长 / 北京时间
+     */
+    private void refreshPlayInfo() {
+        if (mPlayInfoRoot == null || mPlayInfoRoot.getVisibility() != VISIBLE) return;
+        if (mControlWrapper != null) {
+            if (mPlayInfoSpeed != null) {
+                String speed = PlayerHelper.getDisplaySpeed(mControlWrapper.getTcpSpeed());
+                mPlayInfoSpeed.setText("网速 " + (TextUtils.isEmpty(speed) ? "--" : speed));
+            }
+            if (mPlayInfoProgress != null) {
+                long duration = mControlWrapper.getDuration();
+                long position = mControlWrapper.getCurrentPosition();
+                if (duration < 0) duration = 0;
+                if (position < 0) position = 0;
+                mPlayInfoProgress.setText(stringForTime((int) position) + " / " + stringForTime((int) duration));
+            }
+        }
+        if (mPlayInfoClock != null) {
+            mPlayInfoClock.setText("时间 " + new SimpleDateFormat("HH:mm:ss").format(new Date()));
+        }
     }
 
     public void resetSpeed() {

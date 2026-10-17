@@ -52,6 +52,7 @@ public class PlayingControlDialog extends BottomPopupView {
         mBinding.decode.setText(mController.mPlayerIJKBtn.getText());
         updateAboutIjkVisible();
         updateSpeedUi();
+        updatePlayInfoUi();
     }
 
     private void initListener(){
@@ -103,6 +104,20 @@ public class PlayingControlDialog extends BottomPopupView {
         mBinding.subtitle.setOnClickListener(view -> dismissWith(() -> changeAndUpdateText(null,mController.mZimuBtn)));
         mBinding.voice.setOnClickListener(view -> dismissWith(() -> changeAndUpdateText(null,mController.mAudioTrackBtn)));
         mBinding.download.setOnClickListener(view -> dismissWith(mDetailActivity::use1DMDownload));
+        mBinding.playInfo.setOnClickListener(view -> {
+            mController.togglePlayInfo();
+            updatePlayInfoUi();
+        });
+    }
+
+    /**
+     * 播放信息浮层开关状态: 开启时高亮
+     */
+    private void updatePlayInfoUi(){
+        boolean on = mController.isPlayInfoVisible();
+        mBinding.playInfo.setBackground(getResources().getDrawable(on ? R.drawable.bg_r_common_solid_primary : R.drawable.bg_r_common_stroke_primary));
+        mBinding.playInfo.setTextColor(ColorUtils.getColor(on ? R.color.white : R.color.text_foreground));
+        mBinding.playInfo.setText(on ? "播放信息(开)" : "播放信息");
     }
 
     private void updateSkipText(boolean start){

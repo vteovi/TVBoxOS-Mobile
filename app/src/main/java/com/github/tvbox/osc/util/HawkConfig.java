@@ -74,4 +74,9 @@ public class HawkConfig {
      * 横屏时是否使用横版(16:9)卡片
      */
     public static final String LANDSCAPE_CARD = "landscape_card";
+
+    /**
+     * 播放页是否显示播放信息浮层(网速/播放进度/北京时间)
+     */
+    public static final String PLAY_INFO_SHOW = "play_info_show";
 }
