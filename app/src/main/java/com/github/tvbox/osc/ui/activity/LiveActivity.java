@@ -1236,6 +1236,22 @@ public class LiveActivity extends BaseActivity {
         mHandler.postDelayed(mHideChannelInfoRun, 3000);
     }
 
+    /**
+     * 延迟弹出频道侧边栏: 等全屏动画稳定后再 show, 否则弹层尺寸/层级可能错位。
+     * 期间若已经退出全屏(或用户手动打开过), 就不弹了。
+     */
+    private final Runnable mAutoOpenAllChannelRun = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isDestroyed()) return;
+            if (mVideoView == null || !mVideoView.isFullScreen()) return;
+            if (mAllChannelRightDialog != null && mAllChannelRightDialog.isShow()) return;
+            if (getResources().getConfiguration().orientation
+                    != Configuration.ORIENTATION_LANDSCAPE) return;
+            showAllChannelDialog();
+        }
+    };
+
     private Runnable mHideChannelInfoRun = new Runnable() {
         @Override
         public void run() {
@@ -1439,8 +1455,19 @@ public class LiveActivity extends BaseActivity {
             public void onPlayerStateChanged(int playerState) {
                 if (playerState == VideoView.PLAYER_FULL_SCREEN) {
                     relocateLiveInfoOverlay(true);
+                    // 横屏进入直播页会直接进全屏, 全屏下页面上没有频道列表可点,
+                    // 这里把右侧频道侧边栏自动打开(延迟到全屏稳定后, 避免和全屏动画抢)
+                    if (getResources().getConfiguration().orientation
+                            == Configuration.ORIENTATION_LANDSCAPE) {
+                        mHandler.postDelayed(mAutoOpenAllChannelRun, 300);
+                    }
                 } else if (playerState == VideoView.PLAYER_NORMAL) {
                     relocateLiveInfoOverlay(false);
+                    mHandler.removeCallbacks(mAutoOpenAllChannelRun);
+                    // 退出全屏要收起频道抽屉: 它是独立浮层, 不退会悬在普通页面右侧
+                    if (mAllChannelRightDialog != null && mAllChannelRightDialog.isShow()) {
+                        mAllChannelRightDialog.dismiss();
+                    }
                     // 退出全屏后按当前方向重算视频区高度
                     applyLiveVideoBoxSize();
                 }

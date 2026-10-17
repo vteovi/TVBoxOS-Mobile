@@ -3,6 +3,7 @@ package com.github.tvbox.osc.player.controller;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.view.MotionEvent;
 
 import com.github.tvbox.osc.R;
@@ -102,6 +103,31 @@ public class LiveNewController extends BaseController {
             return stopFullScreen();
         }
         return super.onBackPressed();
+    }
+
+    /**
+     * 双击切换全屏。
+     * 基类实现是 mControlWrapper.toggleFullScreen(mActivity): 退出时会
+     * setRequestedOrientation(PORTRAIT) —— 平板上横屏双击退出全屏会被硬翻成竖屏
+     * (和已修好的 stopFullScreen 是两条不同的路径)。这里改为:
+     *   退出 —— 走自己的 stopFullScreen(), 方向交还系统(UNSPECIFIED), 保持当前朝向;
+     *   进入 —— 只有当前确实竖屏时才主动转横屏(用 SENSOR_LANDSCAPE 保留 180 度旋转,
+     *           之后用户竖握仍会被方向监听识别并退出全屏, 不会被困在横屏)。
+     */
+    @Override
+    protected void toggleFullScreen() {
+        if (mControlWrapper.isFullScreen()) {
+            stopFullScreen();
+            return;
+        }
+        if (mActivity != null && !mActivity.isFinishing()) {
+            boolean portrait = mActivity.getResources().getConfiguration().orientation
+                    == Configuration.ORIENTATION_PORTRAIT;
+            if (portrait) {
+                mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            }
+        }
+        mControlWrapper.startFullScreen();
     }
 
     /**
