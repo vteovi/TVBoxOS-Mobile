@@ -237,9 +237,19 @@ public class LiveActivity extends BaseActivity {
 
     private void initBottomNavigation() {
         NavigationBarView bottomNavigation = findViewById(R.id.bottom_nav);
-        bottomNavigation.setSelectedItemId(R.id.navigation_dashboard);
+        // 平板大屏(sw600dp)菜单带"直播"项时默认高亮它; 手机端菜单无此项, 退回"我的"。
+        boolean hasLiveItem = bottomNavigation.getMenu().findItem(R.id.navigation_live) != null;
+        bottomNavigation.setSelectedItemId(hasLiveItem ? R.id.navigation_live : R.id.navigation_dashboard);
         bottomNavigation.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
+            if (itemId == R.id.navigation_live) {
+                return true; // 当前页(仅大屏菜单含此项)
+            }
+            if (itemId == R.id.navigation_setting) {
+                startActivity(new Intent(this, SettingActivity.class));
+                finish();
+                return false;
+            }
             if (itemId == R.id.navigation_home || itemId == R.id.navigation_dashboard) {
                 openMainDestination(itemId);
                 return false;

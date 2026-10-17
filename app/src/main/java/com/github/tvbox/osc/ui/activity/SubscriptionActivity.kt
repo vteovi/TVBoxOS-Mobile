@@ -495,6 +495,18 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
                     finish()
                     false
                 }
+                R.id.navigation_live -> {
+                    startActivity(Intent(this, LiveActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
+                R.id.navigation_setting -> {
+                    startActivity(Intent(this, SettingActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
                 R.id.navigation_home,
                 R.id.navigation_dashboard -> {
                     destinationAfterFinish = item.itemId

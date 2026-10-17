@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_home"
+        android:icon="@drawable/ic_nav_home"
+        android:orderInCategory="0"
+        android:title="首页"/>
+
+    <item
+        android:id="@+id/navigation_collect"
+        android:icon="@drawable/ic_nav_collect"
+        android:orderInCategory="1"
+        android:title="收藏"/>
+
+    <item
+        android:id="@+id/navigation_subscription"
+        android:icon="@drawable/ic_nav_subscription"
+        android:orderInCategory="2"
+        android:title="订阅"/>
+
+    <item
+        android:id="@+id/navigation_dashboard"
+        android:icon="@drawable/ic_nav_my"
+        android:orderInCategory="3"
+        android:title="我的"/>
+
+    <!-- 平板大屏(sw600dp)专属: 额外提供直播与设置入口, 与上方导航图标风格保持一致 -->
+    <item
+        android:id="@+id/navigation_live"
+        android:icon="@drawable/ic_nav_live"
+        android:orderInCategory="4"
+        android:title="直播"/>
+
+    <item
+        android:id="@+id/navigation_setting"
+        android:icon="@drawable/ic_nav_settings"
+        android:orderInCategory="5"
+        android:title="设置"/>
+
+</menu>
