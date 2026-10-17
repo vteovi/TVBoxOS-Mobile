@@ -597,8 +597,7 @@ public class LiveActivity extends BaseActivity {
                 saveBackground(parent);
                 parent.setBackgroundColor(Color.BLACK);
                 mSavedParentLp = parent.getLayoutParams();
-                parent.setLayoutParams(new ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                parent.setLayoutParams(newFullscreenLp(parent));
             }
             // 根布局黑底
             View root = findViewById(R.id.live_root);
@@ -656,8 +655,7 @@ public class LiveActivity extends BaseActivity {
                 if (mSavedParentLp == null) {
                     mSavedParentLp = plp;
                 }
-                parent.setLayoutParams(new ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                parent.setLayoutParams(newFullscreenLp(parent));
             }
         }
         ViewGroup.LayoutParams vlp = mVideoView.getLayoutParams();
@@ -666,8 +664,7 @@ public class LiveActivity extends BaseActivity {
             if (mSavedVideoLp == null) {
                 mSavedVideoLp = vlp;
             }
-            mVideoView.setLayoutParams(new RelativeLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            mVideoView.setLayoutParams(newFullscreenLp(mVideoView));
         }
     }
 
@@ -685,6 +682,29 @@ public class LiveActivity extends BaseActivity {
         if (v != null && !mPipSavedBg.containsKey(v)) {
             mPipSavedBg.put(v, v.getBackground());
         }
+    }
+
+    /**
+     * 按父容器类型生成正确的 LayoutParams, 并设为铺满。
+     * 必须保持与父容器匹配的具体类型(LinearLayout.LayoutParams / RelativeLayout.LayoutParams 等),
+     * 否则 LinearLayout 在 measure 时直接强转会抛 ClassCastException。
+     */
+    private ViewGroup.LayoutParams newFullscreenLp(View child) {
+        ViewGroup p = (ViewGroup) child.getParent();
+        ViewGroup.LayoutParams src = child.getLayoutParams();
+        ViewGroup.LayoutParams lp;
+        if (p != null && src != null) {
+            lp = p.generateLayoutParams(src);
+        } else if (p != null) {
+            lp = p.generateLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            lp = new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+        lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        return lp;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
