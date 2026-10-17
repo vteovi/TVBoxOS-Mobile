@@ -32,6 +32,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -438,6 +439,7 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        mPipClosing = false; // 从画中画展开回到前台, 继续播放
         if (mVideoView != null) {
             mVideoView.resume();
         }
@@ -454,6 +456,19 @@ public class LiveActivity extends BaseActivity {
     }
 
     @Override
+    protected void onStop() {
+        super.onStop();
+        // 画中画被用户关闭(而非展开)时 Activity 退到后台且不再返回, 停止播放并关闭
+        if (mPipClosing && !isInPictureInPictureMode()) {
+            mPipClosing = false;
+            if (mVideoView != null) {
+                mVideoView.pause();
+            }
+            finish();
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         mHandler.removeCallbacksAndMessages(null);
         // 取消本页未完成的网络请求, 避免回调在本 Activity 销毁后才返回导致空指针
@@ -464,6 +479,13 @@ public class LiveActivity extends BaseActivity {
             mVideoView = null;
         }
     }
+
+    // 画中画相关状态
+    private boolean mPipClosing = false;       // 刚退出画中画(关闭/展开均可触发), 展开会被 onResume 复位
+    private boolean mPipUiMode = false;        // 是否已切到"纯视频全屏"UI
+    private int[] mSavedVis;                   // 视频容器内各子控件原始可见性
+    private ViewGroup.LayoutParams mSavedVideoLp;
+    private ViewGroup.LayoutParams mSavedParentLp;
 
     /**
      * 画中画(小窗)模式
@@ -482,7 +504,9 @@ public class LiveActivity extends BaseActivity {
             } else {
                 ratio = new Rational(16, 9);
             }
-            // 截图源区域：只取视频画面，避免把顶栏/其它 UI 一起缩进画中画
+            // 进入画中画前把界面切到"纯视频全屏": 隐藏频道列表/EPG/导航等, 视频铺满窗口
+            applyPipUiMode(true);
+            // 截图源区域：视频铺满后整窗即视频画面
             Rect sourceRect = new Rect();
             int[] location = new int[2];
             mVideoView.getLocationInWindow(location);
@@ -495,7 +519,71 @@ public class LiveActivity extends BaseActivity {
                     .setAspectRatio(ratio)
                     .setSourceRectHint(sourceRect)
                     .setActions(actions).build();
+            // 模拟 Home 让应用退到后台, 画中画悬浮在应用外(与点播一致)
+            Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+            homeIntent.addCategory(Intent.CATEGORY_HOME);
+            startActivity(homeIntent);
             enterPictureInPictureMode(params);
+        }
+    }
+
+    /**
+     * 进入/退出画中画时切换 UI: 仅保留视频画面, 隐藏频道列表/EPG/导航及其它控件, 视频铺满窗口
+     */
+    private void applyPipUiMode(boolean pip) {
+        if (pip == mPipUiMode) {
+            return;
+        }
+        mPipUiMode = pip;
+        // 隐藏/恢复频道列表、EPG、底部导航
+        setGone(R.id.ll_epg, pip);
+        setGone(R.id.tvLeftChannnelListLayout, pip);
+        View nav = findViewById(R.id.bottom_nav);
+        if (nav != null) {
+            nav.setVisibility(pip ? View.GONE : View.VISIBLE);
+        }
+        ViewGroup parent = (ViewGroup) mVideoView.getParent();
+        if (parent == null) {
+            return;
+        }
+        int n = parent.getChildCount();
+        if (pip) {
+            // 保存并隐藏视频容器内除播放器外的其它控件(源切换/设置等)
+            mSavedVis = new int[n];
+            for (int i = 0; i < n; i++) {
+                View child = parent.getChildAt(i);
+                mSavedVis[i] = child.getVisibility();
+                if (child != mVideoView) {
+                    child.setVisibility(View.GONE);
+                }
+            }
+            // 容器与播放器铺满窗口
+            mSavedParentLp = parent.getLayoutParams();
+            parent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            mSavedVideoLp = mVideoView.getLayoutParams();
+            mVideoView.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            if (mSavedVis != null) {
+                for (int i = 0; i < n; i++) {
+                    parent.getChildAt(i).setVisibility(mSavedVis[i]);
+                }
+                mSavedVis = null;
+            }
+            if (mSavedVideoLp != null) {
+                mVideoView.setLayoutParams(mSavedVideoLp);
+                mSavedVideoLp = null;
+            }
+            if (mSavedParentLp != null) {
+                parent.setLayoutParams(mSavedParentLp);
+                mSavedParentLp = null;
+            }
+        }
+    }
+
+    private void setGone(int id, boolean gone) {
+        View v = findViewById(id);
+        if (v != null) {
+            v.setVisibility(gone ? View.GONE : View.VISIBLE);
         }
     }
 
@@ -547,6 +635,14 @@ public class LiveActivity extends BaseActivity {
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         registerActionReceiver(Utils.supportsPiPMode() && isInPictureInPictureMode);
+        if (isInPictureInPictureMode) {
+            applyPipUiMode(true);
+        } else {
+            applyPipUiMode(false);
+            // 退出画中画: 展开回到前台会触发 onResume 复位本标志;
+            // 若被关闭, 则在 onStop 中停止播放并关闭(解决关闭后仍播声音)
+            mPipClosing = true;
+        }
     }
 
     private void showChannelList() {
