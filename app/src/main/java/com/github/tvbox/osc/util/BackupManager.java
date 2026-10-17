@@ -92,7 +92,7 @@ public class BackupManager {
             root.add("collects", collectArr);
 
             // 2. 历史记录
-            List<VodRecord> records = AppDataManager.get().getVodRecordDao().getAll();
+            List<VodRecord> records = AppDataManager.get().getVodRecordDao().getAll(100000);
             JsonArray recordArr = new JsonArray();
             for (VodRecord r : records) {
                 JsonObject obj = new JsonObject();
