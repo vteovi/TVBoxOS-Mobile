@@ -1027,6 +1027,18 @@ public class VodController extends BaseController {
     }
 
     @Override
+    public boolean onDoubleTap(MotionEvent e) {
+        // 竖屏（半屏）双击进入全屏，横屏（全屏）双击暂停/播放
+        boolean isLandscape = getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        if (!isLandscape && listener != null) {
+            listener.toggleFullScreen();
+            return true;
+        }
+        return super.onDoubleTap(e);
+    }
+
+    @Override
     public boolean onBackPressed() {
         if (super.onBackPressed()) {
             return true;
