@@ -12,6 +12,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Rect;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
@@ -932,8 +933,14 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, IntentKey.BROADCAST_ACTION_PREV, "Prev", "Play Previous"));
             actions.add(generateRemoteAction(android.R.drawable.ic_media_play, IntentKey.BROADCAST_ACTION_PLAYPAUSE, "Play", "Play/Pause"));
             actions.add(generateRemoteAction(android.R.drawable.ic_media_next, IntentKey.BROADCAST_ACTION_NEXT, "Next", "Play Next"));
+            // 截图源区域：只取视频画面，避免把顶栏/其它 UI 一起缩进画中画
+            Rect sourceRect = new Rect();
+            int[] location = new int[2];
+            playFragment.getPlayer().getLocationInWindow(location);
+            sourceRect.set(location[0], location[1], location[0] + playFragment.getPlayer().getWidth(), location[1] + playFragment.getPlayer().getHeight());
             PictureInPictureParams params = new PictureInPictureParams.Builder()
                     .setAspectRatio(ratio)
+                    .setSourceRectHint(sourceRect)
                     .setActions(actions).build();
             playFragment.getPlayer().postDelayed(() -> {//代码模拟home键时会立即执行,toggleFullPreview中竖屏有切换横屏操作,
                 if (!fullWindows) {

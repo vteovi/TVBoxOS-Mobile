@@ -13,6 +13,7 @@ import android.os.Build;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.app.PendingIntent;
+import android.graphics.Rect;
 import android.util.Rational;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
@@ -481,12 +482,18 @@ public class LiveActivity extends BaseActivity {
             } else {
                 ratio = new Rational(16, 9);
             }
+            // 截图源区域：只取视频画面，避免把顶栏/其它 UI 一起缩进画中画
+            Rect sourceRect = new Rect();
+            int[] location = new int[2];
+            mVideoView.getLocationInWindow(location);
+            sourceRect.set(location[0], location[1], location[0] + mVideoView.getWidth(), location[1] + mVideoView.getHeight());
             List<RemoteAction> actions = new ArrayList<>();
             actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, IntentKey.BROADCAST_ACTION_PREV, "Prev", "上一个源"));
             actions.add(generateRemoteAction(android.R.drawable.ic_media_play, IntentKey.BROADCAST_ACTION_PLAYPAUSE, "Play", "播放/暂停"));
             actions.add(generateRemoteAction(android.R.drawable.ic_media_next, IntentKey.BROADCAST_ACTION_NEXT, "Next", "下一个源"));
             PictureInPictureParams params = new PictureInPictureParams.Builder()
                     .setAspectRatio(ratio)
+                    .setSourceRectHint(sourceRect)
                     .setActions(actions).build();
             enterPictureInPictureMode(params);
         }
