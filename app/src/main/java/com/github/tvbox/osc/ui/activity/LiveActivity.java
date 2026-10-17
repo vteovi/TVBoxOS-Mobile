@@ -728,6 +728,9 @@ public class LiveActivity extends BaseActivity {
             epgLp.height = dp2px(60);
             epgLp.weight = 0f;
             epgLp.setMargins(dp2px(6), dp2px(4), dp2px(6), dp2px(6));
+            // EPG 条只有 60dp 高, 源切换行不能再贴在右下角(会与图标行重叠),
+            // 改成与图标同一行、垂直居中, 排在图标行左侧
+            applyEpgSourceSwitchLayout(epg, true);
             // 右: 频道选择占 2/5, 上下撑满
             listLp.width = 0;
             listLp.height = LinearLayout.LayoutParams.MATCH_PARENT;
@@ -746,12 +749,39 @@ public class LiveActivity extends BaseActivity {
             epgLp.height = dp2px(100);
             epgLp.weight = 0f;
             epgLp.setMargins(dp2px(10), dp2px(10), dp2px(10), dp2px(10));
+            applyEpgSourceSwitchLayout(epg, false);
             listLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
             listLp.height = 0;
             listLp.weight = 1f;
             listLp.setMargins(0, 0, 0, 0);
         }
         row.requestLayout();
+    }
+
+    /**
+     * 调整 EPG 条内"源切换"行(上一个源/线路/下一个源)的位置:
+     * 竖屏 EPG 条 100dp 高 —— 源切换固定在右下角, 图标行在顶部, 两行错开;
+     * 横屏 EPG 条压到 60dp 后两行会重叠, 改为源切换与图标同行、垂直居中。
+     */
+    private void applyEpgSourceSwitchLayout(View epg, boolean land) {
+        View switchBar = epg.findViewById(R.id.ll_source_switch);
+        if (switchBar == null
+                || !(switchBar.getLayoutParams() instanceof RelativeLayout.LayoutParams)) {
+            return;
+        }
+        RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) switchBar.getLayoutParams();
+        if (land) {
+            lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, 0);
+            lp.addRule(RelativeLayout.CENTER_VERTICAL);
+            lp.addRule(RelativeLayout.LEFT_OF, R.id.ic_live_source);
+            lp.setMargins(0, 0, dp2px(14), 0);
+        } else {
+            lp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
+            lp.addRule(RelativeLayout.LEFT_OF, 0);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            lp.setMargins(0, 0, dp2px(20), dp2px(10));
+        }
+        switchBar.setLayoutParams(lp);
     }
 
     /**
