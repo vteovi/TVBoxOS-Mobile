@@ -111,6 +111,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     private SourceViewModel sourceViewModel;
     private Movie.Video mVideo;
     private VodInfo vodInfo;
+    private boolean isCollected = false;
     public SeriesFlagAdapter seriesFlagAdapter;
     public SeriesAdapter seriesAdapter;
     public String vodId;
@@ -204,7 +205,6 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                 sortSeries();
             }
         });
-        mBinding.tvCast.setVisibility(View.GONE);
         mBinding.tvExternalPlay.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -233,16 +233,16 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.tvCollect.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String text = mBinding.tvCollect.getText().toString();
-                if ("加入收藏".equals(text)) {
-                    RoomDataManger.insertVodCollect(sourceKey, vodInfo);
-                    Toast.makeText(DetailActivity.this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
-                    mBinding.tvCollect.setText("取消收藏");
-                } else {
+                if (isCollected) {
                     RoomDataManger.deleteVodCollect(sourceKey, vodInfo);
                     Toast.makeText(DetailActivity.this, "已移除收藏夹", Toast.LENGTH_SHORT).show();
-                    mBinding.tvCollect.setText("加入收藏");
+                    isCollected = false;
+                } else {
+                    RoomDataManger.insertVodCollect(sourceKey, vodInfo);
+                    Toast.makeText(DetailActivity.this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
+                    isCollected = true;
                 }
+                updateCollectIcon();
             }
         });
 
@@ -579,12 +579,14 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             showLoading();
             sourceViewModel.getDetail(sourceKey, vodId);
             boolean isVodCollect = RoomDataManger.isVodCollect(sourceKey, vodId);
-            if (isVodCollect) {
-                mBinding.tvCollect.setText("取消收藏");
-            } else {
-                mBinding.tvCollect.setText("加入收藏");
-            }
+            isCollected = isVodCollect;
+            updateCollectIcon();
         }
+    }
+
+    private void updateCollectIcon() {
+        int color = isCollected ? 0xFFFF4081 : getResources().getColor(R.color.text_foreground);
+        mBinding.tvCollect.setColorFilter(color);
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
