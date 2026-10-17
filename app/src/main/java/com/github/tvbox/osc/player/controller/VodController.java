@@ -3,6 +3,7 @@ package com.github.tvbox.osc.player.controller;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
@@ -143,6 +144,8 @@ public class VodController extends BaseController {
     TextView mPlayInfoSpeed;
     TextView mPlayInfoProgress;
     TextView mPlayInfoClock;
+    private long mLastRxBytes = -1;                    // 上次采集的 UID 接收字节数(网速兜底用)
+    private long mLastRxTime = 0;
     TextView mVideoSize;
     public SimpleSubtitleView mSubtitleView;
     public TextView mZimuBtn;
@@ -762,7 +765,11 @@ public class VodController extends BaseController {
         Hawk.put(HawkConfig.PLAY_INFO_SHOW, show);
         if (mPlayInfoRoot == null) return;
         mPlayInfoRoot.setVisibility(show ? VISIBLE : GONE);
-        if (show) refreshPlayInfo();
+        if (show) {
+            mLastRxBytes = -1;
+            mLastRxTime = 0;
+            refreshPlayInfo();
+        }
     }
 
     /**
@@ -772,7 +779,7 @@ public class VodController extends BaseController {
         if (mPlayInfoRoot == null || mPlayInfoRoot.getVisibility() != VISIBLE) return;
         if (mControlWrapper != null) {
             if (mPlayInfoSpeed != null) {
-                String speed = PlayerHelper.getDisplaySpeed(mControlWrapper.getTcpSpeed());
+                String speed = PlayerHelper.getDisplaySpeed(getCurrentNetSpeed());
                 mPlayInfoSpeed.setText("网速 " + (TextUtils.isEmpty(speed) ? "--" : speed));
             }
             if (mPlayInfoProgress != null) {
@@ -786,6 +793,34 @@ public class VodController extends BaseController {
         if (mPlayInfoClock != null) {
             mPlayInfoClock.setText("时间 " + new SimpleDateFormat("HH:mm:ss").format(new Date()));
         }
+    }
+
+    /**
+     * 取当前播放网速: 优先播放器上报的 TCP 速度;
+     * 播放器不上报(部分解码/系统播放器)时用本应用 UID 的接收流量差分兜底,
+     * 否则"播放信息"里的网速会一直为空。
+     */
+    private long getCurrentNetSpeed() {
+        long tcpSpeed = mControlWrapper != null ? mControlWrapper.getTcpSpeed() : 0;
+        if (tcpSpeed > 0) {
+            return tcpSpeed;
+        }
+        Context context = getContext();
+        if (context == null || context.getApplicationInfo() == null) {
+            return 0;
+        }
+        long rxBytes = TrafficStats.getUidRxBytes(context.getApplicationInfo().uid);
+        long now = System.currentTimeMillis();
+        long speed = 0;
+        if (rxBytes != TrafficStats.UNSUPPORTED && mLastRxBytes >= 0 && now > mLastRxTime) {
+            long delta = rxBytes - mLastRxBytes;
+            if (delta > 0) {
+                speed = delta * 1000L / (now - mLastRxTime);
+            }
+        }
+        mLastRxBytes = rxBytes == TrafficStats.UNSUPPORTED ? -1 : rxBytes;
+        mLastRxTime = now;
+        return speed;
     }
 
     public void resetSpeed() {

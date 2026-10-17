@@ -646,17 +646,17 @@ public class LiveActivity extends BaseActivity {
             RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-            lp.setMargins(dp2px(12), dp2px(10), 0, 0);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+            lp.setMargins(0, dp2px(timeView ? 50 : 6), dp2px(12), 0);
             if (!timeView) {
                 lp.addRule(RelativeLayout.BELOW, R.id.tv_live_time);
-                lp.topMargin = dp2px(6);
             }
             host.addView(view, lp);
         } else if (host instanceof FrameLayout) {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.gravity = Gravity.TOP | Gravity.START;
-            lp.setMargins(dp2px(12), dp2px(timeView ? 10 : 40), 0, 0);
+            lp.gravity = Gravity.TOP | Gravity.END;
+            lp.setMargins(0, dp2px(timeView ? 50 : 80), dp2px(12), 0);
             host.addView(view, lp);
         } else {
             host.addView(view);
