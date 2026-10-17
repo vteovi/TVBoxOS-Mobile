@@ -1,11 +1,9 @@
 package com.github.tvbox.osc.ui.dialog;
 
-import android.app.Dialog;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -16,6 +14,7 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.bean.CastDevice;
 import com.github.tvbox.osc.util.CastManager;
 import com.blankj.utilcode.util.ToastUtils;
+import com.lxj.xpopup.core.CenterPopupView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +22,10 @@ import java.util.List;
 /**
  * 投屏设备选择弹窗
  * 复用 layout/dialog_cast.xml: 标题 + 设备列表(RecyclerView) + 关闭/刷新按钮
+ * 采用 XPopup 的 CenterPopupView 承载(与项目内其它弹窗一致), 由 XPopup 自动负责
+ * 居中、宽度约束(屏幕宽减边距)与背景, 避免原生 Dialog 默认 WRAP_CONTENT 把布局压塌。
  */
-public class CastDialog extends Dialog {
+public class CastDialog extends CenterPopupView {
     private final String mUrl;
     private final String mTitle;
     private final long mPosition;
@@ -39,16 +40,19 @@ public class CastDialog extends Dialog {
         this.mUrl = url;
         this.mTitle = title;
         this.mPosition = position;
+    }
 
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        setContentView(R.layout.dialog_cast);
-        if (getWindow() != null) {
-            getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
+    @Override
+    protected int getImplLayoutId() {
+        return R.layout.dialog_cast;
+    }
 
+    @Override
+    protected void onCreate() {
+        super.onCreate();
         mRv = findViewById(R.id.rv);
         mTip = findViewById(R.id.tip);
-        mRv.setLayoutManager(new LinearLayoutManager(context));
+        mRv.setLayoutManager(new LinearLayoutManager(getContext()));
         mRv.setAdapter(mAdapter);
 
         findViewById(R.id.btn_cancel).setOnClickListener(v -> dismiss());
