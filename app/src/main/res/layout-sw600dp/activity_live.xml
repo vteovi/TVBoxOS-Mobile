@@ -3,7 +3,7 @@
 
     <include android:id="@+id/bottom_nav" layout="@layout/include_bottom_navigation" android:layout_width="64dp" android:layout_height="match_parent" />
 
-<android:LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical"><RelativeLayout android:layout_width="match_parent" android:layout_height="240dp">
+<android:LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical"><RelativeLayout android:id="@+id/live_video_box" android:layout_width="match_parent" android:layout_height="240dp">
 
 		<xyz.doikki.videoplayer.player.VideoView android:id="@+id/mVideoView" android:layout_width="match_parent" android:layout_height="300dp" />
 

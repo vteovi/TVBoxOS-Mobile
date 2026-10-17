@@ -7,8 +7,8 @@ import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.content.BroadcastReceiver;
-import android.content.pm.ActivityInfo;
 import android.os.Build;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
@@ -124,6 +124,8 @@ import xyz.doikki.videoplayer.player.VideoView;
 public class LiveActivity extends BaseActivity {
     public static Context context;
     private VideoView mVideoView;
+    private LiveNewController mLiveController;      // 直播控制器(负责方向/全屏策略)
+    private boolean mEnteredPortrait = false;       // 进入本页时是否竖屏: 决定"转到横屏是否自动全屏"
     private TextView tvChannelInfo;
     private LinearLayout tvLeftChannelListLayout;
     private RecyclerView mChannelGroupView;
@@ -211,10 +213,9 @@ public class LiveActivity extends BaseActivity {
         if (bottomNav != null) {
             bottomNav.setVisibility(View.GONE);
         }
-        // 平板(含小米平板5及以上)锁定横屏：避免"全屏返回"翻成竖屏导致两侧大黑边(MIUI 兼容小窗)
-        if (getResources().getConfiguration().smallestScreenWidthDp >= 600) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-        }
+        // 记录进入直播页时的屏幕方向：竖屏进入保留"转到横屏自动全屏"的原体验；
+        // 已经是横屏进入(手机横屏 / 大屏横屏)时不再自动全屏，也不锁定方向，允许转到竖屏。
+        mEnteredPortrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
         mVideoView = findViewById(R.id.mVideoView);
 
         tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -264,6 +265,7 @@ public class LiveActivity extends BaseActivity {
         }
 
         initVideoView();
+        applyLiveVideoBoxSize();
         initChannelGroupView();
         initLiveChannelView();
         initSettingGroupView();
@@ -347,41 +349,19 @@ public class LiveActivity extends BaseActivity {
 
 
     /**
-     * 平板(含小米平板5及以上)直播页全程锁定横屏。
-     * 播放器退出全屏的各条路径(返回键 / 标题栏返回 / 库内控制条按钮 / 方向传感器)最终都会调用
-     * activity.setRequestedOrientation(), 这里统一拦截任何"可能变成竖屏"的请求并改写为横屏,
-     * 避免"全屏 -> 半屏"时翻成竖屏触发 MIUI 兼容显示(内容居中、两侧大块空白)。
-     * 手机端行为完全不变。
+     * 屏幕方向变化(本页已声明 configChanges, 不会重建)。
+     * 只要页面在竖屏状态下显示过一次，就说明用户是"竖屏看直播"，
+     * 之后转到横屏可以自动进入全屏，与原体验一致；
+     * 而横屏直接进入时不会因为初始就是横屏就弹成全屏。
      */
     @Override
-    public void setRequestedOrientation(int requestedOrientation) {
-        if (isTabletLandscapeLock() && mayBecomePortrait(requestedOrientation)) {
-            super.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-            return;
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT && mLiveController != null) {
+            mLiveController.setRotateToFullScreenEnabled(true);
         }
-        super.setRequestedOrientation(requestedOrientation);
-    }
-
-    /**
-     * 用 Android 标准 smallestScreenWidthDp>=600 判定平板(blankj 的 ScreenUtils 无 isTablet())
-     */
-    private boolean isTabletLandscapeLock() {
-        return getResources().getConfiguration().smallestScreenWidthDp >= 600;
-    }
-
-    /**
-     * 这些取值在小米平板上都可能被解析成竖屏(尤其是 UNSPECIFIED)
-     */
-    private static boolean mayBecomePortrait(int orientation) {
-        return orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_USER
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT;
+        // 方向切换后重算视频区高度(平板竖屏时不再只剩一条窄画面)
+        applyLiveVideoBoxSize();
     }
 
     @Override
@@ -665,6 +645,42 @@ public class LiveActivity extends BaseActivity {
 
     private int dp2px(int dp) {
         return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    /**
+     * 直播页视频区高度自适应(全屏 / 画中画时不处理):
+     * 竖屏按 16:9 取屏宽比例 —— 平板竖屏时不会再只剩一条 240dp 的窄画面;
+     * 横屏尽量占满, 只给底部 EPG 留 120dp, 最少保持原有的 240dp。
+     * 同时把播放器高度改成跟随容器, 避免固定 300dp 在大屏上显得偏小。
+     */
+    private void applyLiveVideoBoxSize() {
+        if (mInPip || isInPictureInPictureMode()) return;
+        View videoBox = findViewById(R.id.live_video_box);
+        if (videoBox == null) return;
+        Configuration cfg = getResources().getConfiguration();
+        int shortDp = Math.min(cfg.screenWidthDp, cfg.screenHeightDp);
+        int longDp = Math.max(cfg.screenWidthDp, cfg.screenHeightDp);
+        int targetDp;
+        if (cfg.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            targetDp = Math.max(240, shortDp * 9 / 16);
+        } else {
+            targetDp = Math.max(240, Math.min(longDp - 120, Math.round(shortDp * 0.62f)));
+        }
+        ViewGroup.LayoutParams lp = videoBox.getLayoutParams();
+        if (lp != null) {
+            int targetPx = dp2px(targetDp);
+            if (lp.height != targetPx) {
+                lp.height = targetPx;
+                videoBox.setLayoutParams(lp);
+            }
+        }
+        if (mVideoView != null) {
+            ViewGroup.LayoutParams vlp = mVideoView.getLayoutParams();
+            if (vlp != null && vlp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                vlp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                mVideoView.setLayoutParams(vlp);
+            }
+        }
     }
 
     /**
@@ -1028,6 +1044,7 @@ public class LiveActivity extends BaseActivity {
             // 页面就会停留在"视频铺满+黑底+面板隐藏"的画中画状态。
             mInPip = false;
             applyPipUiMode(false);
+            applyLiveVideoBoxSize();
             // 恢复画面叠加信息刷新(时间/网速): 部分 ROM 展开时不回调 onResume
             startLiveInfoTicker();
             // 已经回到前台(展开): 不要再走关闭逻辑, 否则会把刚恢复的播放暂停掉
@@ -1284,8 +1301,11 @@ public class LiveActivity extends BaseActivity {
         controller.setEnableInNormal(true);
         controller.setGestureEnabled(true);
         controller.setDoubleTapTogglePlayEnabled(false);
-        // 手机(竖屏默认)转横屏自动全屏；平板(sw>=600, 默认即横屏)不开启, 否则会一直全屏
-        controller.setEnableOrientation(!isTabletLandscapeLock());
+        // 方向自动全屏: 竖屏进入时允许"转到横屏即全屏"；横屏(手机横屏/大屏横屏)进入时先关闭,
+        // 避免一进直播页就直接全屏, 同时不锁定方向, 等页面出现过竖屏后再解锁(见 onConfigurationChanged)
+        controller.setEnableOrientation(true);
+        controller.setRotateToFullScreenEnabled(mEnteredPortrait);
+        mLiveController = controller;
         mVideoView.setVideoController(controller);
         mVideoView.setProgressManager(null);
         //全屏/退出全屏时把画面叠加信息(时间/网速)迁移到播放器容器, 保证全屏也能看到

@@ -1,6 +1,8 @@
 package com.github.tvbox.osc.player.controller;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.view.MotionEvent;
 
 import com.github.tvbox.osc.R;
@@ -12,6 +14,13 @@ import org.jetbrains.annotations.NotNull;
  */
 
 public class LiveNewController extends BaseController {
+    /** 是否允许"旋转到横屏就自动全屏"。横屏直接进入直播页时为 false, 避免一进页面就全屏 */
+    private boolean mRotateToFullScreenEnabled = true;
+
+    public void setRotateToFullScreenEnabled(boolean enabled) {
+        mRotateToFullScreenEnabled = enabled;
+    }
+
     private int minFlingDistance = 100;             //最小识别距离
     private int minFlingVelocity = 10;              //最小识别速度
 
@@ -54,6 +63,37 @@ public class LiveNewController extends BaseController {
         } else if (e2.getY() - e1.getY() > minFlingDistance && Math.abs(velocityY) > minFlingVelocity) {
         }
         return false;
+    }
+
+    @Override
+    protected void onOrientationLandscape(Activity activity) {
+        if (!mRotateToFullScreenEnabled && !mControlWrapper.isFullScreen()) {
+            // 本来就是横屏进入的: 不自动全屏, 也不锁定横屏, 交给系统跟随物理方向(允许转竖屏)
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            return;
+        }
+        super.onOrientationLandscape(activity);
+    }
+
+    @Override
+    protected void onOrientationReverseLandscape(Activity activity) {
+        if (!mRotateToFullScreenEnabled && !mControlWrapper.isFullScreen()) {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            return;
+        }
+        super.onOrientationReverseLandscape(activity);
+    }
+
+    /**
+     * 退出全屏后不再强制竖屏(平板上会突然翻成竖屏, 手机上横握也会被硬转),
+     * 改为跟随系统物理方向, 由方向监听自行决定是否回竖屏。
+     */
+    @Override
+    protected boolean stopFullScreen() {
+        if (mActivity == null || mActivity.isFinishing()) return false;
+        mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        mControlWrapper.stopFullScreen();
+        return true;
     }
 
     @Override

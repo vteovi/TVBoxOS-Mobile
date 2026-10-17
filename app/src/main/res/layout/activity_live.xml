@@ -9,6 +9,7 @@
 	android:orientation="vertical">
 
     <RelativeLayout
+		android:id="@+id/live_video_box"
 		android:layout_width="match_parent"
 		android:layout_height="240dp">
 
