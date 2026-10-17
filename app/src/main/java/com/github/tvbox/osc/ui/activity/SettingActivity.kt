@@ -21,6 +21,7 @@ import com.github.tvbox.osc.ui.dialog.BackupDialog
 import com.github.tvbox.osc.ui.dialog.LiveApiDialog
 import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.util.FastClickCheckUtil
+import com.github.tvbox.osc.util.BackupManager
 import com.github.tvbox.osc.util.FileUtils
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.HistoryHelper
@@ -71,7 +72,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             override fun createIntent(context: Context, input: String): Intent =
                 Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
-                    setType("application/zip")
+                    setType("application/json")
                     putExtra(Intent.EXTRA_TITLE, input)
                 }
 
@@ -85,7 +86,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             override fun createIntent(context: Context, input: Unit): Intent =
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
-                    setType("application/zip")
+                    setType("application/json")
                 }
 
             override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
@@ -95,10 +96,10 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
 
     private fun doBackupToUri(uri: Uri) {
         try {
-            val tmpZip = File(cacheDir, "tvbox_backup_tmp.zip")
-            if (buildBackupZip(tmpZip)) {
+            val tmpFile = File(cacheDir, "tvbox_backup.json")
+            if (BackupManager.exportBackup(tmpFile)) {
                 contentResolver.openOutputStream(uri)?.use { os ->
-                    FileInputStream(tmpZip).use { it.copyTo(os) }
+                    FileInputStream(tmpFile).use { it.copyTo(os) }
                 }
                 ToastUtils.showShort("备份成功")
             } else {
@@ -108,120 +109,30 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             e.printStackTrace()
             ToastUtils.showShort("备份失败: ${e.message}")
         } finally {
-            File(cacheDir, "tvbox_backup_tmp.zip").delete()
+            File(cacheDir, "tvbox_backup.json").delete()
         }
     }
 
     private fun doRestoreFromUri(uri: Uri) {
-        val tmpRoot = File(cacheDir, "tvbox_restore_tmp")
+        val tmpFile = File(cacheDir, "tvbox_restore.json")
         try {
-            FileUtils.recursiveDelete(tmpRoot)
-            tmpRoot.mkdirs()
             contentResolver.openInputStream(uri)?.use { input ->
-                unzipTo(input, tmpRoot)
+                FileOutputStream(tmpFile).use { input.copyTo(it) }
             }
-            val db = File(tmpRoot, "sqlite")
-            val hawk = File(tmpRoot, "hawk")
-            if (!db.exists()) {
-                ToastUtils.showShort("备份文件无效:缺少数据库")
-                return
-            }
-            if (AppDataManager.restore(db)) {
-                if (hawk.exists()) {
-                    restoreHawk(hawk)
-                    ToastUtils.showShort("恢复成功,即将重启应用!")
-                    Handler(Looper.getMainLooper()).postDelayed({ AppUtils.relaunchApp(true) }, 2000)
-                } else {
-                    ToastUtils.showShort("Hawk恢复失败!")
-                }
+            if (BackupManager.importBackup(tmpFile)) {
+                ToastUtils.showShort("恢复成功,即将重启应用!")
+                Handler(Looper.getMainLooper()).postDelayed({ AppUtils.relaunchApp(true) }, 2000)
             } else {
-                ToastUtils.showShort("DB文件恢复失败!")
+                ToastUtils.showShort("恢复失败:文件格式错误")
             }
         } catch (e: Throwable) {
             e.printStackTrace()
             ToastUtils.showShort("恢复失败: ${e.message}")
         } finally {
-            FileUtils.recursiveDelete(tmpRoot)
+            tmpFile.delete()
         }
     }
-
-    private fun restoreHawk(hawkFile: File) {
-        val data = FileUtils.readSimple(hawkFile) ?: return
-        val json = JSONObject(String(data, Charsets.UTF_8))
-        val it = json.keys()
-        val sp = App.getInstance().getSharedPreferences("Hawk2", Context.MODE_PRIVATE)
-        val spCrypto = App.getInstance().getSharedPreferences("crypto.KEY_256", Context.MODE_PRIVATE)
-        while (it.hasNext()) {
-            val key = it.next()
-            val value = json.getString(key)
-            if (key == "cipher_key") {
-                spCrypto.edit().putString(key, value).commit()
-            } else {
-                sp.edit().putString(key, value).commit()
-            }
-        }
-    }
-
-    private fun buildBackupZip(destZip: File): Boolean {
-        return try {
-            val tmpRoot = File(cacheDir, "tvbox_backup_tmp")
-            FileUtils.recursiveDelete(tmpRoot)
-            val dataDir = File(tmpRoot, "data")
-            dataDir.mkdirs()
-            val db = File(dataDir, "sqlite")
-            if (!AppDataManager.backup(db)) return false
-            val sp = App.getInstance().getSharedPreferences("Hawk2", Context.MODE_PRIVATE)
-            val json = JSONObject()
-            for (key in sp.all.keys) json.put(key, sp.getString(key, ""))
-            val spCrypto = App.getInstance().getSharedPreferences("crypto.KEY_256", Context.MODE_PRIVATE)
-            for (key in spCrypto.all.keys) json.put(key, spCrypto.getString(key, ""))
-            if (!FileUtils.writeSimple(json.toString().toByteArray(Charsets.UTF_8), File(dataDir, "hawk")))
-                return false
             zipFolder(dataDir, destZip)
-            true
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            false
-        } finally {
-            FileUtils.recursiveDelete(File(cacheDir, "tvbox_backup_tmp"))
-        }
-    }
-
-    private fun zipFolder(folder: File, dest: File) {
-        ZipOutputStream(BufferedOutputStream(FileOutputStream(dest))).use { zos ->
-            folder.walkTopDown().forEach { file ->
-                if (file.isFile) {
-                    val name = (file.relativeTo(folder)?.path ?: file.name).replace("\\", "/")
-                    zos.putNextEntry(ZipEntry(name))
-                    FileInputStream(file).use { it.copyTo(zos) }
-                    zos.closeEntry()
-                }
-            }
-        }
-    }
-
-    private fun unzipTo(input: InputStream, destDir: File) {
-        destDir.mkdirs()
-        val destPath = destDir.canonicalPath
-        ZipInputStream(BufferedInputStream(input)).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                val outFile = File(destDir, entry.name)
-                if (!outFile.canonicalPath.startsWith(destPath)) {
-                    throw IOException("非法的压缩项: ${entry.name}")
-                }
-                if (entry.isDirectory) {
-                    outFile.mkdirs()
-                } else {
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { zis.copyTo(it) }
-                }
-                zis.closeEntry()
-                entry = zis.nextEntry
-            }
-        }
-    }
-
     private var homeRec = Hawk.get(HawkConfig.HOME_REC, 0)
     private var dnsOpt = Hawk.get(HawkConfig.DOH_URL, 0)
     private var currentLiveApi = Hawk.get(HawkConfig.LIVE_URL, "")
