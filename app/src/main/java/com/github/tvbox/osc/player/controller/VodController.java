@@ -360,7 +360,12 @@ public class VodController extends BaseController {
             listener.toggleFullScreen();
             hideBottom();
         });
-        findViewById(R.id.cast).setVisibility(GONE);
+        findViewById(R.id.cast).setOnClickListener(view -> {
+            hideBottom();
+            if (listener != null) {
+                listener.cast();
+            }
+        });
         pip.setOnClickListener(view -> {//画中画
             if (isInPlaybackState()){
                 listener.pip();
@@ -780,6 +785,8 @@ public class VodController extends BaseController {
         void showSetting();
 
         void pip();
+
+        void cast();
 
         void showParseRoot(boolean show,ParseAdapter adapter);
     }

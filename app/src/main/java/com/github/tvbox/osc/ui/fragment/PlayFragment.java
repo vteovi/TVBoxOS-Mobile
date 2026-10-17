@@ -64,6 +64,7 @@ import com.github.tvbox.osc.server.RemoteServer;
 import com.github.tvbox.osc.ui.activity.DetailActivity;
 import com.github.tvbox.osc.ui.adapter.ParseAdapter;
 import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter;
+import com.github.tvbox.osc.ui.dialog.CastDialog;
 import com.github.tvbox.osc.ui.dialog.PlayingControlDialog;
 import com.github.tvbox.osc.ui.dialog.PlayingControlRightDialog;
 import com.github.tvbox.osc.ui.dialog.SearchSubtitleDialog;
@@ -333,6 +334,28 @@ public class PlayFragment extends BaseLazyFragment {
             @Override
             public void pip() {
                 activity.enterPip();
+            }
+
+            @Override
+            public void cast() {
+                String url = getFinalUrl();
+                if (TextUtils.isEmpty(url)) {
+                    ToastUtils.showShort("暂无可投屏的播放地址，请先播放");
+                    return;
+                }
+                String title = "";
+                try {
+                    String vsName = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex).name;
+                    title = mVodInfo.name + " " + vsName;
+                } catch (Throwable e) {
+                    title = mVodInfo != null ? mVodInfo.name : "TVBox";
+                }
+                long position = 0;
+                try {
+                    if (mVideoView != null) position = mVideoView.getCurrentPosition();
+                } catch (Throwable ignore) {
+                }
+                new CastDialog(activity, url, title, position).show();
             }
 
             @Override
