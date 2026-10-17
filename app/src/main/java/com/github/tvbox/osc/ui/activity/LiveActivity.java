@@ -443,9 +443,14 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        mResumed = true;
         // 只有真正回到前台(从画中画展开 / 正常启动)才复位小窗状态并还原 UI;
         // 进入画中画过程中系统也可能回调 onResume, 此时 isInPictureInPictureMode() 为 true, 不会误恢复。
         if (!isInPictureInPictureMode()) {
+            // 回到前台说明是"展开"而不是"关闭", 取消退出判定
+            mPendingPipExit = false;
+            mPipExitTicks = 0;
+            mHandler.removeCallbacks(mPipExitCheckRun);
             mInPip = false;
             mEnteringPip = false;
             if (mPipUiMode) {
@@ -461,6 +466,7 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        mResumed = false;
         // 进入画中画的过渡期 / 已在画中画中时 Activity 会被 pause, 但视频必须继续播
         if (mVideoView != null && !mEnteringPip && !mInPip && !isInPictureInPictureMode()) {
             mVideoView.pause();
@@ -472,10 +478,13 @@ public class LiveActivity extends BaseActivity {
         super.onStop();
         // 从画中画被"关闭"(而非展开回到前台)时: Activity 进入 stop 且不会回到前台。
         // 此时立即暂停并退出本页, 彻底断开后台声音。
-        // 注意: 不能依赖 !isInPictureInPictureMode(), 关闭瞬间该值可能仍为 true。
+        // 注意: 展开会走 pause -> resume, 不会触发 onStop, 所以这里不会误杀。
         if (mInPip) {
             mInPip = false;
             mEnteringPip = false;
+            mPendingPipExit = false;
+            mPipExitTicks = 0;
+            mHandler.removeCallbacks(mPipExitCheckRun);
             if (mVideoView != null) {
                 mVideoView.pause();
             }
@@ -504,6 +513,44 @@ public class LiveActivity extends BaseActivity {
     private ViewGroup.LayoutParams mSavedVideoLp;
     private ViewGroup.LayoutParams mSavedParentLp;
     private boolean mPipSysUi = false;         // 是否已切到"隐藏全部系统栏"状态(避免重复 init 引起重排闪烁)
+    private boolean mResumed = false;          // Activity 是否已回到前台(resumed)
+    private boolean mPendingPipExit = false;   // 刚退出画中画, 尚未判定是"展开"还是"关闭"
+    private int mPipExitTicks = 0;             // 退出判定轮询次数
+
+    /**
+     * 画中画退出判定: "展开"会很快回到前台(获得焦点/onResume), "关闭"则不会。
+     * 轮询到回到前台就取消退出; 一直没回来才停播并退出本页。
+     * 注意: 不能用固定超时直接 finish —— 展开动画耗时可能超过几十毫秒级,
+     * 之前 500ms 固定兜底会在放大过程中把页面关掉(用户反馈"先放大然后退出")。
+     */
+    private final Runnable mPipExitCheckRun = new Runnable() {
+        @Override
+        public void run() {
+            if (!mPendingPipExit || isFinishing()) {
+                return;
+            }
+            // 已经回到前台(展开) —— 取消退出, 由 onResume 恢复播放
+            if (mResumed || hasWindowFocus()) {
+                mPendingPipExit = false;
+                mPipExitTicks = 0;
+                return;
+            }
+            mPipExitTicks++;
+            // 每 300ms 检查一次, 最多等约 2.1s, 给展开/放大动画留足时间
+            if (mPipExitTicks < 7) {
+                mHandler.postDelayed(this, 300);
+                return;
+            }
+            mPipExitTicks = 0;
+            mPendingPipExit = false;
+            mInPip = false;
+            mEnteringPip = false;
+            if (mVideoView != null) {
+                mVideoView.pause();
+            }
+            finish();
+        }
+    };
 
     /**
      * 画中画(小窗)模式
@@ -826,24 +873,28 @@ public class LiveActivity extends BaseActivity {
                 }, 120);
             }
         } else {
+            // 展开(已回到前台): onResume 已处理恢复, 这里不要再走关闭逻辑,
+            // 否则会把刚恢复的播放暂停掉。
+            if (mResumed) {
+                mPendingPipExit = false;
+                mPipExitTicks = 0;
+                mHandler.removeCallbacks(mPipExitCheckRun);
+                mInPip = false;
+                return;
+            }
             // 退出画中画先暂停, 防止"关闭"后后台继续出声;
             // 若是"展开"回到前台, onResume 会恢复播放并还原 UI。
             if (mVideoView != null) {
                 if (mVideoView.isPlaying()) {
                     mVideoView.pause();
                 }
-                // 兜底: 500ms 后若仍处于"曾进画中画且未回前台"状态, 说明小窗是被"关闭"的,
-                // 直接退出本页(满足"点关闭就退出应用"的诉求)。展开会在 onResume 中清掉 mInPip。
-                mVideoView.postDelayed(() -> {
-                    if (mInPip && !isFinishing()) {
-                        mInPip = false;
-                        if (mVideoView != null) {
-                            mVideoView.pause();
-                        }
-                        finish();
-                    }
-                }, 500);
             }
+            // 不立即 finish(展开动画需要时间), 交给轮询判定:
+            // 回到前台就取消, 一直没回来才判定为"关闭"并退出本页。
+            mPendingPipExit = true;
+            mPipExitTicks = 0;
+            mHandler.removeCallbacks(mPipExitCheckRun);
+            mHandler.postDelayed(mPipExitCheckRun, 300);
         }
     }
 
