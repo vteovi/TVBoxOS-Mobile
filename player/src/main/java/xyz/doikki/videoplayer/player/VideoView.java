@@ -598,6 +598,14 @@ public class VideoView<P extends AbstractPlayer> extends FrameLayout
     }
 
     /**
+     * 获取承载播放画面与控制器的容器(全屏时该容器会被移入 DecorView)。
+     * 供外部在全屏时把叠加信息(时间/网速等)挂到画面之上。
+     */
+    public FrameLayout getPlayerContainer() {
+        return mPlayerContainer;
+    }
+
+    /**
      * 设置播放速度
      */
     @Override

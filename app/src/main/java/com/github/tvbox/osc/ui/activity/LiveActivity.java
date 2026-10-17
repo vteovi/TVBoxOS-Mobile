@@ -18,11 +18,13 @@ import android.graphics.Rect;
 import android.util.Rational;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.net.TrafficStats;
 import android.net.Uri;
 import java.io.FileInputStream;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.view.Gravity;
 import java.util.ArrayList;
@@ -82,6 +84,7 @@ import com.github.tvbox.osc.ui.widget.PlayerMenuView;
 import com.github.tvbox.osc.ui.widget.PlayerTitleView;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.PlayerHelper;
 import com.github.tvbox.osc.util.live.TxtSubscribe;
 import com.google.gson.JsonArray;
 import com.gyf.immersionbar.BarHide;
@@ -226,6 +229,10 @@ public class LiveActivity extends BaseActivity {
         mSettingItemView = findViewById(R.id.mSettingItemView);
         tvChannelInfo = findViewById(R.id.tvChannel);
 
+        //画面叠加信息(时间/网速)
+        mTvLiveTime = findViewById(R.id.tv_live_time);
+        mTvLiveSpeed = findViewById(R.id.tv_live_speed);
+
         //EPG  findViewById  by 龍
         tip_chname = findViewById(R.id.tv_channel_bar_name);//底部名称
         tip_chname.setOnClickListener(view -> {
@@ -263,6 +270,8 @@ public class LiveActivity extends BaseActivity {
         initSettingItemView();
         initLiveChannelList();
         initLiveSettingGroupList();
+        //画面叠加信息(时间/网速)定时刷新
+        startLiveInfoTicker();
     }
 
     private void initBottomNavigation() {
@@ -444,6 +453,7 @@ public class LiveActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         mResumed = true;
+        startLiveInfoTicker();
         // 只有真正回到前台(从画中画展开 / 正常启动)才复位小窗状态并还原 UI;
         // 进入画中画过程中系统也可能回调 onResume, 此时 isInPictureInPictureMode() 为 true, 不会误恢复。
         if (!isInPictureInPictureMode()) {
@@ -467,6 +477,7 @@ public class LiveActivity extends BaseActivity {
     protected void onPause() {
         super.onPause();
         mResumed = false;
+        stopLiveInfoTicker();
         // 进入画中画的过渡期 / 已在画中画中时 Activity 会被 pause, 但视频必须继续播
         if (mVideoView != null && !mEnteringPip && !mInPip && !isInPictureInPictureMode()) {
             mVideoView.pause();
@@ -494,6 +505,7 @@ public class LiveActivity extends BaseActivity {
 
     @Override
     protected void onDestroy() {
+        mLiveInfoTicking = false;
         mHandler.removeCallbacksAndMessages(null);
         // 取消本页未完成的网络请求, 避免回调在本 Activity 销毁后才返回导致空指针
         OkGo.getInstance().cancelTag(this);
@@ -517,6 +529,143 @@ public class LiveActivity extends BaseActivity {
     private boolean mPendingPipExit = false;   // 刚退出画中画, 尚未判定是"展开"还是"关闭"
     private int mPipExitTicks = 0;             // 退出判定轮询次数
     private int mSavedScaleType = -1;          // 进入画中画前的播放器缩放模式(退出时精确还原)
+
+    // 画面叠加信息: 当前时间 / 当前网速(直播设置-偏好设置)
+    private TextView mTvLiveTime = null;
+    private TextView mTvLiveSpeed = null;
+    private final SimpleDateFormat mLiveTimeFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+    private boolean mLiveInfoTicking = false;          // 叠加信息刷新任务是否在跑
+    private long mLastRxBytes = -1;                    // 上次采集的接收字节数(网速兜底计算用)
+    private long mLastRxTime = 0;
+    private final Runnable mLiveInfoTickRun = new Runnable() {
+        @Override
+        public void run() {
+            if (!mLiveInfoTicking) {
+                return;
+            }
+            updateLiveInfoOverlay();
+            mHandler.postDelayed(this, 1000);
+        }
+    };
+
+    private void startLiveInfoTicker() {
+        if (mLiveInfoTicking) {
+            return;
+        }
+        mLiveInfoTicking = true;
+        mHandler.removeCallbacks(mLiveInfoTickRun);
+        mHandler.post(mLiveInfoTickRun);
+    }
+
+    private void stopLiveInfoTicker() {
+        mLiveInfoTicking = false;
+        mHandler.removeCallbacks(mLiveInfoTickRun);
+    }
+
+    /**
+     * 刷新画面叠加信息(时间/网速)。
+     * 每次刷新都重新读取开关, 因此无论在哪个入口改设置(直播页内嵌设置 / 设置弹窗),
+     * 都无需额外通知即可立即生效。
+     */
+    private void updateLiveInfoOverlay() {
+        if (mTvLiveTime != null) {
+            boolean showTime = Hawk.get(HawkConfig.LIVE_SHOW_TIME, false);
+            mTvLiveTime.setVisibility(showTime ? View.VISIBLE : View.GONE);
+            if (showTime) {
+                mTvLiveTime.setText(mLiveTimeFormat.format(new Date()));
+            }
+        }
+        if (mTvLiveSpeed != null) {
+            boolean showSpeed = Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false);
+            mTvLiveSpeed.setVisibility(showSpeed ? View.VISIBLE : View.GONE);
+            if (showSpeed) {
+                String text = PlayerHelper.getDisplaySpeed(getCurrentNetSpeed());
+                if (TextUtils.isEmpty(text)) {
+                    text = "0B/s";
+                }
+                mTvLiveSpeed.setText(text);
+            }
+        }
+    }
+
+    /**
+     * 取当前播放网速: 优先用播放器上报的 TCP 速度;
+     * 系统播放器等不上报时, 用进程 UID 的接收流量差分兜底,
+     * 避免"显示网速"打开了却一直空白。
+     */
+    private long getCurrentNetSpeed() {
+        long tcpSpeed = mVideoView != null ? mVideoView.getTcpSpeed() : 0;
+        if (tcpSpeed > 0) {
+            return tcpSpeed;
+        }
+        long rxBytes = TrafficStats.getUidRxBytes(getApplicationInfo().uid);
+        long now = System.currentTimeMillis();
+        long speed = 0;
+        if (rxBytes != TrafficStats.UNSUPPORTED && mLastRxBytes >= 0 && now > mLastRxTime) {
+            long delta = rxBytes - mLastRxBytes;
+            if (delta > 0) {
+                speed = delta * 1000L / (now - mLastRxTime);
+            }
+        }
+        mLastRxBytes = rxBytes == TrafficStats.UNSUPPORTED ? -1 : rxBytes;
+        mLastRxTime = now;
+        return speed;
+    }
+
+    /**
+     * dkplayer 全屏的做法是把播放器容器搬进 DecorView, Activity 布局里的控件不会跟随,
+     * 所以全屏时要把时间/网速挪到播放器容器上, 退出全屏再挪回来。
+     */
+    private void relocateLiveInfoOverlay(boolean fullScreen) {
+        if (mTvLiveTime == null || mVideoView == null) {
+            return;
+        }
+        ViewGroup home = mVideoView.getParent() instanceof ViewGroup ? (ViewGroup) mVideoView.getParent() : null;
+        ViewGroup host = fullScreen ? mVideoView.getPlayerContainer() : home;
+        if (host == null) {
+            return;
+        }
+        moveInfoView(mTvLiveTime, host, true);
+        moveInfoView(mTvLiveSpeed, host, false);
+    }
+
+    /**
+     * @param timeView true=时间 false=网速(网速紧跟在时间下方)
+     */
+    private void moveInfoView(View view, ViewGroup host, boolean timeView) {
+        if (view == null || host == null) {
+            return;
+        }
+        if (view.getParent() == host) {
+            return;
+        }
+        if (view.getParent() instanceof ViewGroup) {
+            ((ViewGroup) view.getParent()).removeView(view);
+        }
+        if (host instanceof RelativeLayout) {
+            RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+            lp.setMargins(dp2px(12), dp2px(10), 0, 0);
+            if (!timeView) {
+                lp.addRule(RelativeLayout.BELOW, R.id.tv_live_time);
+                lp.topMargin = dp2px(6);
+            }
+            host.addView(view, lp);
+        } else if (host instanceof FrameLayout) {
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.gravity = Gravity.TOP | Gravity.START;
+            lp.setMargins(dp2px(12), dp2px(timeView ? 10 : 40), 0, 0);
+            host.addView(view, lp);
+        } else {
+            host.addView(view);
+        }
+    }
+
+    private int dp2px(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
 
     /**
      * 画中画退出判定: "展开"会很快回到前台(获得焦点/onResume), "关闭"则不会。
@@ -879,6 +1028,8 @@ public class LiveActivity extends BaseActivity {
             // 页面就会停留在"视频铺满+黑底+面板隐藏"的画中画状态。
             mInPip = false;
             applyPipUiMode(false);
+            // 恢复画面叠加信息刷新(时间/网速): 部分 ROM 展开时不回调 onResume
+            startLiveInfoTicker();
             // 已经回到前台(展开): 不要再走关闭逻辑, 否则会把刚恢复的播放暂停掉
             if (mResumed) {
                 mPendingPipExit = false;
@@ -1137,6 +1288,21 @@ public class LiveActivity extends BaseActivity {
         controller.setEnableOrientation(!isTabletLandscapeLock());
         mVideoView.setVideoController(controller);
         mVideoView.setProgressManager(null);
+        //全屏/退出全屏时把画面叠加信息(时间/网速)迁移到播放器容器, 保证全屏也能看到
+        mVideoView.setOnStateChangeListener(new VideoView.OnStateChangeListener() {
+            @Override
+            public void onPlayerStateChanged(int playerState) {
+                if (playerState == VideoView.PLAYER_FULL_SCREEN) {
+                    relocateLiveInfoOverlay(true);
+                } else if (playerState == VideoView.PLAYER_NORMAL) {
+                    relocateLiveInfoOverlay(false);
+                }
+            }
+
+            @Override
+            public void onPlayStateChanged(int playState) {
+            }
+        });
     }
 
     @NonNull

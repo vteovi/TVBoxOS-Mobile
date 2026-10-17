@@ -17,6 +17,50 @@
 			android:layout_width="match_parent"
 			android:layout_height="300dp" />
 
+		<!--画面叠加信息: 当前时间(设置-偏好设置-显示时间)-->
+		<TextView
+			android:id="@+id/tv_live_time"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_alignParentTop="true"
+			android:layout_marginStart="12dp"
+			android:layout_marginLeft="12dp"
+			android:layout_marginTop="10dp"
+			android:background="@drawable/bg_live_info_overlay"
+			android:paddingStart="8dp"
+			android:paddingLeft="8dp"
+			android:paddingTop="3dp"
+			android:paddingEnd="8dp"
+			android:paddingRight="8dp"
+			android:paddingBottom="3dp"
+			android:textColor="@color/white"
+			android:textSize="12sp"
+			android:textStyle="bold"
+			android:visibility="gone"
+			tools:text="20:31:45" />
+
+		<!--画面叠加信息: 当前网速(设置-偏好设置-显示网速)-->
+		<TextView
+			android:id="@+id/tv_live_speed"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_below="@+id/tv_live_time"
+			android:layout_alignStart="@+id/tv_live_time"
+			android:layout_alignLeft="@+id/tv_live_time"
+			android:layout_marginTop="6dp"
+			android:background="@drawable/bg_live_info_overlay"
+			android:paddingStart="8dp"
+			android:paddingLeft="8dp"
+			android:paddingTop="3dp"
+			android:paddingEnd="8dp"
+			android:paddingRight="8dp"
+			android:paddingBottom="3dp"
+			android:textColor="@color/white"
+			android:textSize="12sp"
+			android:textStyle="bold"
+			android:visibility="gone"
+			tools:text="2.35Mb/s" />
+
 		<LinearLayout
 			android:id="@+id/tvRightSettingLayout"
 			android:layout_width="wrap_content"
