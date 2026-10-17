@@ -159,6 +159,7 @@ public class VodController extends BaseController {
     int videoPlayState = 0;
     LockRunnable lockRunnable = new LockRunnable();
     private boolean isLock = false;
+    private boolean isFullScreenState = false; // 是否全屏状态
     private ParseAdapter mParseAdapter;
 
     private Runnable myRunnable2 = new Runnable() {
@@ -1026,12 +1027,14 @@ public class VodController extends BaseController {
         return true;
     }
 
+    public void setFullScreenState(boolean full) {
+        this.isFullScreenState = full;
+    }
+
     @Override
     public boolean onDoubleTap(MotionEvent e) {
-        // 竖屏（半屏）双击进入全屏，横屏（全屏）双击暂停/播放
-        boolean isLandscape = getResources().getConfiguration().orientation
-                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
-        if (!isLandscape && listener != null) {
+        // 非全屏时双击进入全屏，全屏时双击暂停/播放
+        if (!isFullScreenState && listener != null) {
             listener.toggleFullScreen();
             return true;
         }
