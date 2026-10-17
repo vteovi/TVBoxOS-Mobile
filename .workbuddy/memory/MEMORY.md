@@ -24,6 +24,9 @@
 - **异步回调晚于Activity销毁→NPE**（直播页崩溃根因）：所有「网络/子线程→主线程→改View/播放器」路径先判 `isFinishing()||isDestroyed()` 并判空View；网络请求onDestroy取消。
 - 首页数据源排序：`SourceViewModel.getSort(sourceKey)` 经 `ApiConfig.get().getSource(key)` 取 `SourceBean`；取不到须 null 保护（见关键修复清单）。
 - **播放器布局与设置弹窗**：VOD 真正使用的控制布局是 `res/layout/player_vod_control_view.xml`（`VodController.getLayoutId()`）；`box_vod_control_view.xml` 是无人引用的遗留文件。播放设置弹窗 `dialog_playing_control.xml` 被 `PlayingControlDialog`(手机底部) 与 `PlayingControlRightDialog`(sw600dp 右侧抽屉) 共用，布局改一次即可，但**两个 Java 类都要各自接监听**。
+- **直播页方向策略(2.18.0 定稿, 勿退回锁横屏)**：全程不锁方向。`LiveActivity.initVideoView()` 里 `setEnableOrientation(true)` + `setRotateToFullScreenEnabled(true)`：手机横屏/大屏横屏进入直播页都会自动进全屏，转到竖屏则退出全屏回普通竖屏页。**库的 `BaseVideoController.stopFullScreen()` 硬编码 `setRequestedOrientation(PORTRAIT)`**，平板会一退全屏就翻竖屏，已在 `LiveNewController` 覆写成 `UNSPECIFIED`；`PlayerTitleView` 的返回按钮同理。**dkplayer 的 `onOrientationLandscape/ReverseLandscape` 没有 `mEnableOrientation` 保护**(只有 portrait 分支有)，要禁止自动全屏必须覆写这两个回调，`setEnableOrientation(false)` 拦不住横屏。
+- **直播全屏里的画中画入口**：全屏时 `activity_live.xml` 的 `ic_pip` 被播放器容器盖住，所以在 `dkplayer_layout_menu_view.xml` 右侧菜单栏加了 `pip` 按钮(`PlayerMenuView.OnPlayerMenuClickListener.onPip()` → `LiveActivity.enterPip()`)，仅 `Utils.supportsPiPMode()` 时显示。`enterPip()` 开头若处于全屏会先 `mVideoView.stopFullScreen()` + 方向复位 `UNSPECIFIED`，否则全屏容器(decorView)会让画中画残留白边、退出后卡横屏。`dkplayer_layout_menu_view.xml` 只被直播页 `PlayerMenuView` 使用，改它不影响点播。
+- 直播页视频区高度运行时自适应 `applyLiveVideoBoxSize()`(布局 id `live_video_box`，`layout/` 与 `layout-sw600dp/` 都加了)：竖屏 `max(240, 屏宽*9/16)`、横屏 `max(240, min(屏高-120, 屏高*0.62))`；`mVideoView` 高度改 `match_parent`(原固定 300dp 在大屏偏小)。全屏/PiP 时跳过，退出全屏(PLAYER_NORMAL)时重算。资源限定符里 smallestWidth 优先于 orientation，`layout-sw600dp` 会盖过 `layout-land`，别指望加 land 布局区分手机横屏。
 
 ## 深色模式 / 主题
 - 切换：`util/Utils.isDarkTheme()` + `AppCompatDelegate.setDefaultNightMode`。

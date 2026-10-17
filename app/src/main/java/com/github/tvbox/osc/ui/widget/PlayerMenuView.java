@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.github.tvbox.osc.R;
+import com.github.tvbox.osc.util.Utils;
 
 import xyz.doikki.videoplayer.controller.ControlWrapper;
 import xyz.doikki.videoplayer.controller.IControlComponent;
@@ -35,6 +36,7 @@ public class PlayerMenuView extends FrameLayout implements IControlComponent {
     public interface OnPlayerMenuClickListener{
         void onSetting();
         void expand();
+        void onPip();
     }
 
     private OnPlayerMenuClickListener mOnPlayerMenuClickListener;
@@ -67,6 +69,19 @@ public class PlayerMenuView extends FrameLayout implements IControlComponent {
                 mOnPlayerMenuClickListener.expand();
             }
         });
+        // 全屏时页面内的画中画入口会被播放器容器盖住, 这里补一个控制条按钮
+        View pip = findViewById(R.id.pip);
+        if (pip != null) {
+            if (Utils.supportsPiPMode()) {
+                pip.setOnClickListener(view -> {
+                    if (mOnPlayerMenuClickListener != null) {
+                        mOnPlayerMenuClickListener.onPip();
+                    }
+                });
+            } else {
+                pip.setVisibility(GONE);
+            }
+        }
     }
 
 

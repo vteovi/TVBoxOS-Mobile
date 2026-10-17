@@ -7,6 +7,7 @@ import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.BroadcastReceiver;
 import android.os.Build;
@@ -124,8 +125,6 @@ import xyz.doikki.videoplayer.player.VideoView;
 public class LiveActivity extends BaseActivity {
     public static Context context;
     private VideoView mVideoView;
-    private LiveNewController mLiveController;      // 直播控制器(负责方向/全屏策略)
-    private boolean mEnteredPortrait = false;       // 进入本页时是否竖屏: 决定"转到横屏是否自动全屏"
     private TextView tvChannelInfo;
     private LinearLayout tvLeftChannelListLayout;
     private RecyclerView mChannelGroupView;
@@ -213,9 +212,8 @@ public class LiveActivity extends BaseActivity {
         if (bottomNav != null) {
             bottomNav.setVisibility(View.GONE);
         }
-        // 记录进入直播页时的屏幕方向：竖屏进入保留"转到横屏自动全屏"的原体验；
-        // 已经是横屏进入(手机横屏 / 大屏横屏)时不再自动全屏，也不锁定方向，允许转到竖屏。
-        mEnteredPortrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
+        // 直播页不锁定任何方向：手机/大屏横屏进入都直接进全屏(与原体验一致)，
+        // 转到竖屏则退出全屏回到普通竖屏页。
         mVideoView = findViewById(R.id.mVideoView);
 
         tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -357,9 +355,6 @@ public class LiveActivity extends BaseActivity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT && mLiveController != null) {
-            mLiveController.setRotateToFullScreenEnabled(true);
-        }
         // 方向切换后重算视频区高度(平板竖屏时不再只剩一条窄画面)
         applyLiveVideoBoxSize();
     }
@@ -655,6 +650,8 @@ public class LiveActivity extends BaseActivity {
      */
     private void applyLiveVideoBoxSize() {
         if (mInPip || isInPictureInPictureMode()) return;
+        // 全屏时播放器容器被搬到 decorView, 这里改尺寸没有意义, 退出全屏时再算
+        if (mVideoView != null && mVideoView.isFullScreen()) return;
         View videoBox = findViewById(R.id.live_video_box);
         if (videoBox == null) return;
         Configuration cfg = getResources().getConfiguration();
@@ -724,6 +721,12 @@ public class LiveActivity extends BaseActivity {
     public void enterPip() {
         if (!Utils.supportsPiPMode() || mVideoView == null) {
             return;
+        }
+        // 全屏时播放器容器被搬到了 decorView, 直接进画中画容易残留标题/白边;
+        // 先退回普通页面再进画中画(方向不锁定, 交给系统跟随物理方向)。
+        if (mVideoView.isFullScreen()) {
+            mVideoView.stopFullScreen();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
         int[] size = mVideoView.getVideoSize();
         int vWidth = size[0];
@@ -1301,11 +1304,10 @@ public class LiveActivity extends BaseActivity {
         controller.setEnableInNormal(true);
         controller.setGestureEnabled(true);
         controller.setDoubleTapTogglePlayEnabled(false);
-        // 方向自动全屏: 竖屏进入时允许"转到横屏即全屏"；横屏(手机横屏/大屏横屏)进入时先关闭,
-        // 避免一进直播页就直接全屏, 同时不锁定方向, 等页面出现过竖屏后再解锁(见 onConfigurationChanged)
+        // 方向自动全屏: 手机横屏 / 大屏横屏进入直播页都直接进全屏, 转到竖屏则退出全屏,
+        // 并且全程不锁定方向(平板也能转竖屏)。
         controller.setEnableOrientation(true);
-        controller.setRotateToFullScreenEnabled(mEnteredPortrait);
-        mLiveController = controller;
+        controller.setRotateToFullScreenEnabled(true);
         mVideoView.setVideoController(controller);
         mVideoView.setProgressManager(null);
         //全屏/退出全屏时把画面叠加信息(时间/网速)迁移到播放器容器, 保证全屏也能看到
@@ -1316,6 +1318,8 @@ public class LiveActivity extends BaseActivity {
                     relocateLiveInfoOverlay(true);
                 } else if (playerState == VideoView.PLAYER_NORMAL) {
                     relocateLiveInfoOverlay(false);
+                    // 退出全屏后按当前方向重算视频区高度
+                    applyLiveVideoBoxSize();
                 }
             }
 
@@ -1337,6 +1341,11 @@ public class LiveActivity extends BaseActivity {
             @Override
             public void onSetting() {
                 showSettingDialog(true);
+            }
+
+            @Override
+            public void onPip() {
+                enterPip();
             }
 
         });
