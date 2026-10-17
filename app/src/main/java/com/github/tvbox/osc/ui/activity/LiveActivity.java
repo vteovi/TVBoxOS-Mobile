@@ -6,7 +6,15 @@ import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.BroadcastReceiver;
 import android.content.pm.ActivityInfo;
+import android.os.Build;
+import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.app.PendingIntent;
+import android.graphics.Rational;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import java.io.FileInputStream;
 import android.os.CountDownTimer;
@@ -14,6 +22,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 import android.view.Gravity;
+import java.util.ArrayList;
+import java.util.List;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -25,6 +35,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.navigation.NavigationBarView;
@@ -35,6 +47,8 @@ import com.blankj.utilcode.util.ToastUtils;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
+import com.github.tvbox.osc.constant.IntentKey;
+import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.base.BaseActivity;
 import com.github.tvbox.osc.callback.LiveEmptyCallback;
@@ -225,6 +239,14 @@ public class LiveActivity extends BaseActivity {
         findViewById(R.id.ic_cast).setVisibility(View.GONE);
         //切换直播源
         findViewById(R.id.ic_live_source).setOnClickListener(view -> showLiveSourceDialog());
+        //画中画(小窗)模式
+        ImageView icPip = findViewById(R.id.ic_pip);
+        if (Utils.supportsPiPMode()) {
+            icPip.setVisibility(View.VISIBLE);
+            icPip.setOnClickListener(view -> enterPip());
+        } else {
+            icPip.setVisibility(View.GONE);
+        }
 
         initVideoView();
         initChannelGroupView();
@@ -422,7 +444,8 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (mVideoView != null) {
+        // 画中画模式下 Activity 会被 pause, 但视频必须继续播, 故跳过暂停
+        if (mVideoView != null && !isInPictureInPictureMode()) {
             mVideoView.pause();
         }
     }
@@ -437,6 +460,84 @@ public class LiveActivity extends BaseActivity {
             mVideoView.release();
             mVideoView = null;
         }
+    }
+
+    /**
+     * 画中画(小窗)模式
+     */
+    public void enterPip() {
+        if (Utils.supportsPiPMode()) {
+            int[] size = mVideoView.getVideoSize();
+            int vWidth = size[0];
+            int vHeight = size[1];
+            Rational ratio;
+            if (vWidth != 0 && vHeight != 0) {
+                if (((double) vWidth / (double) vHeight) > 2.39) {
+                    vHeight = (int) ((double) vWidth / 2.35);
+                }
+                ratio = new Rational(vWidth, vHeight);
+            } else {
+                ratio = new Rational(16, 9);
+            }
+            List<RemoteAction> actions = new ArrayList<>();
+            actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, IntentKey.BROADCAST_ACTION_PREV, "Prev", "上一个源"));
+            actions.add(generateRemoteAction(android.R.drawable.ic_media_play, IntentKey.BROADCAST_ACTION_PLAYPAUSE, "Play", "播放/暂停"));
+            actions.add(generateRemoteAction(android.R.drawable.ic_media_next, IntentKey.BROADCAST_ACTION_NEXT, "Next", "下一个源"));
+            PictureInPictureParams params = new PictureInPictureParams.Builder()
+                    .setAspectRatio(ratio)
+                    .setActions(actions).build();
+            enterPictureInPictureMode(params);
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private RemoteAction generateRemoteAction(int iconResId, int actionCode, String title, String desc) {
+        final PendingIntent intent =
+                PendingIntent.getBroadcast(
+                        LiveActivity.this,
+                        actionCode,
+                        new Intent(IntentKey.BROADCAST_ACTION).putExtra("action", actionCode),
+                        // targetSdk>=31 时 PendingIntent 必须显式声明可变性, 否则抛 IllegalArgumentException
+                        PendingIntent.FLAG_IMMUTABLE);
+        final Icon icon = Icon.createWithResource(LiveActivity.this, iconResId);
+        return new RemoteAction(icon, title, desc, intent);
+    }
+
+    private BroadcastReceiver mRemoteActionReceiver;
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void registerActionReceiver(boolean isRegister) {
+        if (isRegister) {
+            mRemoteActionReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (intent == null || !intent.getAction().equals(IntentKey.BROADCAST_ACTION) || mVideoView == null) {
+                        return;
+                    }
+                    int action = intent.getIntExtra("action", 1);
+                    if (action == IntentKey.BROADCAST_ACTION_PREV) {
+                        playPreSource();
+                    } else if (action == IntentKey.BROADCAST_ACTION_PLAYPAUSE) {
+                        if (mVideoView.isPlaying()) mVideoView.pause();
+                        else mVideoView.resume();
+                    } else if (action == IntentKey.BROADCAST_ACTION_NEXT) {
+                        playNextSource();
+                    }
+                }
+            };
+            // Android 14+ 要求动态注册显式声明导出性
+            ContextCompat.registerReceiver(this, mRemoteActionReceiver,
+                    new IntentFilter(IntentKey.BROADCAST_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
+        } else if (mRemoteActionReceiver != null) {
+            unregisterReceiver(mRemoteActionReceiver);
+            mRemoteActionReceiver = null;
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode);
+        registerActionReceiver(Utils.supportsPiPMode() && isInPictureInPictureMode);
     }
 
     private void showChannelList() {
@@ -670,6 +771,8 @@ public class LiveActivity extends BaseActivity {
         controller.setEnableInNormal(true);
         controller.setGestureEnabled(true);
         controller.setDoubleTapTogglePlayEnabled(false);
+        // 手机(竖屏默认)转横屏自动全屏；平板(sw>=600, 默认即横屏)不开启, 否则会一直全屏
+        controller.setEnableOrientation(!isTabletLandscapeLock());
         mVideoView.setVideoController(controller);
         mVideoView.setProgressManager(null);
     }

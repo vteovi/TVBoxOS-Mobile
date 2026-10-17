@@ -72,7 +72,8 @@
         <activity
             android:name=".ui.activity.LiveActivity"
             android:launchMode="singleTop"
-            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|screenLayout"/>
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|uiMode|screenLayout"/>
         <activity
             android:name=".ui.activity.DetailActivity"
             android:supportsPictureInPicture="true"
