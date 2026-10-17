@@ -13,8 +13,10 @@ import android.os.Build;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.app.PendingIntent;
+import android.graphics.Color;
 import android.graphics.Rect;
 import android.util.Rational;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import java.io.FileInputStream;
@@ -24,7 +26,9 @@ import android.os.Looper;
 import android.util.Base64;
 import android.view.Gravity;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -439,7 +443,15 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        mPipClosing = false; // 从画中画展开回到前台, 继续播放
+        // 只有真正回到前台(从画中画展开 / 正常启动)才复位小窗状态并还原 UI;
+        // 进入画中画过程中系统也可能回调 onResume, 此时 isInPictureInPictureMode() 为 true, 不会误恢复。
+        if (!isInPictureInPictureMode()) {
+            mInPip = false;
+            mEnteringPip = false;
+            if (mPipUiMode) {
+                applyPipUiMode(false);
+            }
+        }
         if (mVideoView != null) {
             mVideoView.resume();
         }
@@ -449,8 +461,8 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // 画中画模式下 Activity 会被 pause, 但视频必须继续播, 故跳过暂停
-        if (mVideoView != null && !isInPictureInPictureMode()) {
+        // 进入画中画的过渡期 / 已在画中画中时 Activity 会被 pause, 但视频必须继续播
+        if (mVideoView != null && !mEnteringPip && !mInPip && !isInPictureInPictureMode()) {
             mVideoView.pause();
         }
     }
@@ -458,9 +470,12 @@ public class LiveActivity extends BaseActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        // 画中画被用户关闭(而非展开)时 Activity 退到后台且不再返回, 停止播放并关闭
-        if (mPipClosing && !isInPictureInPictureMode()) {
-            mPipClosing = false;
+        // 从画中画被"关闭"(而非展开回到前台)时: Activity 进入 stop 且不会回到前台。
+        // 此时立即暂停并退出本页, 彻底断开后台声音。
+        // 注意: 不能依赖 !isInPictureInPictureMode(), 关闭瞬间该值可能仍为 true。
+        if (mInPip) {
+            mInPip = false;
+            mEnteringPip = false;
             if (mVideoView != null) {
                 mVideoView.pause();
             }
@@ -481,9 +496,11 @@ public class LiveActivity extends BaseActivity {
     }
 
     // 画中画相关状态
-    private boolean mPipClosing = false;       // 刚退出画中画(关闭/展开均可触发), 展开会被 onResume 复位
-    private boolean mPipUiMode = false;        // 是否已切到"纯视频全屏"UI
-    private int[] mSavedVis;                   // 视频容器内各子控件原始可见性
+    private boolean mInPip = false;            // 当前是否处于画中画小窗
+    private boolean mEnteringPip = false;      // 正在进入画中画的过渡期(此时不能暂停播放)
+    private boolean mPipUiMode = false;        // 是否已切到"纯视频"UI
+    private final Map<View, Integer> mPipSavedVis = new HashMap<>();   // 被隐藏控件 -> 原可见性
+    private final Map<View, Drawable> mPipSavedBg = new HashMap<>();   // 被改背景的控件 -> 原背景
     private ViewGroup.LayoutParams mSavedVideoLp;
     private ViewGroup.LayoutParams mSavedParentLp;
 
@@ -491,99 +508,182 @@ public class LiveActivity extends BaseActivity {
      * 画中画(小窗)模式
      */
     public void enterPip() {
-        if (Utils.supportsPiPMode()) {
-            int[] size = mVideoView.getVideoSize();
-            int vWidth = size[0];
-            int vHeight = size[1];
-            Rational ratio;
-            if (vWidth != 0 && vHeight != 0) {
-                if (((double) vWidth / (double) vHeight) > 2.39) {
-                    vHeight = (int) ((double) vWidth / 2.35);
-                }
-                ratio = new Rational(vWidth, vHeight);
-            } else {
-                ratio = new Rational(16, 9);
-            }
-            // 进入画中画前把界面切到"纯视频全屏": 隐藏频道列表/EPG/导航等, 视频铺满窗口
-            applyPipUiMode(true);
-            // 截图源区域：视频铺满后整窗即视频画面
-            Rect sourceRect = new Rect();
-            int[] location = new int[2];
-            mVideoView.getLocationInWindow(location);
-            sourceRect.set(location[0], location[1], location[0] + mVideoView.getWidth(), location[1] + mVideoView.getHeight());
-            List<RemoteAction> actions = new ArrayList<>();
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, IntentKey.BROADCAST_ACTION_PREV, "Prev", "上一个源"));
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_play, IntentKey.BROADCAST_ACTION_PLAYPAUSE, "Play", "播放/暂停"));
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_next, IntentKey.BROADCAST_ACTION_NEXT, "Next", "下一个源"));
-            PictureInPictureParams params = new PictureInPictureParams.Builder()
-                    .setAspectRatio(ratio)
-                    .setSourceRectHint(sourceRect)
-                    .setActions(actions).build();
-            // 模拟 Home 让应用退到后台, 画中画悬浮在应用外(与点播一致)
-            Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-            homeIntent.addCategory(Intent.CATEGORY_HOME);
-            startActivity(homeIntent);
-            enterPictureInPictureMode(params);
+        if (!Utils.supportsPiPMode() || mVideoView == null) {
+            return;
         }
+        int[] size = mVideoView.getVideoSize();
+        int vWidth = size[0];
+        int vHeight = size[1];
+        Rational ratio;
+        if (vWidth != 0 && vHeight != 0) {
+            if (((double) vWidth / (double) vHeight) > 2.39) {
+                vHeight = (int) ((double) vWidth / 2.35);
+            }
+            ratio = new Rational(vWidth, vHeight);
+        } else {
+            ratio = new Rational(16, 9);
+        }
+        mEnteringPip = true;
+        // 先把界面切到"纯视频"(尽量提前), 进画中画后还会再确保一次
+        applyPipUiMode(true);
+        // 截图源区域: 视频铺满后整窗即视频画面
+        Rect sourceRect = new Rect();
+        int[] location = new int[2];
+        mVideoView.getLocationInWindow(location);
+        sourceRect.set(location[0], location[1], location[0] + mVideoView.getWidth(), location[1] + mVideoView.getHeight());
+        List<RemoteAction> actions = new ArrayList<>();
+        actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, IntentKey.BROADCAST_ACTION_PREV, "Prev", "上一个源"));
+        actions.add(generateRemoteAction(android.R.drawable.ic_media_play, IntentKey.BROADCAST_ACTION_PLAYPAUSE, "Play", "播放/暂停"));
+        actions.add(generateRemoteAction(android.R.drawable.ic_media_next, IntentKey.BROADCAST_ACTION_NEXT, "Next", "下一个源"));
+        PictureInPictureParams params = new PictureInPictureParams.Builder()
+                .setAspectRatio(ratio)
+                .setSourceRectHint(sourceRect)
+                .setActions(actions).build();
+        // 模拟 Home 让应用退到后台, 画中画悬浮在应用外(与点播一致)
+        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+        homeIntent.addCategory(Intent.CATEGORY_HOME);
+        startActivity(homeIntent);
+        boolean entered = enterPictureInPictureMode(params);
+        if (!entered) {
+            // 进入失败(系统限制/不支持), 立即还原 UI, 避免界面卡在纯视频黑屏
+            mEnteringPip = false;
+            applyPipUiMode(false);
+            return;
+        }
+        // 画中画窗口稳定后再强制确保一次纯视频布局, 否则系统可能捕获到旧布局(白条)
+        mVideoView.postDelayed(() -> {
+            if (mVideoView != null && (mInPip || isInPictureInPictureMode())) {
+                applyPipUiMode(true);
+                ensurePipVideoFullscreen();
+            }
+            mEnteringPip = false;
+        }, 350);
     }
 
     /**
-     * 进入/退出画中画时切换 UI: 仅保留视频画面, 隐藏频道列表/EPG/导航及其它控件, 视频铺满窗口
+     * 进入/退出画中画时切换 UI: 仅保留视频画面。
+     * 隐藏频道列表/EPG/导航/源切换等所有非视频控件, 视频容器与播放器铺满窗口,
+     * 并把根布局与视频容器改为黑底, 避免视频比例与窗口不一致时露出白条。
      */
     private void applyPipUiMode(boolean pip) {
-        if (pip == mPipUiMode) {
+        if (mVideoView == null) {
             return;
         }
-        mPipUiMode = pip;
-        // 隐藏/恢复频道列表、EPG、底部导航
-        setGone(R.id.ll_epg, pip);
-        setGone(R.id.tvLeftChannnelListLayout, pip);
-        View nav = findViewById(R.id.bottom_nav);
-        if (nav != null) {
-            nav.setVisibility(pip ? View.GONE : View.VISIBLE);
-        }
-        ViewGroup parent = (ViewGroup) mVideoView.getParent();
-        if (parent == null) {
-            return;
-        }
-        int n = parent.getChildCount();
         if (pip) {
-            // 保存并隐藏视频容器内除播放器外的其它控件(源切换/设置等)
-            mSavedVis = new int[n];
-            for (int i = 0; i < n; i++) {
-                View child = parent.getChildAt(i);
-                mSavedVis[i] = child.getVisibility();
-                if (child != mVideoView) {
-                    child.setVisibility(View.GONE);
-                }
+            if (mPipUiMode) {
+                // 已经切过, 但仍需确保铺满(应对画中画窗口尺寸变化)
+                ensurePipVideoFullscreen();
+                return;
             }
-            // 容器与播放器铺满窗口
-            mSavedParentLp = parent.getLayoutParams();
-            parent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            mSavedVideoLp = mVideoView.getLayoutParams();
-            mVideoView.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        } else {
-            if (mSavedVis != null) {
+            mPipUiMode = true;
+            mPipSavedVis.clear();
+            mPipSavedBg.clear();
+            // 隐藏除视频外的所有区块: EPG、频道列表、底部/左侧导航、频道号
+            hideForPip(findViewById(R.id.ll_epg));
+            hideForPip(findViewById(R.id.tvLeftChannnelListLayout));
+            hideForPip(findViewById(R.id.bottom_nav));
+            hideForPip(findViewById(R.id.tvChannel));
+            // 隐藏视频容器内除播放器外的其它控件(源切换/设置等)
+            ViewGroup parent = (ViewGroup) mVideoView.getParent();
+            if (parent != null) {
+                int n = parent.getChildCount();
                 for (int i = 0; i < n; i++) {
-                    parent.getChildAt(i).setVisibility(mSavedVis[i]);
+                    View child = parent.getChildAt(i);
+                    if (child != mVideoView) {
+                        hideForPip(child);
+                    }
                 }
-                mSavedVis = null;
+                // 视频容器黑底, 防止 letterbox 露出白/灰底
+                saveBackground(parent);
+                parent.setBackgroundColor(Color.BLACK);
+                mSavedParentLp = parent.getLayoutParams();
+                parent.setLayoutParams(new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
+            // 根布局黑底
+            View root = findViewById(R.id.live_root);
+            if (root != null) {
+                saveBackground(root);
+                root.setBackgroundColor(Color.BLACK);
+            }
+            // 整个窗口黑底兜底(含状态栏/导航栏 inset 区域), 防止小窗边缘露白条
+            View decor = getWindow() != null ? getWindow().getDecorView() : null;
+            if (decor != null) {
+                saveBackground(decor);
+                decor.setBackgroundColor(Color.BLACK);
+            }
+            ensurePipVideoFullscreen();
+        } else {
+            if (!mPipUiMode) {
+                return;
+            }
+            mPipUiMode = false;
+            // 恢复被隐藏控件的可见性
+            for (Map.Entry<View, Integer> e : mPipSavedVis.entrySet()) {
+                e.getKey().setVisibility(e.getValue());
+            }
+            mPipSavedVis.clear();
+            // 恢复背景
+            for (Map.Entry<View, Drawable> e : mPipSavedBg.entrySet()) {
+                e.getKey().setBackground(e.getValue());
+            }
+            mPipSavedBg.clear();
+            // 恢复尺寸
+            ViewGroup parent = (ViewGroup) mVideoView.getParent();
+            if (parent != null && mSavedParentLp != null) {
+                parent.setLayoutParams(mSavedParentLp);
+                mSavedParentLp = null;
             }
             if (mSavedVideoLp != null) {
                 mVideoView.setLayoutParams(mSavedVideoLp);
                 mSavedVideoLp = null;
             }
-            if (mSavedParentLp != null) {
-                parent.setLayoutParams(mSavedParentLp);
-                mSavedParentLp = null;
-            }
         }
     }
 
-    private void setGone(int id, boolean gone) {
-        View v = findViewById(id);
-        if (v != null) {
-            v.setVisibility(gone ? View.GONE : View.VISIBLE);
+    /**
+     * 确保播放器与其父容器铺满窗口(画中画里只显示视频画面)。
+     */
+    private void ensurePipVideoFullscreen() {
+        if (mVideoView == null) {
+            return;
+        }
+        ViewGroup parent = (ViewGroup) mVideoView.getParent();
+        if (parent != null) {
+            ViewGroup.LayoutParams plp = parent.getLayoutParams();
+            if (plp == null || plp.width != ViewGroup.LayoutParams.MATCH_PARENT
+                    || plp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                if (mSavedParentLp == null) {
+                    mSavedParentLp = plp;
+                }
+                parent.setLayoutParams(new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
+        }
+        ViewGroup.LayoutParams vlp = mVideoView.getLayoutParams();
+        if (vlp == null || vlp.width != ViewGroup.LayoutParams.MATCH_PARENT
+                || vlp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+            if (mSavedVideoLp == null) {
+                mSavedVideoLp = vlp;
+            }
+            mVideoView.setLayoutParams(new RelativeLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    /** 隐藏控件并记录原可见性(仅首次记录, 保证恢复准确) */
+    private void hideForPip(View v) {
+        if (v == null || mPipSavedVis.containsKey(v)) {
+            return;
+        }
+        mPipSavedVis.put(v, v.getVisibility());
+        v.setVisibility(View.GONE);
+    }
+
+    /** 记录控件原背景(仅首次记录) */
+    private void saveBackground(View v) {
+        if (v != null && !mPipSavedBg.containsKey(v)) {
+            mPipSavedBg.put(v, v.getBackground());
         }
     }
 
@@ -636,12 +736,36 @@ public class LiveActivity extends BaseActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         registerActionReceiver(Utils.supportsPiPMode() && isInPictureInPictureMode);
         if (isInPictureInPictureMode) {
-            applyPipUiMode(true);
+            mInPip = true;
+            mEnteringPip = false;
+            // 延迟到画中画窗口稳定后再切纯视频, 否则系统可能捕获到旧布局(白条)
+            if (mVideoView != null) {
+                mVideoView.postDelayed(() -> {
+                    if (mInPip) {
+                        applyPipUiMode(true);
+                        ensurePipVideoFullscreen();
+                    }
+                }, 120);
+            }
         } else {
-            applyPipUiMode(false);
-            // 退出画中画: 展开回到前台会触发 onResume 复位本标志;
-            // 若被关闭, 则在 onStop 中停止播放并关闭(解决关闭后仍播声音)
-            mPipClosing = true;
+            // 退出画中画先暂停, 防止"关闭"后后台继续出声;
+            // 若是"展开"回到前台, onResume 会恢复播放并还原 UI。
+            if (mVideoView != null) {
+                if (mVideoView.isPlaying()) {
+                    mVideoView.pause();
+                }
+                // 兜底: 500ms 后若仍处于"曾进画中画且未回前台"状态, 说明小窗是被"关闭"的,
+                // 直接退出本页(满足"点关闭就退出应用"的诉求)。展开会在 onResume 中清掉 mInPip。
+                mVideoView.postDelayed(() -> {
+                    if (mInPip && !isFinishing()) {
+                        mInPip = false;
+                        if (mVideoView != null) {
+                            mVideoView.pause();
+                        }
+                        finish();
+                    }
+                }, 500);
+            }
         }
     }
 
