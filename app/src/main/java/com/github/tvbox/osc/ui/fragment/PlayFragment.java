@@ -338,24 +338,7 @@ public class PlayFragment extends BaseLazyFragment {
 
             @Override
             public void cast() {
-                String url = getFinalUrl();
-                if (TextUtils.isEmpty(url)) {
-                    ToastUtils.showShort("暂无可投屏的播放地址，请先播放");
-                    return;
-                }
-                String title = "";
-                try {
-                    String vsName = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex).name;
-                    title = mVodInfo.name + " " + vsName;
-                } catch (Throwable e) {
-                    title = mVodInfo != null ? mVodInfo.name : "TVBox";
-                }
-                long position = 0;
-                try {
-                    if (mVideoView != null) position = mVideoView.getCurrentPosition();
-                } catch (Throwable ignore) {
-                }
-                new CastDialog(activity, url, title, position).show();
+                openCast();
             }
 
             @Override
@@ -1708,6 +1691,30 @@ public class PlayFragment extends BaseLazyFragment {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * 打开投屏设备选择弹窗(顶部栏投屏按钮与详情页外部操作栏投屏按钮共用)。
+     */
+    public void openCast() {
+        String url = getFinalUrl();
+        if (TextUtils.isEmpty(url)) {
+            ToastUtils.showShort("暂无可投屏的播放地址，请先播放");
+            return;
+        }
+        String title = "";
+        try {
+            String vsName = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex).name;
+            title = mVodInfo.name + " " + vsName;
+        } catch (Throwable e) {
+            title = mVodInfo != null ? mVodInfo.name : "TVBox";
+        }
+        long position = 0;
+        try {
+            if (mVideoView != null) position = mVideoView.getCurrentPosition();
+        } catch (Throwable ignore) {
+        }
+        new CastDialog(activity, url, title, position).show();
     }
 
     class MyWebView extends WebView {

@@ -57,6 +57,7 @@ import com.github.tvbox.osc.ui.adapter.SeriesAdapter;
 import com.github.tvbox.osc.ui.adapter.SeriesFlagAdapter;
 import com.github.tvbox.osc.ui.dialog.AllVodSeriesBottomDialog;
 import com.github.tvbox.osc.ui.dialog.AllVodSeriesRightDialog;
+import com.github.tvbox.osc.ui.dialog.CastDialog;
 import com.github.tvbox.osc.ui.dialog.QuickSearchDialog;
 import com.github.tvbox.osc.ui.dialog.VideoDetailDialog;
 import com.github.tvbox.osc.ui.fragment.PlayFragment;
@@ -211,6 +212,11 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                 FastClickCheckUtil.check(v);
                 showExternalPlayerChooser();
             }
+        });
+        // 外部操作栏：投屏
+        mBinding.tvCast.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            if (playFragment != null) playFragment.openCast();
         });
         // 外部按钮：画中画
         mBinding.extPip.setOnClickListener(v -> {

@@ -126,6 +126,15 @@
                             android:contentDescription="外部播放"/>
 
                         <ImageView
+                            android:id="@+id/tvCast"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:padding="6dp"
+                            android:src="@drawable/ic_cast_18"
+                            app:tint="@color/text_foreground"
+                            android:contentDescription="投屏"/>
+
+                        <ImageView
                             android:id="@+id/tvCollect"
                             android:layout_width="40dp"
                             android:layout_height="40dp"
