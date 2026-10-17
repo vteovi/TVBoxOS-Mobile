@@ -23,6 +23,7 @@
 - **Edit工具会把CRLF改LF致diff噪音**：用Python bytes级替换并保留行尾 `replace(b'\r\n',b'\n').replace(b'\n',b'\r\n')`。
 - **异步回调晚于Activity销毁→NPE**（直播页崩溃根因）：所有「网络/子线程→主线程→改View/播放器」路径先判 `isFinishing()||isDestroyed()` 并判空View；网络请求onDestroy取消。
 - 首页数据源排序：`SourceViewModel.getSort(sourceKey)` 经 `ApiConfig.get().getSource(key)` 取 `SourceBean`；取不到须 null 保护（见关键修复清单）。
+- **播放器布局与设置弹窗**：VOD 真正使用的控制布局是 `res/layout/player_vod_control_view.xml`（`VodController.getLayoutId()`）；`box_vod_control_view.xml` 是无人引用的遗留文件。播放设置弹窗 `dialog_playing_control.xml` 被 `PlayingControlDialog`(手机底部) 与 `PlayingControlRightDialog`(sw600dp 右侧抽屉) 共用，布局改一次即可，但**两个 Java 类都要各自接监听**。
 
 ## 深色模式 / 主题
 - 切换：`util/Utils.isDarkTheme()` + `AppCompatDelegate.setDefaultNightMode`。
