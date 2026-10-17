@@ -132,7 +132,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             tmpFile.delete()
         }
     }
-            zipFolder(dataDir, destZip)
+
     private var homeRec = Hawk.get(HawkConfig.HOME_REC, 0)
     private var dnsOpt = Hawk.get(HawkConfig.DOH_URL, 0)
     private var currentLiveApi = Hawk.get(HawkConfig.LIVE_URL, "")
