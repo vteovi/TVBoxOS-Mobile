@@ -648,24 +648,32 @@ public class LiveActivity extends BaseActivity {
             return;
         }
         ViewGroup parent = (ViewGroup) mVideoView.getParent();
-        if (parent != null) {
-            ViewGroup.LayoutParams plp = parent.getLayoutParams();
-            if (plp == null || plp.width != ViewGroup.LayoutParams.MATCH_PARENT
-                    || plp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
-                if (mSavedParentLp == null) {
-                    mSavedParentLp = plp;
-                }
-                parent.setLayoutParams(newFullscreenLp(parent));
+        if (parent != null && !isFullscreenLp(parent.getLayoutParams())) {
+            if (mSavedParentLp == null) {
+                mSavedParentLp = parent.getLayoutParams();
             }
+            parent.setLayoutParams(newFullscreenLp(parent));
         }
-        ViewGroup.LayoutParams vlp = mVideoView.getLayoutParams();
-        if (vlp == null || vlp.width != ViewGroup.LayoutParams.MATCH_PARENT
-                || vlp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+        if (!isFullscreenLp(mVideoView.getLayoutParams())) {
             if (mSavedVideoLp == null) {
-                mSavedVideoLp = vlp;
+                mSavedVideoLp = mVideoView.getLayoutParams();
             }
             mVideoView.setLayoutParams(newFullscreenLp(mVideoView));
         }
+    }
+
+    /** 是否已是"铺满且无边距"的布局参数 */
+    private boolean isFullscreenLp(ViewGroup.LayoutParams lp) {
+        if (lp == null || lp.width != ViewGroup.LayoutParams.MATCH_PARENT
+                || lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+            return false;
+        }
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
+            return m.leftMargin == 0 && m.topMargin == 0
+                    && m.rightMargin == 0 && m.bottomMargin == 0;
+        }
+        return true;
     }
 
     /** 隐藏控件并记录原可见性(仅首次记录, 保证恢复准确) */
@@ -690,17 +698,27 @@ public class LiveActivity extends BaseActivity {
      * 否则 LinearLayout 在 measure 时直接强转会抛 ClassCastException。
      */
     private ViewGroup.LayoutParams newFullscreenLp(View child) {
-        ViewGroup p = (ViewGroup) child.getParent();
-        ViewGroup.LayoutParams src = child.getLayoutParams();
+        ViewGroup p = (child != null && child.getParent() instanceof ViewGroup)
+                ? (ViewGroup) child.getParent() : null;
+        // 注意: ViewGroup.generateLayoutParams() 是 protected, 外部不可调用,
+        // 只能按父容器具体类型自行创建对应的 LayoutParams。
         ViewGroup.LayoutParams lp;
-        if (p != null && src != null) {
-            lp = p.generateLayoutParams(src);
-        } else if (p != null) {
-            lp = p.generateLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (p instanceof LinearLayout) {
+            lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        } else if (p instanceof RelativeLayout) {
+            lp = new RelativeLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        } else if (p instanceof FrameLayout) {
+            lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         } else {
             lp = new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+        // 清空外边距, 避免原布局的 margin 在铺满时留下缝隙(露出白边)
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ((ViewGroup.MarginLayoutParams) lp).setMargins(0, 0, 0, 0);
         }
         lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
         lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
