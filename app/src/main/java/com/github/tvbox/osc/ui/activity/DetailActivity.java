@@ -212,6 +212,24 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                 showExternalPlayerChooser();
             }
         });
+        // 外部按钮：画中画
+        mBinding.extPip.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            enterPip();
+        });
+        // 外部按钮：设置
+        mBinding.extSetting.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            if (playFragment != null && playFragment.getController() != null) {
+                android.view.View settingBtn = playFragment.getController().findViewById(R.id.setting);
+                if (settingBtn != null) settingBtn.performClick();
+            }
+        });
+        // 外部按钮：全屏
+        mBinding.extFullscreen.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            toggleFullPreview();
+        });
         mBinding.tvCollect.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -812,6 +830,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.previewPlayer.setLayoutParams(fullWindows ? windowsFull : windowsPreview);
         mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
         mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
+        mBinding.externalBtnBar.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
 
         //全屏下禁用详情页几个按键的焦点 防止上键跑过来
         mBinding.tvSort.setFocusable(!fullWindows);
