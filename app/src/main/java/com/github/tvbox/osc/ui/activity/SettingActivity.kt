@@ -230,7 +230,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             val dialog = BackupDialog(this@SettingActivity, object : BackupDialog.OnActionListener {
                 override fun onBackup() {
                     val name = "TVBox-Backup-" +
-                        SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date()) + ".zip"
+                        SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date()) + ".json"
                     backupSaf.launch(name)
                 }
 
