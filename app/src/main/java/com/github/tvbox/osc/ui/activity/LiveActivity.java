@@ -212,8 +212,11 @@ public class LiveActivity extends BaseActivity {
         if (bottomNav != null) {
             bottomNav.setVisibility(View.GONE);
         }
-        // 直播页不锁定任何方向：手机/大屏横屏进入都直接进全屏(与原体验一致)，
-        // 转到竖屏则退出全屏回到普通竖屏页。
+        // 直播页不锁定任何方向。
+        // 记录进入直播页时的屏幕方向：横屏直接进来时停在左右分栏的普通页
+        // (左边画面、右边频道列表)，不自动全屏；只有竖屏进入后转到横屏才自动全屏。
+        mEnteredPortrait = getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_PORTRAIT;
         mVideoView = findViewById(R.id.mVideoView);
 
         tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -355,6 +358,13 @@ public class LiveActivity extends BaseActivity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        // 页面出现过竖屏 —— 之后"转到横屏自动全屏"就恢复(和用户从竖屏进来一样)
+        if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            mEnteredPortrait = true;
+            if (mLiveController != null) {
+                mLiveController.setRotateToFullScreenEnabled(true);
+            }
+        }
         // 方向切换后重算视频区高度(平板竖屏时不再只剩一条窄画面)
         applyLiveVideoBoxSize();
     }
@@ -500,6 +510,8 @@ public class LiveActivity extends BaseActivity {
     private ViewGroup.LayoutParams mSavedVideoLp;
     private ViewGroup.LayoutParams mSavedParentLp;
     private ViewGroup.LayoutParams mSavedColumnLp;    // 横屏分栏时左栏(视频列)的原布局参数
+    private LiveNewController mLiveController;        // 直播控制器(方向/全屏策略)
+    private boolean mEnteredPortrait = false;         // 进入本页时是否竖屏: 决定"转到横屏是否自动全屏"
     private boolean mPipSysUi = false;         // 是否已切到"隐藏全部系统栏"状态(避免重复 init 引起重排闪烁)
     private boolean mResumed = false;          // Activity 是否已回到前台(resumed)
     private boolean mPendingPipExit = false;   // 刚退出画中画, 尚未判定是"展开"还是"关闭"
@@ -1236,22 +1248,6 @@ public class LiveActivity extends BaseActivity {
         mHandler.postDelayed(mHideChannelInfoRun, 3000);
     }
 
-    /**
-     * 延迟弹出频道侧边栏: 等全屏动画稳定后再 show, 否则弹层尺寸/层级可能错位。
-     * 期间若已经退出全屏(或用户手动打开过), 就不弹了。
-     */
-    private final Runnable mAutoOpenAllChannelRun = new Runnable() {
-        @Override
-        public void run() {
-            if (isFinishing() || isDestroyed()) return;
-            if (mVideoView == null || !mVideoView.isFullScreen()) return;
-            if (mAllChannelRightDialog != null && mAllChannelRightDialog.isShow()) return;
-            if (getResources().getConfiguration().orientation
-                    != Configuration.ORIENTATION_LANDSCAPE) return;
-            showAllChannelDialog();
-        }
-    };
-
     private Runnable mHideChannelInfoRun = new Runnable() {
         @Override
         public void run() {
@@ -1443,10 +1439,12 @@ public class LiveActivity extends BaseActivity {
         controller.setEnableInNormal(true);
         controller.setGestureEnabled(true);
         controller.setDoubleTapTogglePlayEnabled(false);
-        // 方向自动全屏: 手机横屏 / 大屏横屏进入直播页都直接进全屏, 转到竖屏则退出全屏,
-        // 并且全程不锁定方向(平板也能转竖屏)。
+        // 方向自动全屏: 横屏进入本页时不自动全屏(保持左右分栏的普通页);
+        // 竖屏进入才保留"转到横屏即全屏"的原体验。全程不锁定方向(平板也能转竖屏),
+        // 页面一旦出现过竖屏就解锁(见 onConfigurationChanged)。
         controller.setEnableOrientation(true);
-        controller.setRotateToFullScreenEnabled(true);
+        controller.setRotateToFullScreenEnabled(mEnteredPortrait);
+        mLiveController = controller;
         mVideoView.setVideoController(controller);
         mVideoView.setProgressManager(null);
         //全屏/退出全屏时把画面叠加信息(时间/网速)迁移到播放器容器, 保证全屏也能看到
@@ -1455,15 +1453,8 @@ public class LiveActivity extends BaseActivity {
             public void onPlayerStateChanged(int playerState) {
                 if (playerState == VideoView.PLAYER_FULL_SCREEN) {
                     relocateLiveInfoOverlay(true);
-                    // 横屏进入直播页会直接进全屏, 全屏下页面上没有频道列表可点,
-                    // 这里把右侧频道侧边栏自动打开(延迟到全屏稳定后, 避免和全屏动画抢)
-                    if (getResources().getConfiguration().orientation
-                            == Configuration.ORIENTATION_LANDSCAPE) {
-                        mHandler.postDelayed(mAutoOpenAllChannelRun, 300);
-                    }
                 } else if (playerState == VideoView.PLAYER_NORMAL) {
                     relocateLiveInfoOverlay(false);
-                    mHandler.removeCallbacks(mAutoOpenAllChannelRun);
                     // 退出全屏要收起频道抽屉: 它是独立浮层, 不退会悬在普通页面右侧
                     if (mAllChannelRightDialog != null && mAllChannelRightDialog.isShow()) {
                         mAllChannelRightDialog.dismiss();
