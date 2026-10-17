@@ -780,7 +780,7 @@ public class VodController extends BaseController {
         if (mControlWrapper != null) {
             if (mPlayInfoSpeed != null) {
                 String speed = PlayerHelper.getDisplaySpeed(getCurrentNetSpeed());
-                mPlayInfoSpeed.setText("网速 " + (TextUtils.isEmpty(speed) ? "0B" : speed));
+                mPlayInfoSpeed.setText("网速 " + (TextUtils.isEmpty(speed) ? "0B/s" : speed));
             }
             if (mPlayInfoProgress != null) {
                 long duration = mControlWrapper.getDuration();
