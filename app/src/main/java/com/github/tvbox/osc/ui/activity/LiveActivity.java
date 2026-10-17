@@ -2084,10 +2084,15 @@ public class LiveActivity extends BaseActivity {
     }
 
     public void showAllChannelDialog() {
+        // 必须给抽屉固定宽度: 不设 popupWidth 时它按 wrap_content 测量,
+        // 而 dialog_all_channel 里两个列表是 0dp+weight, 在 UNSPECIFIED 宽度下权重失效、
+        // 退化为"按内容自然宽度", 于是切换分类后频道名长短不同会把列表宽度带得忽宽忽窄。
+        int width = Math.max(dp2px(260), Math.round(ScreenUtils.getScreenWidth() * 0.42f));
         mAllChannelRightDialog = new XPopup.Builder(this)
                 .isViewMode(true)
                 .hasNavigationBar(false)
                 .hasShadowBg(false)
+                .popupWidth(width)
                 .popupHeight(ScreenUtils.getScreenHeight())
                 .popupPosition(PopupPosition.Right)
                 .asCustom(new AllChannelsRightDialog(this));
