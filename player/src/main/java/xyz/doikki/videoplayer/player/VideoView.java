@@ -921,6 +921,13 @@ public class VideoView<P extends AbstractPlayer> extends FrameLayout
     }
 
     /**
+     * 获取当前视频比例
+     */
+    public int getScreenScaleType() {
+        return mCurrentScreenScaleType;
+    }
+
+    /**
      * 设置镜像旋转，暂不支持SurfaceView
      */
     @Override

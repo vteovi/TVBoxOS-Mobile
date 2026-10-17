@@ -516,6 +516,7 @@ public class LiveActivity extends BaseActivity {
     private boolean mResumed = false;          // Activity 是否已回到前台(resumed)
     private boolean mPendingPipExit = false;   // 刚退出画中画, 尚未判定是"展开"还是"关闭"
     private int mPipExitTicks = 0;             // 退出判定轮询次数
+    private int mSavedScaleType = -1;          // 进入画中画前的播放器缩放模式(退出时精确还原)
 
     /**
      * 画中画退出判定: "展开"会很快回到前台(获得焦点/onResume), "关闭"则不会。
@@ -647,18 +648,6 @@ public class LiveActivity extends BaseActivity {
                 mSavedParentLp = parent.getLayoutParams();
                 parent.setLayoutParams(newFullscreenLp(parent));
             }
-            // 根布局黑底
-            View root = findViewById(R.id.live_root);
-            if (root != null) {
-                saveBackground(root);
-                root.setBackgroundColor(Color.BLACK);
-            }
-            // 整个窗口黑底兜底(含状态栏/导航栏 inset 区域), 防止小窗边缘露白条
-            View decor = getWindow() != null ? getWindow().getDecorView() : null;
-            if (decor != null) {
-                saveBackground(decor);
-                decor.setBackgroundColor(Color.BLACK);
-            }
             ensurePipVideoFullscreen();
         } else {
             if (!mPipUiMode) {
@@ -686,8 +675,16 @@ public class LiveActivity extends BaseActivity {
                 mSavedVideoLp = null;
             }
             // 还原播放器缩放模式与系统栏(退出画中画回到应用内)
-            mVideoView.setScreenScaleType(VideoView.SCREEN_SCALE_DEFAULT);
+            if (mSavedScaleType >= 0) {
+                mVideoView.setScreenScaleType(mSavedScaleType);
+                mSavedScaleType = -1;
+            }
             applyPipSystemUi(false);
+            // 触发一次重新测量, 确保还原后的宽高立即生效(否则可能残留画中画的尺寸)
+            if (parent != null) {
+                parent.requestLayout();
+            }
+            mVideoView.requestLayout();
         }
     }
 
@@ -714,6 +711,10 @@ public class LiveActivity extends BaseActivity {
         // 画面按比例铺满并裁剪: 系统给的画中画窗口比例未必等于视频比例,
         // 默认缩放模式会按视频比例居中显示, 窗口比例不一致时就会留黑边。
         // 用 CENTER_CROP 让画面始终填满小窗(只裁剪, 不拉伸变形)。
+        if (mSavedScaleType < 0) {
+            // 记住进入前的缩放模式(直播页每个频道有独立的画面比例设置), 退出时精确还原
+            mSavedScaleType = mVideoView.getScreenScaleType();
+        }
         mVideoView.setScreenScaleType(VideoView.SCREEN_SCALE_CENTER_CROP);
         // 隐藏状态栏/导航栏并让内容铺满整个窗口, 否则顶部会留一条系统栏高度的黑边
         applyPipSystemUi(true);
@@ -873,21 +874,24 @@ public class LiveActivity extends BaseActivity {
                 }, 120);
             }
         } else {
-            // 展开(已回到前台): onResume 已处理恢复, 这里不要再走关闭逻辑,
-            // 否则会把刚恢复的播放暂停掉。
+            // 无论"展开"还是"关闭", 都必须先把画中画 UI 还原成正常页面。
+            // 某些 ROM 展开时不一定会再次回调 onResume, 若把还原只放在 onResume 里,
+            // 页面就会停留在"视频铺满+黑底+面板隐藏"的画中画状态。
+            mInPip = false;
+            applyPipUiMode(false);
+            // 已经回到前台(展开): 不要再走关闭逻辑, 否则会把刚恢复的播放暂停掉
             if (mResumed) {
                 mPendingPipExit = false;
                 mPipExitTicks = 0;
                 mHandler.removeCallbacks(mPipExitCheckRun);
-                mInPip = false;
+                if (mVideoView != null) {
+                    mVideoView.resume();
+                }
                 return;
             }
-            // 退出画中画先暂停, 防止"关闭"后后台继续出声;
-            // 若是"展开"回到前台, onResume 会恢复播放并还原 UI。
-            if (mVideoView != null) {
-                if (mVideoView.isPlaying()) {
-                    mVideoView.pause();
-                }
+            // 退出画中画先暂停, 防止"关闭"后后台继续出声
+            if (mVideoView != null && mVideoView.isPlaying()) {
+                mVideoView.pause();
             }
             // 不立即 finish(展开动画需要时间), 交给轮询判定:
             // 回到前台就取消, 一直没回来才判定为"关闭"并退出本页。
