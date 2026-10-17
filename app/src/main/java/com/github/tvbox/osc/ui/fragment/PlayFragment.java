@@ -1714,7 +1714,7 @@ public class PlayFragment extends BaseLazyFragment {
             if (mVideoView != null) position = mVideoView.getCurrentPosition();
         } catch (Throwable ignore) {
         }
-        new CastDialog(activity, url, title, position).show();
+        new CastDialog(mActivity, url, title, position).show();
     }
 
     class MyWebView extends WebView {
