@@ -503,6 +503,7 @@ public class LiveActivity extends BaseActivity {
     private final Map<View, Drawable> mPipSavedBg = new HashMap<>();   // 被改背景的控件 -> 原背景
     private ViewGroup.LayoutParams mSavedVideoLp;
     private ViewGroup.LayoutParams mSavedParentLp;
+    private boolean mPipSysUi = false;         // 是否已切到"隐藏全部系统栏"状态(避免重复 init 引起重排闪烁)
 
     /**
      * 画中画(小窗)模式
@@ -637,6 +638,9 @@ public class LiveActivity extends BaseActivity {
                 mVideoView.setLayoutParams(mSavedVideoLp);
                 mSavedVideoLp = null;
             }
+            // 还原播放器缩放模式与系统栏(退出画中画回到应用内)
+            mVideoView.setScreenScaleType(VideoView.SCREEN_SCALE_DEFAULT);
+            applyPipSystemUi(false);
         }
     }
 
@@ -659,6 +663,42 @@ public class LiveActivity extends BaseActivity {
                 mSavedVideoLp = mVideoView.getLayoutParams();
             }
             mVideoView.setLayoutParams(newFullscreenLp(mVideoView));
+        }
+        // 画面按比例铺满并裁剪: 系统给的画中画窗口比例未必等于视频比例,
+        // 默认缩放模式会按视频比例居中显示, 窗口比例不一致时就会留黑边。
+        // 用 CENTER_CROP 让画面始终填满小窗(只裁剪, 不拉伸变形)。
+        mVideoView.setScreenScaleType(VideoView.SCREEN_SCALE_CENTER_CROP);
+        // 隐藏状态栏/导航栏并让内容铺满整个窗口, 否则顶部会留一条系统栏高度的黑边
+        applyPipSystemUi(true);
+    }
+
+    /**
+     * 画中画期间切换系统栏: 进入时隐藏全部系统栏且去掉系统窗口 inset,
+     * 使视频真正铺满整个窗口(对齐点播页 changedLandscape 的做法);
+     * 退出时恢复本页原来的沉浸式配置。
+     */
+    private void applyPipSystemUi(boolean pip) {
+        if (pip == mPipSysUi) {
+            return; // 状态未变化, 不重复 init(避免画中画窗口反复重排闪烁)
+        }
+        mPipSysUi = pip;
+        if (pip) {
+            ImmersionBar.with(this)
+                    .statusBarColor(R.color.black)
+                    .statusBarDarkFont(false)
+                    .navigationBarColor(R.color.black)
+                    .fitsSystemWindows(false)
+                    .hideBar(BarHide.FLAG_HIDE_BAR)
+                    .init();
+        } else {
+            // 还原 init() 里的原始配置
+            ImmersionBar.with(this)
+                    .statusBarColor(R.color.black)
+                    .statusBarDarkFont(false)
+                    .navigationBarColor(R.color.black)
+                    .fitsSystemWindows(true)
+                    .hideBar(BarHide.FLAG_HIDE_NAVIGATION_BAR)
+                    .init();
         }
     }
 
