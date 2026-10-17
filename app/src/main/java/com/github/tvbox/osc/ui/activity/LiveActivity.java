@@ -13,7 +13,7 @@ import android.os.Build;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.app.PendingIntent;
-import android.graphics.Rational;
+import android.util.Rational;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import java.io.FileInputStream;
