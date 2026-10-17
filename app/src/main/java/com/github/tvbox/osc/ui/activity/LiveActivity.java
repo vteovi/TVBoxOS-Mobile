@@ -499,6 +499,7 @@ public class LiveActivity extends BaseActivity {
     private final Map<View, Drawable> mPipSavedBg = new HashMap<>();   // 被改背景的控件 -> 原背景
     private ViewGroup.LayoutParams mSavedVideoLp;
     private ViewGroup.LayoutParams mSavedParentLp;
+    private ViewGroup.LayoutParams mSavedColumnLp;    // 横屏分栏时左栏(视频列)的原布局参数
     private boolean mPipSysUi = false;         // 是否已切到"隐藏全部系统栏"状态(避免重复 init 引起重排闪烁)
     private boolean mResumed = false;          // Activity 是否已回到前台(resumed)
     private boolean mPendingPipExit = false;   // 刚退出画中画, 尚未判定是"展开"还是"关闭"
@@ -643,32 +644,33 @@ public class LiveActivity extends BaseActivity {
     }
 
     /**
-     * 直播页视频区高度自适应(全屏 / 画中画时不处理):
-     * 竖屏按 16:9 取屏宽比例 —— 平板竖屏时不会再只剩一条 240dp 的窄画面;
-     * 横屏尽量占满, 只给底部 EPG 留 120dp, 最少保持原有的 240dp。
-     * 同时把播放器高度改成跟随容器, 避免固定 300dp 在大屏上显得偏小。
+     * 直播页整体布局随方向切换(全屏 / 画中画时不处理):
+     * 竖屏 —— 上方视频(高度按 16:9 自适应) + EPG 条, 下方频道选择;
+     * 横屏 —— 左右分栏: 左边直播画面(含 EPG 条), 右边频道选择。
+     *
+     * 注意: manifest 给本页声明了 orientation|screenSize 等 configChanges,
+     * 旋转屏幕不会重建 Activity, 也就不会自动换成 layout-land,
+     * 所以这里手动调结构对应的 LayoutParams。
      */
     private void applyLiveVideoBoxSize() {
         if (mInPip || isInPictureInPictureMode()) return;
         // 全屏时播放器容器被搬到 decorView, 这里改尺寸没有意义, 退出全屏时再算
         if (mVideoView != null && mVideoView.isFullScreen()) return;
+        applyLiveResponsiveLayout();
         View videoBox = findViewById(R.id.live_video_box);
         if (videoBox == null) return;
         Configuration cfg = getResources().getConfiguration();
-        int shortDp = Math.min(cfg.screenWidthDp, cfg.screenHeightDp);
-        int longDp = Math.max(cfg.screenWidthDp, cfg.screenHeightDp);
-        int targetDp;
+        // 横屏分栏时视频区高度由 layout_weight 撑满, 只有竖屏才需要写死高度
         if (cfg.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            targetDp = Math.max(240, shortDp * 9 / 16);
-        } else {
-            targetDp = Math.max(240, Math.min(longDp - 120, Math.round(shortDp * 0.62f)));
-        }
-        ViewGroup.LayoutParams lp = videoBox.getLayoutParams();
-        if (lp != null) {
-            int targetPx = dp2px(targetDp);
-            if (lp.height != targetPx) {
-                lp.height = targetPx;
-                videoBox.setLayoutParams(lp);
+            int shortDp = Math.min(cfg.screenWidthDp, cfg.screenHeightDp);
+            int targetDp = Math.max(240, shortDp * 9 / 16);
+            ViewGroup.LayoutParams lp = videoBox.getLayoutParams();
+            if (lp != null) {
+                int targetPx = dp2px(targetDp);
+                if (lp.height != targetPx) {
+                    lp.height = targetPx;
+                    videoBox.setLayoutParams(lp);
+                }
             }
         }
         if (mVideoView != null) {
@@ -678,6 +680,78 @@ public class LiveActivity extends BaseActivity {
                 mVideoView.setLayoutParams(vlp);
             }
         }
+    }
+
+    /**
+     * 按当前方向设置直播页的结构参数:
+     * 竖屏 = live_content_row 纵向(视频列在上、频道列表在下);
+     * 横屏 = live_content_row 横向(视频列在左 3/5、频道列表在右 2/5)。
+     */
+    private void applyLiveResponsiveLayout() {
+        View row = findViewById(R.id.live_content_row);
+        View column = findViewById(R.id.live_video_column);
+        View videoBox = findViewById(R.id.live_video_box);
+        View epg = findViewById(R.id.ll_epg);
+        View channelList = findViewById(R.id.tvLeftChannnelListLayout);
+        if (row == null || column == null || videoBox == null
+                || epg == null || channelList == null) {
+            return;
+        }
+        if (!(column.getLayoutParams() instanceof LinearLayout.LayoutParams)
+                || !(videoBox.getLayoutParams() instanceof LinearLayout.LayoutParams)
+                || !(epg.getLayoutParams() instanceof LinearLayout.LayoutParams)
+                || !(channelList.getLayoutParams() instanceof LinearLayout.LayoutParams)) {
+            return; // 结构不是预期的布局(理论上不会发生), 放弃调整, 保持默认
+        }
+        boolean land = getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE;
+        if (row instanceof LinearLayout) {
+            int orientation = land ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL;
+            if (((LinearLayout) row).getOrientation() != orientation) {
+                ((LinearLayout) row).setOrientation(orientation);
+            }
+        }
+        LinearLayout.LayoutParams colLp = (LinearLayout.LayoutParams) column.getLayoutParams();
+        LinearLayout.LayoutParams boxLp = (LinearLayout.LayoutParams) videoBox.getLayoutParams();
+        LinearLayout.LayoutParams epgLp = (LinearLayout.LayoutParams) epg.getLayoutParams();
+        LinearLayout.LayoutParams listLp = (LinearLayout.LayoutParams) channelList.getLayoutParams();
+        if (land) {
+            // 左: 视频列占 3/5, 视频区靠权重撑满(减去底部 EPG 条), EPG 条压到 60dp
+            colLp.width = 0;
+            colLp.height = LinearLayout.LayoutParams.MATCH_PARENT;
+            colLp.weight = 3f;
+            colLp.setMargins(0, 0, 0, 0);
+            boxLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            boxLp.height = 0;
+            boxLp.weight = 1f;
+            epgLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            epgLp.height = dp2px(60);
+            epgLp.weight = 0f;
+            epgLp.setMargins(dp2px(6), dp2px(4), dp2px(6), dp2px(6));
+            // 右: 频道选择占 2/5, 上下撑满
+            listLp.width = 0;
+            listLp.height = LinearLayout.LayoutParams.MATCH_PARENT;
+            listLp.weight = 2f;
+            listLp.setMargins(0, 0, 0, 0);
+        } else {
+            // 竖屏还原成"视频在上、频道列表在下"
+            colLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            colLp.height = LinearLayout.LayoutParams.WRAP_CONTENT;
+            colLp.weight = 0f;
+            colLp.setMargins(0, 0, 0, 0);
+            boxLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            boxLp.height = dp2px(240);   // 精确高度由 applyLiveVideoBoxSize 覆盖
+            boxLp.weight = 0f;
+            epgLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            epgLp.height = dp2px(100);
+            epgLp.weight = 0f;
+            epgLp.setMargins(dp2px(10), dp2px(10), dp2px(10), dp2px(10));
+            listLp.width = LinearLayout.LayoutParams.MATCH_PARENT;
+            listLp.height = 0;
+            listLp.weight = 1f;
+            listLp.setMargins(0, 0, 0, 0);
+        }
+        row.requestLayout();
     }
 
     /**
@@ -800,6 +874,14 @@ public class LiveActivity extends BaseActivity {
             hideForPip(findViewById(R.id.tvLeftChannnelListLayout));
             hideForPip(findViewById(R.id.bottom_nav));
             hideForPip(findViewById(R.id.tvChannel));
+            // 横屏分栏时视频容器在"左栏"(占 3/5 宽), 画中画里要让它铺满整窗,
+            // 否则小窗右侧会留下一块空白的频道列表区域
+            View videoColumn = findViewById(R.id.live_video_column);
+            if (videoColumn != null) {
+                mSavedColumnLp = videoColumn.getLayoutParams();
+                videoColumn.setLayoutParams(new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
             // 隐藏视频容器内除播放器外的其它控件(源切换/设置等)
             ViewGroup parent = (ViewGroup) mVideoView.getParent();
             if (parent != null) {
@@ -833,6 +915,13 @@ public class LiveActivity extends BaseActivity {
             }
             mPipSavedBg.clear();
             // 恢复尺寸
+            if (mSavedColumnLp != null) {
+                View videoColumn = findViewById(R.id.live_video_column);
+                if (videoColumn != null) {
+                    videoColumn.setLayoutParams(mSavedColumnLp);
+                }
+                mSavedColumnLp = null;
+            }
             ViewGroup parent = (ViewGroup) mVideoView.getParent();
             if (parent != null && mSavedParentLp != null) {
                 parent.setLayoutParams(mSavedParentLp);

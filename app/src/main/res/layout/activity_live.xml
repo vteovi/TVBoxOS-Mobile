@@ -8,6 +8,22 @@
     android:layout_height="match_parent"
 	android:orientation="vertical">
 
+    <!-- 横屏时整体改为左右分栏: 左视频(含 EPG 条) + 右频道选择 -->
+	<LinearLayout
+		android:id="@+id/live_content_row"
+		android:layout_width="match_parent"
+		android:layout_height="0dp"
+		android:layout_weight="1"
+		android:baselineAligned="false"
+		android:orientation="vertical">
+
+	<LinearLayout
+		android:id="@+id/live_video_column"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:baselineAligned="false"
+		android:orientation="vertical">
+
     <RelativeLayout
 		android:id="@+id/live_video_box"
 		android:layout_width="match_parent"
@@ -248,6 +264,8 @@
 
 	</RelativeLayout>
 
+	</LinearLayout>
+
 	<LinearLayout
 		android:id="@+id/tvLeftChannnelListLayout"
 		android:layout_width="match_parent"
@@ -295,6 +313,8 @@
 				tools:listitem="@layout/item_live_channel_new"
 				/>
 		</LinearLayout>
+	</LinearLayout>
+
 	</LinearLayout>
 <!--添加EPG显示，更改样式 by 龍-->
 

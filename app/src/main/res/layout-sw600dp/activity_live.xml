@@ -3,7 +3,13 @@
 
     <include android:id="@+id/bottom_nav" layout="@layout/include_bottom_navigation" android:layout_width="64dp" android:layout_height="match_parent" />
 
-<android:LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical"><RelativeLayout android:id="@+id/live_video_box" android:layout_width="match_parent" android:layout_height="240dp">
+<android:LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+
+<LinearLayout android:id="@+id/live_content_row" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:baselineAligned="false" android:orientation="vertical">
+
+<LinearLayout android:id="@+id/live_video_column" android:layout_width="match_parent" android:layout_height="wrap_content" android:baselineAligned="false" android:orientation="vertical">
+
+<RelativeLayout android:id="@+id/live_video_box" android:layout_width="match_parent" android:layout_height="240dp">
 
 		<xyz.doikki.videoplayer.player.VideoView android:id="@+id/mVideoView" android:layout_width="match_parent" android:layout_height="300dp" />
 
@@ -22,7 +28,6 @@
 
 	</RelativeLayout>
 
-	
 	<RelativeLayout android:gravity="center_vertical" android:id="@+id/ll_epg" android:layout_width="match_parent" android:layout_height="100dp" android:background="@drawable/bg_large_round_gray" android:layout_margin="10dp">
 
 		<LinearLayout android:id="@+id/channelinfo" android:layout_width="140dp" android:layout_height="match_parent" android:layout_marginStart="@dimen/dp_5" android:layout_marginLeft="@dimen/dp_5" android:layout_marginEnd="@dimen/dp_5" android:layout_marginRight="@dimen/dp_5" android:gravity="center" android:orientation="vertical">
@@ -46,6 +51,8 @@
 
 	</RelativeLayout>
 
+	</LinearLayout>
+
 	<LinearLayout android:id="@+id/tvLeftChannnelListLayout" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_gravity="center_horizontal" android:layout_margin="0dp" android:baselineAligned="false" android:orientation="horizontal">
 
 		<LinearLayout android:id="@+id/ll_typeSelect" android:layout_width="match_parent" android:layout_height="match_parent" android:baselineAligned="false" android:padding="0dp" android:background="@drawable/bg_large_round_gray" android:layout_marginHorizontal="10dp" android:layout_marginBottom="10dp">
@@ -56,6 +63,7 @@
 		</LinearLayout>
 	</LinearLayout>
 
+	</LinearLayout>
 
 	    <TextView android:id="@+id/tvChannel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="right" android:layout_marginTop="30dp" android:layout_marginRight="60dp" android:background="@drawable/shape_live_channel_num" android:gravity="center" android:paddingTop="5dp" android:paddingBottom="5dp" android:textSize="36dp" android:textStyle="bold" android:visibility="gone" />
 
