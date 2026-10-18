@@ -118,8 +118,9 @@ public class BackupManager {
 
             // 3. Hawk 设置
             JsonObject settings = new JsonObject();
-            // 本地(文件/ content)订阅的内容池: key=原订阅 url, value=base64 文件内容。
-            // 设备间同步/换机时, 仅 URL 字符串无法跨设备使用, 必须把文件内容一起带走, 接收端据此重建私有文件。
+            // 本地(文件/ content)配置内容池: key=原 url, value=base64 文件内容。
+            // 设备间同步/换机时, 仅 URL 字符串无法跨设备使用(指向发送端私有路径), 必须把文件内容一起带走, 接收端据此重建私有文件。
+            // 覆盖: 订阅源(SUBSCRIPTIONS)、当前影视源(API_URL)、直播源(LIVE_URL) 等本地文件型配置。
             JsonObject localFiles = null;
             SharedPreferences sp = App.getInstance().getSharedPreferences("Hawk", Context.MODE_PRIVATE);
             Map<String, ?> all = sp.getAll();
@@ -149,7 +150,19 @@ public class BackupManager {
                 if (all.containsKey(key)) {
                     Object val = all.get(key);
                     if (val instanceof String) {
-                        settings.addProperty(key, (String) val);
+                        String s = (String) val;
+                        settings.addProperty(key, s);
+                        // 本地文件型设置项(API_URL/LIVE_URL 等可能是 file:// 或 content:// 配置文件):
+                        // 把文件内容一并打包, 否则跨设备后该 URL 指向发送端私有路径, 加载会报"无法读取本地配置文件"。
+                        if (isLocalUrl(s)) {
+                            byte[] data = readLocalBytes(s);
+                            if (data != null) {
+                                if (localFiles == null) {
+                                    localFiles = new JsonObject();
+                                }
+                                localFiles.addProperty(s, Base64.encodeToString(data, Base64.NO_WRAP));
+                            }
+                        }
                     } else if (val instanceof Integer) {
                         settings.addProperty(key, (Integer) val);
                     } else if (val instanceof Long) {
@@ -224,6 +237,8 @@ public class BackupManager {
                 SharedPreferences sp = App.getInstance().getSharedPreferences("Hawk", Context.MODE_PRIVATE);
                 SharedPreferences.Editor editor = sp.edit();
                 Map<String, ?> all = sp.getAll();
+                // 本地文件内容池(跨设备重建用): key=原本地 url, value=Base64 文件内容
+                JsonObject lf = root.has("localFiles") ? root.getAsJsonObject("localFiles") : null;
                 for (String key : BACKUP_KEYS) {
                     if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
                         // 订阅源是 List<Subscription> 复杂对象: 必须走 Hawk.put 才能同时写回
@@ -249,7 +264,11 @@ public class BackupManager {
                                         editor.putString(key, p.getAsString());
                                     }
                                 } else {
-                                    editor.putString(key, p.getAsString());
+                                    String raw = p.getAsString();
+                                    // 本地文件型设置项(API_URL/LIVE_URL): 跨设备后原 url 指向发送端私有路径,
+                                    // 用打包内容在接收端重建文件并重写成本机 url, 否则加载报"无法读取本地配置文件"。
+                                    raw = restoreLocalFile(raw, lf, "localsources");
+                                    editor.putString(key, raw);
                                 }
                             }
                         } catch (Exception e) {
@@ -273,26 +292,8 @@ public class BackupManager {
                         if (subs != null) {
                             // 本地订阅文件: 用打包进备份的内容在私有目录重建文件, 并重写 URL,
                             // 否则同步/换机后订阅指向发送端私有路径(文件不存在)→ 加载报"无法读取本地配置文件"。
-                            JsonObject lf = root.has("localFiles") ? root.getAsJsonObject("localFiles") : null;
-                            if (lf != null) {
-                                for (Subscription sub : subs) {
-                                    if (isLocalUrl(sub.getUrl()) && lf.has(sub.getUrl())) {
-                                        try {
-                                            byte[] data = Base64.decode(lf.get(sub.getUrl()).getAsString(), Base64.NO_WRAP);
-                                            File dir = new File(App.getInstance().getFilesDir(), "subscriptions");
-                                            if (!dir.exists()) {
-                                                dir.mkdirs();
-                                            }
-                                            File target = new File(dir, localFileName(sub.getUrl()));
-                                            FileOutputStream fos = new FileOutputStream(target);
-                                            fos.write(data);
-                                            fos.close();
-                                            sub.setUrl(Uri.fromFile(target).toString());
-                                        } catch (Exception e) {
-                                            e.printStackTrace();
-                                        }
-                                    }
-                                }
+                            for (Subscription sub : subs) {
+                                sub.setUrl(restoreLocalFile(sub.getUrl(), lf, "subscriptions"));
                             }
                             Hawk.put(HawkConfig.SUBSCRIPTIONS, subs);
                         }
@@ -355,6 +356,32 @@ public class BackupManager {
     /** 由订阅原 url 派生稳定的私有文件名(跨设备一致, 且不重名)。 */
     private static String localFileName(String url) {
         return md5(url) + ".json";
+    }
+
+    /**
+     * 若原 url 是本地(file:// / content://)配置文件且备份里带有其内容, 则在接收端私有目录重建文件,
+     * 返回重写后的本机 url; 否则原样返回。用于跨设备同步/还原影视源 / 直播源 / 订阅等本地文件型配置。
+     * 单条失败 try/catch 跳过, 不影响其余配置。
+     */
+    private static String restoreLocalFile(String origUrl, JsonObject localFiles, String subDir) {
+        if (origUrl == null || localFiles == null || !isLocalUrl(origUrl) || !localFiles.has(origUrl)) {
+            return origUrl;
+        }
+        try {
+            byte[] data = Base64.decode(localFiles.get(origUrl).getAsString(), Base64.NO_WRAP);
+            File dir = new File(App.getInstance().getFilesDir(), subDir);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File target = new File(dir, localFileName(origUrl));
+            FileOutputStream fos = new FileOutputStream(target);
+            fos.write(data);
+            fos.close();
+            return Uri.fromFile(target).toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return origUrl;
+        }
     }
 
     private static String md5(String s) {
