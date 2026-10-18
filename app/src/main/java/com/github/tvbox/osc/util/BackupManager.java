@@ -115,11 +115,11 @@ public class BackupManager {
             Map<String, ?> all = sp.getAll();
             for (String key : BACKUP_KEYS) {
                 if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
-                    // 订阅源是 List<Subscription>: 用 Hawk 取出真实对象后再 Gson 序列化,
-                    // 不依赖 SharedPreferences 原始字符串格式, 保证导出的是合法的订阅列表 JSON
+                    // 订阅源是 List<Subscription>: 用 Hawk 取出真实对象后再 Gson 序列化为
+                    // "字符串"写入(不要直接 add JsonArray, 否则导入端 getAsString() 会抛异常而静默失败)。
                     try {
                         ArrayList<Subscription> subs = Hawk.get(HawkConfig.SUBSCRIPTIONS, new ArrayList<Subscription>());
-                        settings.add(HawkConfig.SUBSCRIPTIONS, JsonParser.parseString(new Gson().toJson(subs)));
+                        settings.addProperty(HawkConfig.SUBSCRIPTIONS, new Gson().toJson(subs));
                     } catch (Exception ignore) {
                     }
                     continue;
@@ -232,13 +232,19 @@ public class BackupManager {
                         }
                     }
                 }
-                // 单独恢复订阅源列表(值 + 类型标记一起写)
+                // 单独恢复订阅源列表(值 + 类型标记一起写)。
+                // 兼容两种形态: 旧备份/其它实现可能把订阅存为 JSON 数组, 这里都能解析。
                 if (settings.has(HawkConfig.SUBSCRIPTIONS)) {
                     try {
-                        String subsJson = settings.get(HawkConfig.SUBSCRIPTIONS).getAsString();
+                        com.google.gson.JsonElement subEl = settings.get(HawkConfig.SUBSCRIPTIONS);
                         java.lang.reflect.Type type = new TypeToken<ArrayList<Subscription>>() {
                         }.getType();
-                        ArrayList<Subscription> subs = new Gson().fromJson(subsJson, type);
+                        ArrayList<Subscription> subs = null;
+                        if (subEl.isJsonArray()) {
+                            subs = new Gson().fromJson(subEl, type);
+                        } else if (subEl.isJsonPrimitive()) {
+                            subs = new Gson().fromJson(subEl.getAsString(), type);
+                        }
                         if (subs != null) {
                             Hawk.put(HawkConfig.SUBSCRIPTIONS, subs);
                         }
