@@ -1,7 +1,5 @@
 package com.github.tvbox.osc.util;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.net.Uri;
 import android.util.Base64;
 
@@ -27,7 +25,6 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 数据备份/恢复：导出 JSON 文件
@@ -36,9 +33,9 @@ import java.util.Map;
 public class BackupManager {
 
     /**
-     * Hawk 2.0.1 内部默认 SharedPreferences 文件名(常量 STORAGE_TAG_DO_NOT_CHANGE = "Hawk2")。
-     * 之前误用 "Hawk": 导出读到的是不存在的文件(读不到任何设置), 导入又写进该文件,
-     * 而 Hawk 实际读写 "Hawk2" → 设置项(API_URL/HOME_API 等)同步后不生效, 首页仍是接收端旧源。
+     * 备忘: Hawk 2.0.1 内部默认 SharedPreferences 文件名(常量 STORAGE_TAG_DO_NOT_CHANGE = "Hawk2")。
+     * 曾误用 "Hawk" 直接读写 sp → 导出读不到设置、导入写错文件, API_URL/HOME_API 等全部不生效。
+     * 现在备份/还原一律走 Hawk API(get/put), 不再直接访问 sp, 故该常量仅作 adb 调试备忘。
      */
     private static final String HAWK_PREF = "Hawk2";
 
@@ -129,8 +126,9 @@ public class BackupManager {
             // 设备间同步/换机时, 仅 URL 字符串无法跨设备使用(指向发送端私有路径), 必须把文件内容一起带走, 接收端据此重建私有文件。
             // 覆盖: 订阅源(SUBSCRIPTIONS)、当前影视源(API_URL)、直播源(LIVE_URL) 等本地文件型配置。
             JsonObject localFiles = null;
-            SharedPreferences sp = App.getInstance().getSharedPreferences(HAWK_PREF, Context.MODE_PRIVATE);
-            Map<String, ?> all = sp.getAll();
+            // 复杂对象(非基础类型)设置的类型登记表: key=设置项, value=具体类名(如 java.util.ArrayList),
+            // 导入端据此用 Gson 还原成正确类型; 不记录类型的话 Gson 只能还原成 LinkedTreeMap。
+            JsonObject complexTypes = null;
             for (String key : BACKUP_KEYS) {
                 if (key.equals(HawkConfig.API_URL) || key.equals(HawkConfig.LIVE_URL)) {
                     // 本地文件型配置(影视源/直播源): sp 里存的是 Hawk 的 "type#value" 包装串,
@@ -175,10 +173,13 @@ public class BackupManager {
                     }
                     continue;
                 }
-                if (all.containsKey(key)) {
-                    Object val = all.get(key);
-                    // 其余设置项: 原样搬运 Hawk 的序列化串(内含 type#value 类型信息),
-                    // 还原时写回同一文件即可无损恢复, 复杂对象(List/Set 等)也无需知道具体类型。
+                // 其余设置项: 一律用 Hawk API 取"真实值"再导出(不搬运 Hawk 的 type#value 序列化串,
+                // 那种做法实测同步后设置不生效)。基础类型直接写, 复杂对象 Gson 序列化并登记类型名。
+                if (!Hawk.contains(key)) {
+                    continue;
+                }
+                try {
+                    Object val = Hawk.get(key);
                     if (val instanceof String) {
                         settings.addProperty(key, (String) val);
                     } else if (val instanceof Integer) {
@@ -189,10 +190,22 @@ public class BackupManager {
                         settings.addProperty(key, (Boolean) val);
                     } else if (val instanceof Float) {
                         settings.addProperty(key, (Float) val);
+                    } else if (val instanceof Double) {
+                        settings.addProperty(key, (Double) val);
+                    } else if (val != null) {
+                        settings.addProperty(key, new Gson().toJson(val));
+                        if (complexTypes == null) {
+                            complexTypes = new JsonObject();
+                        }
+                        complexTypes.addProperty(key, val.getClass().getName());
                     }
+                } catch (Exception ignore) {
                 }
             }
             root.add("settings", settings);
+            if (complexTypes != null) {
+                root.add("complexTypes", complexTypes);
+            }
             if (localFiles != null) {
                 root.add("localFiles", localFiles);
             }
@@ -252,10 +265,10 @@ public class BackupManager {
             // 3. 恢复设置
             if (root.has("settings")) {
                 JsonObject settings = root.getAsJsonObject("settings");
-                SharedPreferences sp = App.getInstance().getSharedPreferences(HAWK_PREF, Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sp.edit();
                 // 本地文件内容池(跨设备重建用): key=原本地 url, value=Base64 文件内容
                 JsonObject lf = root.has("localFiles") ? root.getAsJsonObject("localFiles") : null;
+                // 复杂对象类型登记表(导出端写入)
+                JsonObject complexTypes = root.has("complexTypes") ? root.getAsJsonObject("complexTypes") : null;
                 for (String key : BACKUP_KEYS) {
                     if (key.equals(HawkConfig.API_URL) || key.equals(HawkConfig.LIVE_URL)) {
                         // 本地文件型配置(影视源/直播源): 导出的是真实 url, 需据打包内容在接收端
@@ -279,10 +292,40 @@ public class BackupManager {
                     if (settings.has(key)) {
                         try {
                             com.google.gson.JsonElement el = settings.get(key);
-                            // 其余设置项: 原样写回 Hawk 的序列化串(内含 type#value 类型信息),
-                            // 复杂对象(List/Set 等)也能无损还原, 无需知道具体类型。
-                            if (el.isJsonPrimitive()) {
-                                editor.putString(key, el.getAsString());
+                            if (!el.isJsonPrimitive()) {
+                                continue;
+                            }
+                            com.google.gson.JsonPrimitive p = el.getAsJsonPrimitive();
+                            // 复杂对象: 按导出端登记的类型名用 Gson 还原, 再交给 Hawk 存(保证类型标记正确)
+                            if (complexTypes != null && complexTypes.has(key)) {
+                                try {
+                                    Class<?> c = Class.forName(complexTypes.get(key).getAsString());
+                                    Object obj = new Gson().fromJson(p.getAsString(), c);
+                                    if (obj != null) {
+                                        Hawk.put(key, obj);
+                                    }
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                                continue;
+                            }
+                            // 基础类型: 一律用 Hawk.put 写回"真实值"(绕过 Hawk 序列化直接写 sp 会读不出来)
+                            if (p.isBoolean()) {
+                                Hawk.put(key, p.getAsBoolean());
+                            } else if (p.isNumber()) {
+                                // 与接收端当前值的类型保持一致, 避免 int/long/float 之间串类型
+                                Object cur = Hawk.contains(key) ? Hawk.get(key) : null;
+                                if (cur instanceof Long) {
+                                    Hawk.put(key, p.getAsLong());
+                                } else if (cur instanceof Float) {
+                                    Hawk.put(key, (float) p.getAsFloat());
+                                } else if (cur instanceof Double) {
+                                    Hawk.put(key, p.getAsDouble());
+                                } else {
+                                    Hawk.put(key, p.getAsInt());
+                                }
+                            } else {
+                                Hawk.put(key, p.getAsString());
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -314,9 +357,8 @@ public class BackupManager {
                         e.printStackTrace();
                     }
                 }
-                // 用 commit()(同步落盘)而非 apply(): 导入后会立即重启 App,
-                // 异步 apply 可能还没写盘进程就被杀, 导致设置丢失/首页仍是旧源。
-                editor.commit();
+                // 所有设置项都走 Hawk.put, 而 Hawk 内部用的是 editor.commit()(同步落盘),
+                // 所以导入后立即 relaunchApp 重启也不会丢设置(不能用异步 apply)。
             }
 
             return true;

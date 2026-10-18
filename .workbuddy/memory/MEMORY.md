@@ -31,6 +31,7 @@
 - ⚠️ **Hawk 2.0.1 的 SharedPreferences 文件名是 `Hawk2`，不是 `Hawk`**（库内常量 `STORAGE_TAG_DO_NOT_CHANGE="Hawk2"`，`Hawk.init(this).build()` 默认）。**任何绕过 Hawk API 直接 `getSharedPreferences("Hawk")` 读写设置的代码都会静默失效**（读到空文件/写错文件，Hawk 读不到）。曾导致备份/同步的 API_URL、HOME_API 等设置完全不生效，只有走 `Hawk.put` 的订阅能生效。备份类代码若要直接读 sp，必须用 `"Hawk2"`；更稳妥是全部走 `Hawk.get/Hawk.put`。
 - **Hawk 内部序列化格式是 `type#value` 分隔的包装串**（`HawkSerializer`，`INFO_DELIMITER="#"`），sp 里存的原始值**不是纯值**——所以从 sp 直接取字符串判断内容（如 `isLocalUrl`）会误判，判断/改写具体值必须用 `Hawk.get` 取真实值。但整串原样搬运回写是**无损**的（含类型信息，复杂对象 List/Set 也能还原），可作为不关心具体类型的设置项的备份策略。
 - **Hawk 的 `put` 内部用 `editor.commit()`（同步落盘）**，不会因进程重启丢数据；自己写 SharedPreferences 时若之后要立即重启 App（如 `relaunchApp`），**必须用 `commit()` 不能用 `apply()`**。
+- ⚠️ **备份/还原设置一律走 `Hawk.get`/`Hawk.put` 真实值，不要搬运 Hawk 的 `type#value` 序列化串**。曾以为"整串原样搬运无损"直接 `editor.putString`，实测同步后设置（HOME_REC/LANDSCAPE_CARD 等）不生效；改走 Hawk API 取真实值后正常。复杂对象（List/Set）导出时额外登记 `val.getClass().getName()`，导入端 `Gson.fromJson(json, Class.forName(类型名))` 再 `Hawk.put`，避免退化成 LinkedTreeMap。
 - **局域网设备同步（2.22.0 新增）**：设置页 →「设备同步（局域网）」→ `DeviceSyncDialog`。核心类 `util/LanSyncManager.java`（纯 JDK，无第三方依赖）：UDP 广播 45127 自动发现（`TVBOX_LAN_SYNC|设备名|端口`，**接收广播必须拿 WifiManager.MulticastLock**）+ 极简 HTTP（8099~8103，`GET /config` / `GET /ping`）传输。**数据格式直接复用 `BackupManager.exportBackup/importBackup`**（收藏+历史+设置的 JSON），与「数据备份还原」完全一致，导入后 `AppUtils.relaunchApp(true)`。明文 HTTP 可用是因为 manifest 已 `usesCleartextTraffic=true` 且 network_security_config 是 base-config 放行。
 
 ## 深色模式 / 主题
