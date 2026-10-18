@@ -18,6 +18,7 @@ import com.github.tvbox.osc.databinding.ActivitySettingBinding
 import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter
 import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter.SelectDialogInterface
 import com.github.tvbox.osc.ui.dialog.BackupDialog
+import com.github.tvbox.osc.ui.dialog.DeviceSyncDialog
 import com.github.tvbox.osc.ui.dialog.LiveApiDialog
 import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.util.FastClickCheckUtil
@@ -239,6 +240,11 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 }
             })
             dialog.show()
+        }
+
+        mBinding.llDeviceSync.setOnClickListener { v: View? ->
+            FastClickCheckUtil.check(v)
+            DeviceSyncDialog(this@SettingActivity).show()
         }
 
         mBinding.llDns.setOnClickListener { v: View? ->

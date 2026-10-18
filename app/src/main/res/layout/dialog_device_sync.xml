@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_bottom_dialog"
+        android:orientation="vertical"
+        android:paddingBottom="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="20dp"
+            android:text="局域网设备同步"
+            android:textColor="@color/text_foreground"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingHorizontal="30dp"
+            android:paddingBottom="14dp"
+            android:text="两台设备连同一个 WiFi，一台点「发送配置」，另一台点「接收配置」。\n同步内容：收藏 / 历史 / 全部设置"
+            android:textColor="@color/text_foreground"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="30dp">
+
+            <TextView
+                android:id="@+id/btnSend"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/dp_5"
+                android:layout_marginRight="@dimen/dp_5"
+                android:layout_weight="1"
+                android:background="@drawable/bg_r_common_solid_primary"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/dp_10"
+                android:text="发送配置"
+                android:textColor="@color/color_FFFFFF"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/btnReceive"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp_5"
+                android:layout_marginLeft="@dimen/dp_5"
+                android:layout_weight="1"
+                android:background="@drawable/bg_r_common_solid_primary"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/dp_10"
+                android:text="接收配置"
+                android:textColor="@color/color_FFFFFF"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!--扫描到的设备列表(动态填充)-->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:layout_marginTop="14dp"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/llDevices"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="30dp" />
+        </ScrollView>
+
+        <!--手动连接(自动发现失败时用)-->
+        <LinearLayout
+            android:id="@+id/llManual"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="30dp"
+            android:paddingTop="14dp"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/etIp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_r_common_stroke_primary"
+                android:hint="对方地址, 如 192.168.1.5:8099"
+                android:imeOptions="actionDone"
+                android:inputType="text"
+                android:padding="@dimen/dp_10"
+                android:singleLine="true"
+                android:textColor="@color/text_foreground"
+                android:textColorHint="@color/text_foreground"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnManual"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp_10"
+                android:layout_marginLeft="@dimen/dp_10"
+                android:background="@drawable/bg_r_common_solid_primary"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/dp_10"
+                android:text="连接"
+                android:textColor="@color/color_FFFFFF"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</FrameLayout>
