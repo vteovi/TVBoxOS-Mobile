@@ -4,16 +4,21 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.github.tvbox.osc.base.App;
+import com.github.tvbox.osc.bean.Subscription;
 import com.github.tvbox.osc.cache.VodCollect;
 import com.github.tvbox.osc.cache.VodRecord;
 import com.github.tvbox.osc.data.AppDataManager;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
+import com.orhanobut.hawk.Hawk;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -109,6 +114,16 @@ public class BackupManager {
             SharedPreferences sp = App.getInstance().getSharedPreferences("Hawk", Context.MODE_PRIVATE);
             Map<String, ?> all = sp.getAll();
             for (String key : BACKUP_KEYS) {
+                if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
+                    // 订阅源是 List<Subscription>: 用 Hawk 取出真实对象后再 Gson 序列化,
+                    // 不依赖 SharedPreferences 原始字符串格式, 保证导出的是合法的订阅列表 JSON
+                    try {
+                        ArrayList<Subscription> subs = Hawk.get(HawkConfig.SUBSCRIPTIONS, new ArrayList<Subscription>());
+                        settings.add(HawkConfig.SUBSCRIPTIONS, JsonParser.parseString(new Gson().toJson(subs)));
+                    } catch (Exception ignore) {
+                    }
+                    continue;
+                }
                 if (all.containsKey(key)) {
                     Object val = all.get(key);
                     if (val instanceof String) {
@@ -185,6 +200,11 @@ public class BackupManager {
                 SharedPreferences.Editor editor = sp.edit();
                 Map<String, ?> all = sp.getAll();
                 for (String key : BACKUP_KEYS) {
+                    if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
+                        // 订阅源是 List<Subscription> 复杂对象: 必须走 Hawk.put 才能同时写回
+                        // "值"与"类型标记", 否则 Hawk 反序列化会失败/退化成 LinkedTreeMap, 订阅管理读不到
+                        continue;
+                    }
                     if (settings.has(key)) {
                         try {
                             com.google.gson.JsonElement el = settings.get(key);
@@ -210,6 +230,20 @@ public class BackupManager {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                    }
+                }
+                // 单独恢复订阅源列表(值 + 类型标记一起写)
+                if (settings.has(HawkConfig.SUBSCRIPTIONS)) {
+                    try {
+                        String subsJson = settings.get(HawkConfig.SUBSCRIPTIONS).getAsString();
+                        java.lang.reflect.Type type = new TypeToken<ArrayList<Subscription>>() {
+                        }.getType();
+                        ArrayList<Subscription> subs = new Gson().fromJson(subsJson, type);
+                        if (subs != null) {
+                            Hawk.put(HawkConfig.SUBSCRIPTIONS, subs);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
                 editor.apply();
