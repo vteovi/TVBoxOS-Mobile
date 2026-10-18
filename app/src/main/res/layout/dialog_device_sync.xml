@@ -28,7 +28,7 @@
             android:gravity="center"
             android:paddingHorizontal="30dp"
             android:paddingBottom="14dp"
-            android:text="两台设备连同一个 WiFi，一台点「发送配置」，另一台点「接收配置」。\n同步内容：收藏 / 历史 / 全部设置"
+            android:text="两台设备连同一个 WiFi，一台点「发送配置」，另一台点「接收配置」。\n同步内容：收藏 / 历史 / 设置 / 订阅源（影视源 + 直播源）"
             android:textColor="@color/text_foreground"
             android:textSize="13sp" />
 
@@ -100,11 +100,29 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:background="@drawable/bg_r_common_stroke_primary"
-                android:hint="对方地址, 如 192.168.1.5:8099"
-                android:imeOptions="actionDone"
+                android:hint="对方 IP, 如 192.168.1.5"
+                android:imeOptions="actionNext"
                 android:inputType="text"
                 android:padding="@dimen/dp_10"
                 android:singleLine="true"
+                android:textColor="@color/text_foreground"
+                android:textColorHint="@color/text_foreground"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/etPort"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp_8"
+                android:layout_marginLeft="@dimen/dp_8"
+                android:background="@drawable/bg_r_common_stroke_primary"
+                android:gravity="center"
+                android:hint="端口"
+                android:imeOptions="actionDone"
+                android:inputType="number"
+                android:padding="@dimen/dp_10"
+                android:singleLine="true"
+                android:text="8099"
                 android:textColor="@color/text_foreground"
                 android:textColorHint="@color/text_foreground"
                 android:textSize="13sp" />

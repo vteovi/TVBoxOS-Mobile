@@ -37,6 +37,7 @@ public class DeviceSyncDialog extends BaseDialog {
     private LinearLayout llDevices;
     private LinearLayout llManual;
     private EditText etIp;
+    private EditText etPort;
     private boolean sending = false;   // 是否正在"发送配置"
 
     public DeviceSyncDialog(@NonNull Context context) {
@@ -50,6 +51,7 @@ public class DeviceSyncDialog extends BaseDialog {
         llDevices = findViewById(R.id.llDevices);
         llManual = findViewById(R.id.llManual);
         etIp = findViewById(R.id.etIp);
+        etPort = findViewById(R.id.etPort);
         TextView btnManual = findViewById(R.id.btnManual);
 
         btnSend.setOnClickListener(v -> toggleSend());
@@ -109,10 +111,10 @@ public class DeviceSyncDialog extends BaseDialog {
         }
         llDevices.removeAllViews();
         llManual.setVisibility(View.GONE);
-        tvStatus.setText("正在扫描同一 WiFi 下的设备…");
+        tvStatus.setText("正在扫描同一 WiFi 下的设备（自动探测子网）…");
         btnReceive.setEnabled(false);
 
-        mLanSync.discover(mContext, 4000, new LanSyncManager.DiscoverListener() {
+        mLanSync.discover(mContext, 8000, new LanSyncManager.DiscoverListener() {
             @Override
             public void onResult(List<LanSyncManager.Device> devices) {
                 btnReceive.setEnabled(true);
@@ -148,18 +150,17 @@ public class DeviceSyncDialog extends BaseDialog {
     }
 
     private void connectManual() {
-        String text = etIp.getText() == null ? "" : etIp.getText().toString().trim();
-        if (text.isEmpty()) {
-            ToastUtils.showShort("请输入对方地址");
+        String ip = etIp.getText() == null ? "" : etIp.getText().toString().trim();
+        if (ip.isEmpty()) {
+            ToastUtils.showShort("请输入对方 IP");
             return;
         }
-        String ip = text;
+        // 端口默认 8099(与发送端首选端口一致), 只有对方端口不同时才改
         int port = 8099;
-        int idx = text.lastIndexOf(':');
-        if (idx > 0) {
-            ip = text.substring(0, idx);
+        String portText = etPort.getText() == null ? "" : etPort.getText().toString().trim();
+        if (!portText.isEmpty()) {
             try {
-                port = Integer.parseInt(text.substring(idx + 1).trim());
+                port = Integer.parseInt(portText);
             } catch (NumberFormatException e) {
                 ToastUtils.showShort("端口格式不对");
                 return;

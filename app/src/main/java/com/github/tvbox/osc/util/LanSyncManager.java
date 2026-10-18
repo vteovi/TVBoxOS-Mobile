@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.HttpURLConnection;
@@ -33,6 +34,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 局域网设备同步: 同一 WiFi 下, 一台设备"发送配置", 另一台"接收配置"。
@@ -200,7 +203,8 @@ public class LanSyncManager {
             OutputStream os = socket.getOutputStream();
             DataOutputStream out = new DataOutputStream(os);
             if (line != null && line.contains("/ping")) {
-                byte[] body = "ok".getBytes("UTF-8");
+                // 体里带上本机名, 接收端做子网探测时也能拿到友好名称
+                byte[] body = ("ok " + getDeviceName()).getBytes("UTF-8");
                 out.writeBytes("HTTP/1.1 200 OK\r\n");
                 out.writeBytes("Content-Type: text/plain; charset=utf-8\r\n");
                 out.writeBytes("Content-Length: " + body.length + "\r\n");
@@ -241,8 +245,17 @@ public class LanSyncManager {
         beaconThread = new Thread(() -> {
             DatagramSocket ds = null;
             try {
-                ds = new DatagramSocket();
+                ds = new DatagramSocket(null);
+                ds.setReuseAddress(true);
                 ds.setBroadcast(true);
+                // 绑定到本机 WiFi 地址, 让广播从正确的网卡发出(部分机型不绑定收不到)
+                try {
+                    String lip = getLocalIp();
+                    if (lip != null && !lip.equals("127.0.0.1")) {
+                        ds.bind(new InetSocketAddress(InetAddress.getByName(lip), 0));
+                    }
+                } catch (Exception ignore) {
+                }
                 byte[] buf = msg.getBytes("UTF-8");
                 String localIp = getLocalIp();
                 ArrayList<String> targets = new ArrayList<>();
@@ -306,6 +319,10 @@ public class LanSyncManager {
 
     /**
      * 扫描局域网内正在"发送配置"的设备。回调在主线程。
+     *
+     * 双保险发现:
+     *  1) UDP 广播监听(广播不被拦截时, 1~2 秒即可看到);
+     *  2) 子网主动探测(单播 TCP 轮询同网段每个 IP 的候选端口, 绕过广播被拦的情况, 这是主兜底)。
      */
     public void discover(Context context, final int timeoutMs, final DiscoverListener listener) {
         if (discovering) {
@@ -313,56 +330,159 @@ public class LanSyncManager {
         }
         discovering = true;
         acquireMulticastLock(context);
+        final List<Device> devices = Collections.synchronizedList(new ArrayList<>());
+        final String selfIp = getLocalIp();
+        final AtomicBoolean aborted = new AtomicBoolean(false);
+
+        Thread udpThread = new Thread(() -> udpListenPhase(timeoutMs, aborted, devices, selfIp));
+        Thread scanThread = new Thread(() -> subnetScanPhase(timeoutMs, aborted, devices, selfIp));
+        udpThread.start();
+        scanThread.start();
+
+        // 汇总线程: 一旦发现设备并静置 2.5s 就提前返回, 否则等到 timeoutMs
         new Thread(() -> {
-            final List<Device> devices = new ArrayList<>();
-            DatagramSocket ds = null;
+            long start = System.currentTimeMillis();
+            long minWait = 2500;
+            while (true) {
+                long elapsed = System.currentTimeMillis() - start;
+                boolean found = !devices.isEmpty();
+                if ((found && elapsed >= minWait) || elapsed >= timeoutMs) {
+                    break;
+                }
+                try {
+                    Thread.sleep(250);
+                } catch (InterruptedException ignore) {
+                }
+            }
+            aborted.set(true);
+            discovering = false;
             try {
-                ds = new DatagramSocket(null);
-                ds.setReuseAddress(true);
-                ds.setBroadcast(true);
-                ds.setSoTimeout(500);
-                ds.bind(new InetSocketAddress(UDP_PORT));
-                long end = System.currentTimeMillis() + timeoutMs;
-                byte[] buf = new byte[1024];
-                String selfIp = getLocalIp();
-                while (System.currentTimeMillis() < end) {
-                    try {
-                        DatagramPacket packet = new DatagramPacket(buf, buf.length);
-                        ds.receive(packet);
-                        String text = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
-                        Device d = parseBeacon(text);
-                        if (d == null) {
-                            continue;
-                        }
-                        // 跳过本机
-                        if (selfIp != null && selfIp.equals(d.ip)) {
-                            continue;
-                        }
-                        boolean exists = false;
-                        for (Device cur : devices) {
-                            if (cur.ip.equals(d.ip) && cur.port == d.port) {
-                                exists = true;
-                                break;
-                            }
-                        }
-                        if (!exists) {
-                            devices.add(d);
-                        }
-                    } catch (IOException timeout) {
-                        // 单次超时, 继续等
+                udpThread.join(300);
+            } catch (InterruptedException ignore) {
+            }
+            try {
+                scanThread.join(300);
+            } catch (InterruptedException ignore) {
+            }
+            releaseMulticastLock();
+            post(() -> listener.onResult(new ArrayList<>(devices)));
+        }).start();
+    }
+
+    /** 阶段一: 监听发送端的 UDP 广播包 */
+    private void udpListenPhase(long budgetMs, AtomicBoolean aborted, List<Device> out, String selfIp) {
+        long end = System.currentTimeMillis() + budgetMs;
+        DatagramSocket ds = null;
+        try {
+            ds = new DatagramSocket(null);
+            ds.setReuseAddress(true);
+            ds.setBroadcast(true);
+            ds.setSoTimeout(500);
+            ds.bind(new InetSocketAddress(UDP_PORT));
+            byte[] buf = new byte[1024];
+            while (!aborted.get() && System.currentTimeMillis() < end) {
+                try {
+                    DatagramPacket packet = new DatagramPacket(buf, buf.length);
+                    ds.receive(packet);
+                    Device d = parseBeacon(new String(packet.getData(), 0, packet.getLength(), "UTF-8"));
+                    if (d == null) {
+                        continue;
+                    }
+                    if (selfIp != null && selfIp.equals(d.ip)) {
+                        continue;
+                    }
+                    addUnique(out, d);
+                } catch (SocketTimeoutException ignore) {
+                    // 单次超时, 继续等
+                } catch (IOException ignore) {
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (ds != null) {
+                ds.close();
+            }
+        }
+    }
+
+    /**
+     * 阶段二: 子网主动探测。对同网段每个 IP 的候选 HTTP 端口发 /ping,
+     * 谁回 "ok ..." 谁就是发送端。单播 TCP, 不受广播拦截影响, 是可靠兜底。
+     */
+    private void subnetScanPhase(long budgetMs, AtomicBoolean aborted, List<Device> out, String selfIp) {
+        if (selfIp == null || selfIp.equals("127.0.0.1") || selfIp.lastIndexOf('.') < 0) {
+            return;
+        }
+        final String prefix = selfIp.substring(0, selfIp.lastIndexOf('.') + 1);
+        long deadline = System.currentTimeMillis() + budgetMs;
+        int concurrency = 80;
+        ExecutorService pool = Executors.newFixedThreadPool(concurrency);
+        for (int i = 1; i <= 254 && !aborted.get(); i++) {
+            if (System.currentTimeMillis() > deadline) {
+                break;
+            }
+            final String ip = prefix + i;
+            if (ip.equals(selfIp)) {
+                continue;
+            }
+            pool.execute(() -> {
+                for (int port : HTTP_PORT_CANDIDATES) {
+                    if (aborted.get() || System.currentTimeMillis() > deadline) {
+                        break;
+                    }
+                    String name = pingPort(ip, port);
+                    if (name != null) {
+                        addUnique(out, new Device(name, ip, port));
+                        break;
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                if (ds != null) {
-                    ds.close();
+            });
+        }
+        pool.shutdown();
+        try {
+            pool.awaitTermination(budgetMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ignore) {
+        }
+    }
+
+    /** 探测单个 IP:端口是否运行本同步服务, 返回设备名(非本服务返回 null) */
+    private String pingPort(String ip, int port) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL("http://" + ip + ":" + port + "/ping");
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(300);
+            conn.setReadTimeout(300);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            if (code == HttpURLConnection.HTTP_OK) {
+                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                String line = br.readLine();
+                if (line != null && line.startsWith("ok")) {
+                    // "ok 设备名" 或仅 "ok"
+                    return line.length() > 2 ? line.substring(2).trim() : "TVBox 设备";
                 }
-                discovering = false;
-                releaseMulticastLock();
-                post(() -> listener.onResult(devices));
             }
-        }).start();
+        } catch (Exception ignore) {
+            // 连接被拒 / 超时 / 不是本服务, 一律忽略
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+        return null;
+    }
+
+    private void addUnique(List<Device> out, Device d) {
+        synchronized (out) {
+            for (Device cur : out) {
+                if (cur.ip.equals(d.ip) && cur.port == d.port) {
+                    return;
+                }
+            }
+            out.add(d);
+        }
     }
 
     private Device parseBeacon(String text) {
