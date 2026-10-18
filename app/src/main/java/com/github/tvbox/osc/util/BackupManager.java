@@ -35,6 +35,13 @@ import java.util.Map;
  */
 public class BackupManager {
 
+    /**
+     * Hawk 2.0.1 内部默认 SharedPreferences 文件名(常量 STORAGE_TAG_DO_NOT_CHANGE = "Hawk2")。
+     * 之前误用 "Hawk": 导出读到的是不存在的文件(读不到任何设置), 导入又写进该文件,
+     * 而 Hawk 实际读写 "Hawk2" → 设置项(API_URL/HOME_API 等)同步后不生效, 首页仍是接收端旧源。
+     */
+    private static final String HAWK_PREF = "Hawk2";
+
     // 要备份的 Hawk key 列表
     private static final String[] BACKUP_KEYS = {
             HawkConfig.API_URL,
@@ -122,9 +129,30 @@ public class BackupManager {
             // 设备间同步/换机时, 仅 URL 字符串无法跨设备使用(指向发送端私有路径), 必须把文件内容一起带走, 接收端据此重建私有文件。
             // 覆盖: 订阅源(SUBSCRIPTIONS)、当前影视源(API_URL)、直播源(LIVE_URL) 等本地文件型配置。
             JsonObject localFiles = null;
-            SharedPreferences sp = App.getInstance().getSharedPreferences("Hawk", Context.MODE_PRIVATE);
+            SharedPreferences sp = App.getInstance().getSharedPreferences(HAWK_PREF, Context.MODE_PRIVATE);
             Map<String, ?> all = sp.getAll();
             for (String key : BACKUP_KEYS) {
+                if (key.equals(HawkConfig.API_URL) || key.equals(HawkConfig.LIVE_URL)) {
+                    // 本地文件型配置(影视源/直播源): sp 里存的是 Hawk 的 "type#value" 包装串,
+                    // 直接拿来判断 isLocalUrl 会误判, 必须用 Hawk API 取真实 url 值再判断与打包。
+                    if (Hawk.contains(key)) {
+                        try {
+                            String real = Hawk.get(key, "");
+                            settings.addProperty(key, real);
+                            if (isLocalUrl(real)) {
+                                byte[] data = readLocalBytes(real);
+                                if (data != null) {
+                                    if (localFiles == null) {
+                                        localFiles = new JsonObject();
+                                    }
+                                    localFiles.addProperty(real, Base64.encodeToString(data, Base64.NO_WRAP));
+                                }
+                            }
+                        } catch (Exception ignore) {
+                        }
+                    }
+                    continue;
+                }
                 if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
                     // 订阅源是 List<Subscription>: 用 Hawk 取出真实对象后再 Gson 序列化为
                     // "字符串"写入(不要直接 add JsonArray, 否则导入端 getAsString() 会抛异常而静默失败)。
@@ -149,20 +177,10 @@ public class BackupManager {
                 }
                 if (all.containsKey(key)) {
                     Object val = all.get(key);
+                    // 其余设置项: 原样搬运 Hawk 的序列化串(内含 type#value 类型信息),
+                    // 还原时写回同一文件即可无损恢复, 复杂对象(List/Set 等)也无需知道具体类型。
                     if (val instanceof String) {
-                        String s = (String) val;
-                        settings.addProperty(key, s);
-                        // 本地文件型设置项(API_URL/LIVE_URL 等可能是 file:// 或 content:// 配置文件):
-                        // 把文件内容一并打包, 否则跨设备后该 URL 指向发送端私有路径, 加载会报"无法读取本地配置文件"。
-                        if (isLocalUrl(s)) {
-                            byte[] data = readLocalBytes(s);
-                            if (data != null) {
-                                if (localFiles == null) {
-                                    localFiles = new JsonObject();
-                                }
-                                localFiles.addProperty(s, Base64.encodeToString(data, Base64.NO_WRAP));
-                            }
-                        }
+                        settings.addProperty(key, (String) val);
                     } else if (val instanceof Integer) {
                         settings.addProperty(key, (Integer) val);
                     } else if (val instanceof Long) {
@@ -234,12 +252,25 @@ public class BackupManager {
             // 3. 恢复设置
             if (root.has("settings")) {
                 JsonObject settings = root.getAsJsonObject("settings");
-                SharedPreferences sp = App.getInstance().getSharedPreferences("Hawk", Context.MODE_PRIVATE);
+                SharedPreferences sp = App.getInstance().getSharedPreferences(HAWK_PREF, Context.MODE_PRIVATE);
                 SharedPreferences.Editor editor = sp.edit();
-                Map<String, ?> all = sp.getAll();
                 // 本地文件内容池(跨设备重建用): key=原本地 url, value=Base64 文件内容
                 JsonObject lf = root.has("localFiles") ? root.getAsJsonObject("localFiles") : null;
                 for (String key : BACKUP_KEYS) {
+                    if (key.equals(HawkConfig.API_URL) || key.equals(HawkConfig.LIVE_URL)) {
+                        // 本地文件型配置(影视源/直播源): 导出的是真实 url, 需据打包内容在接收端
+                        // 重建文件后用 Hawk.put 写回"真实值"(走 editor 会绕过 Hawk 序列化导致读不出来)。
+                        if (settings.has(key)) {
+                            try {
+                                String raw = settings.get(key).getAsString();
+                                raw = restoreLocalFile(raw, lf, "localsources");
+                                Hawk.put(key, raw);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        continue;
+                    }
                     if (key.equals(HawkConfig.SUBSCRIPTIONS)) {
                         // 订阅源是 List<Subscription> 复杂对象: 必须走 Hawk.put 才能同时写回
                         // "值"与"类型标记", 否则 Hawk 反序列化会失败/退化成 LinkedTreeMap, 订阅管理读不到
@@ -248,28 +279,10 @@ public class BackupManager {
                     if (settings.has(key)) {
                         try {
                             com.google.gson.JsonElement el = settings.get(key);
+                            // 其余设置项: 原样写回 Hawk 的序列化串(内含 type#value 类型信息),
+                            // 复杂对象(List/Set 等)也能无损还原, 无需知道具体类型。
                             if (el.isJsonPrimitive()) {
-                                com.google.gson.JsonPrimitive p = el.getAsJsonPrimitive();
-                                Object orig = all.get(key);
-                                if (p.isBoolean()) {
-                                    editor.putBoolean(key, p.getAsBoolean());
-                                } else if (p.isNumber()) {
-                                    if (orig instanceof Integer) {
-                                        editor.putInt(key, p.getAsInt());
-                                    } else if (orig instanceof Long) {
-                                        editor.putLong(key, p.getAsLong());
-                                    } else if (orig instanceof Float) {
-                                        editor.putFloat(key, p.getAsFloat());
-                                    } else {
-                                        editor.putString(key, p.getAsString());
-                                    }
-                                } else {
-                                    String raw = p.getAsString();
-                                    // 本地文件型设置项(API_URL/LIVE_URL): 跨设备后原 url 指向发送端私有路径,
-                                    // 用打包内容在接收端重建文件并重写成本机 url, 否则加载报"无法读取本地配置文件"。
-                                    raw = restoreLocalFile(raw, lf, "localsources");
-                                    editor.putString(key, raw);
-                                }
+                                editor.putString(key, el.getAsString());
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -301,7 +314,9 @@ public class BackupManager {
                         e.printStackTrace();
                     }
                 }
-                editor.apply();
+                // 用 commit()(同步落盘)而非 apply(): 导入后会立即重启 App,
+                // 异步 apply 可能还没写盘进程就被杀, 导致设置丢失/首页仍是旧源。
+                editor.commit();
             }
 
             return true;
