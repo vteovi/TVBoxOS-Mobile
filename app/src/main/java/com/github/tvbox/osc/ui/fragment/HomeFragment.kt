@@ -29,7 +29,6 @@ import com.github.tvbox.osc.constant.IntentKey
 import com.github.tvbox.osc.databinding.FragmentHomeBinding
 import com.github.tvbox.osc.server.ControlManager
 import com.github.tvbox.osc.ui.activity.FastSearchActivity
-import com.github.tvbox.osc.ui.activity.HistoryActivity
 import com.github.tvbox.osc.ui.activity.MainActivity
 import com.github.tvbox.osc.ui.activity.SubscriptionActivity
 import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter.SelectDialogInterface
@@ -105,9 +104,6 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         }
         mBinding.search.setOnClickListener {
             jumpActivity(FastSearchActivity::class.java)
-        }
-        mBinding.ivHistory.setOnClickListener {
-            jumpActivity(HistoryActivity::class.java)
         }
         setLoadSir(mBinding.contentLayout)
         initViewModel()
