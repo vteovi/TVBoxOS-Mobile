@@ -12,6 +12,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
@@ -397,12 +398,37 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         isTabletScreen = true;
         mBinding.previewPlayerPlace.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-            // 只在宽度变化时重算(高度是我们自己按 16:9 设置的, 避免反复触发)
-            if (right - left != oldRight - oldLeft) {
-                applyTabletPreviewSize();
+            int width = right - left;
+            // 宽度变化(旋转/分屏)要重算;宽度没变但高度不是 16:9 时(旋转回来的中间态)也要补算一次
+            if (width != oldRight - oldLeft || !isTabletPreviewSizeMatched(width)) {
+                // 布局回调里直接改 LayoutParams 容易触发重复 requestLayout, 挪到下一帧
+                mBinding.previewPlayerPlace.post(this::applyTabletPreviewSize);
             }
         });
         mBinding.previewPlayerPlace.post(this::applyTabletPreviewSize);
+    }
+
+    /**
+     * 占位区的高度是否已经是它当前宽度对应的 16:9。
+     */
+    private boolean isTabletPreviewSizeMatched(int width) {
+        if (width <= 0 || mBinding == null || mBinding.previewPlayerPlace == null) {
+            return true;
+        }
+        return mBinding.previewPlayerPlace.getHeight() == Math.round(width * 9f / 16f);
+    }
+
+    /**
+     * 旋转时 Activity 不会重建(manifest 里声明了 configChanges), 这里主动补一次重算,
+     * 否则播放器浮层和右侧信息栏会沿用旋转前的小尺寸。
+     */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (isTabletScreen && mBinding != null) {
+            tabletSizeRetry = 0;
+            mBinding.previewPlayerPlace.post(this::applyTabletPreviewSize);
+        }
     }
 
     /**
@@ -415,8 +441,13 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         View place = mBinding.previewPlayerPlace;
         int width = place.getWidth();
         if (width <= 0) {
+            // 宽度还没测量出来(GONE 恢复/首帧), 下一帧再试, 避免死循环只重试有限次
+            if (tabletSizeRetry++ < 5) {
+                place.post(this::applyTabletPreviewSize);
+            }
             return;
         }
+        tabletSizeRetry = 0;
         int height = Math.round(width * 9f / 16f);
         ViewGroup.LayoutParams lp = place.getLayoutParams();
         if (lp.height != height) {
@@ -436,6 +467,15 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         // 等这一帧布局走完再取位置, 否则拿到的是旧坐标
         place.post(this::layoutPreviewOverPlace);
+        // 旋转过程中宽度可能还会变一帧, 下一帧发现宽度不同就再算一次
+        place.post(() -> {
+            if (!isTabletScreen || mBinding == null || fullWindows) {
+                return;
+            }
+            if (place.getWidth() > 0 && place.getWidth() != width) {
+                applyTabletPreviewSize();
+            }
+        });
     }
 
     /**
@@ -986,6 +1026,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
      * 平板/大屏(sw600dp): 非全屏时顶部为左视频 + 右信息的横向布局, 播放器需要按占位区动态定位
      */
     private boolean isTabletScreen = false;
+    /**
+     * 占位区宽度为 0 时的重试次数(上限 5 帧, 防止死循环)
+     */
+    private int tabletSizeRetry = 0;
     ViewGroup.LayoutParams windowsPreview = null;
     ViewGroup.LayoutParams windowsFull = null;
 
