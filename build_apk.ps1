@@ -4,7 +4,10 @@
 #    .\build_apk.ps1            -> prompt to choose debug / release
 #    .\build_apk.ps1 debug      -> build debug APK
 #    .\build_apk.ps1 release    -> build signed release APK
-#  The produced APK is copied to the project root directory.
+#
+#  One APK is produced per CPU architecture flavor
+#  (arm64v8 -> arm64-v8a, armv7a -> armeabi-v7a).
+#  Every produced APK is copied to the project root directory.
 # ============================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -49,7 +52,7 @@ if (($buildType -ne 'debug') -and ($buildType -ne 'release')) {
 
 Write-Host ''
 Write-Host '============================================'
-Write-Host "  Building $buildType APK, please wait..."
+Write-Host "  Building $buildType APK(s), please wait..."
 Write-Host '  First build may take about 25 minutes.'
 Write-Host '============================================'
 Write-Host ''
@@ -69,41 +72,62 @@ if ($LASTEXITCODE -ne 0) {
     Read-Host 'Press Enter to exit'; exit 1
 }
 
-# --- locate produced apk ---
-$outDir = Join-Path 'app\build\outputs\apk' $buildType
-$apk = Get-ChildItem -Path "$outDir\*.apk" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $apk) {
-    Write-Host "  [WARN] APK not found in $outDir"
+# --- locate produced apks: <outputs>\apk\<flavor>\<buildType>\*.apk ---
+$outRoot = Join-Path 'app\build\outputs\apk' ''
+$apks = @(Get-ChildItem -Path $outRoot -Recurse -Filter *.apk -ErrorAction SilentlyContinue |
+          Where-Object { $_.Directory.Name -eq $buildType } |
+          Sort-Object FullName)
+
+if ($apks.Count -eq 0) {
+    Write-Host "  [WARN] no APK found under $outRoot (looked for $buildType folders)"
     & .\gradlew.bat --stop 2>$null
     Read-Host 'Press Enter to exit'; exit 1
 }
 
-# --- copy apk into project root with versioned name ---
-$destName = "TVBox-Mobile-v$ver-$buildType.apk"
-$destPath = Join-Path $ScriptDir $destName
-Copy-Item -Path $apk.FullName -Destination $destPath -Force
+# --- copy each apk into project root with versioned name ---
+$destPaths = @()
+$apkInfo = @()
+foreach ($apk in $apks) {
+    $destName = $apk.BaseName + "-$buildType.apk"
+    $destPath = Join-Path $ScriptDir $destName
+    Copy-Item -Path $apk.FullName -Destination $destPath -Force
+    $destPaths += $destPath
+    $apkInfo += [pscustomobject]@{
+        Source = $apk.FullName
+        Dest   = $destPath
+        Size   = $apk.Length
+    }
+}
 
 Write-Host ''
 Write-Host '============================================'
 Write-Host '  BUILD SUCCESS'
+Write-Host "  $($apkInfo.Count) APK(s) produced"
 Write-Host '============================================'
-Write-Host "  APK       : $($apk.FullName)"
-Write-Host "  Size      : $($apk.Length) bytes"
-Write-Host "  Copied to : $destPath"
-$hash = (Get-FileHash -Path $destPath -Algorithm SHA256).Hash
-Write-Host "  SHA256    : $hash"
+foreach ($info in $apkInfo) {
+    Write-Host ''
+    Write-Host "  APK       : $($info.Source)"
+    Write-Host "  Size      : $($info.Size) bytes"
+    Write-Host "  Copied to : $($info.Dest)"
+    $hash = (Get-FileHash -Path $info.Dest -Algorithm SHA256).Hash
+    Write-Host "  SHA256    : $hash"
+}
 Write-Host ''
-Write-Host "  Install: adb install -r `"$destPath`""
+foreach ($dp in $destPaths) {
+    Write-Host "  Install: adb install -r `"$dp`""
+}
 
-# --- release: verify signature ---
+# --- release: verify signature of every apk ---
 if ($buildType -eq 'release') {
     $signer = Get-ChildItem -Path "$env:ANDROID_HOME\build-tools\*\apksigner.bat" | Select-Object -Last 1
     if ($signer) {
-        & $signer.FullName verify --print-certs "$destPath"
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host '  [OK] apksigner verify passed'
-        } else {
-            Write-Host '  [WARN] apksigner verify failed'
+        foreach ($dp in $destPaths) {
+            & $signer.FullName verify --print-certs "$dp"
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] apksigner verify passed: $(Split-Path -Leaf $dp)"
+            } else {
+                Write-Host "  [WARN] apksigner verify failed: $(Split-Path -Leaf $dp)"
+            }
         }
     } else {
         Write-Host '  [WARN] apksigner not found, skipped signature check'

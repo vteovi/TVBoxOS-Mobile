@@ -14,8 +14,8 @@ android {
         applicationId 'com.github.tvbox.osc.mobile'
         minSdkVersion 24
         targetSdkVersion 34
-        versionCode 335
-        versionName '2.24.1'
+        versionCode 336
+        versionName '2.25.0'
         multiDexEnabled true
         //设置room的Schema的位置
         javaCompileOptions {
@@ -24,11 +24,24 @@ android {
             }
         }
 
-        ndk {
-            //abiFilters "armeabi-v7a"//, ""
-            abiFilters "arm64-v8a"
-        }
+        // CPU 架构不在这里统一过滤：由下面的 productFlavors 各自指定（arm64v8 / armv7a）
+    }
 
+    // 按 CPU 架构分包：一个 flavor 只打一套 .so，装哪个看设备
+    // arm64v8 -> arm64-v8a（绝大多数 2018 年后的手机/平板）
+    // armv7a  -> armeabi-v7a（老的 32 位设备）
+    // 注：x86 / x86_64 暂不可用，player 与 quickjs 模块没有对应架构的 .so，
+    //     只加 abiFilters 能编出包，但启动时 QuickJSLoader.init() 会 UnsatisfiedLinkError 闪退。
+    flavorDimensions "abi"
+    productFlavors {
+        arm64v8 {
+            dimension "abi"
+            ndk { abiFilters "arm64-v8a" }
+        }
+        armv7a {
+            dimension "abi"
+            ndk { abiFilters "armeabi-v7a" }
+        }
     }
 
     // 执行配置
@@ -36,7 +49,7 @@ android {
 
         // Apk 输出配置
         variant.outputs.all { output ->
-            outputFileName = 'TVBox-Mobile-v' + variant.versionName + '.apk'
+            outputFileName = 'TVBox-Mobile-v' + variant.versionName + '-' + variant.flavorName + '.apk'
         }
     }
 

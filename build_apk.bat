@@ -60,13 +60,13 @@ if /i "%BUILDTYPE%"=="release" goto :build_release
 
 call gradlew.bat assembleDebug --console=plain
 if errorlevel 1 goto :build_failed
-set "OUTDIR=app\build\outputs\apk\debug"
+set "OUTDIR=app\build\outputs\apk"
 goto :show_result
 
 :build_release
 call gradlew.bat assembleRelease --console=plain
 if errorlevel 1 goto :build_failed
-set "OUTDIR=app\build\outputs\apk\release"
+set "OUTDIR=app\build\outputs\apk"
 
 :show_result
 taskkill /f /im java.exe
@@ -74,18 +74,21 @@ echo.
 echo ============================================
 echo   BUILD SUCCESS
 echo ============================================
-set "APKPATH="
-for /f "delims=" %%F in ('dir /b /o-d "%OUTDIR%\*.apk" 2^>nul') do set "APKPATH=%OUTDIR%\%%F"
-if not defined APKPATH (
-    echo   [WARN] APK file not found in %OUTDIR%
+REM one APK per ABI flavor (arm64v8 / armv7a), list every match of this build type
+set "APKFOUND="
+for %%D in (arm64v8 armv7a) do (
+    for /f "delims=" %%F in ('dir /b /o-d "%OUTDIR%\%%D\%BUILDTYPE%\*.apk" 2^>nul') do (
+        set "APKFOUND=1"
+        echo   APK   : %CD%\%OUTDIR%\%%D\%BUILDTYPE%\%%F
+        for %%A in ("%OUTDIR%\%%D\%BUILDTYPE%\%%F") do echo   Size  : %%~zA bytes
+        echo   Install: adb install -r "%CD%\%OUTDIR%\%%D\%BUILDTYPE%\%%F"
+        echo.
+    )
+)
+if not defined APKFOUND (
+    echo   [WARN] APK file not found under %OUTDIR%
     goto :end
 )
-set "APKSIZE="
-for %%A in ("%APKPATH%") do set "APKSIZE=%%~zA"
-echo   APK   : %CD%\%APKPATH%
-echo   Size  : %APKSIZE% bytes
-echo.
-echo   Install: adb install -r "%CD%\%APKPATH%"
 goto :end
 
 :build_failed
