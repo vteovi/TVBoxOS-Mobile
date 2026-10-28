@@ -23,6 +23,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
@@ -187,13 +188,17 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             getSupportFragmentManager().beginTransaction().show(playFragment).commitAllowingStateLoss();
         }
 
-        findViewById(R.id.ll_title).setOnClickListener(view -> {
-            new XPopup.Builder(this)
-                    .isViewMode(true)
-                    .hasNavigationBar(false)
-                    .asCustom(new VideoDetailDialog(this, vodInfo))
-                    .show();
-        });
+        // 平板/大屏的播放页右侧已直接展示年份、演员、简介等信息，不再弹出详情窗；
+        // 手机端布局空间有限，继续保留点标题弹详情的方式。
+        if (!Utils.isTablet(this)) {
+            findViewById(R.id.ll_title).setOnClickListener(view -> {
+                new XPopup.Builder(this)
+                        .isViewMode(true)
+                        .hasNavigationBar(false)
+                        .asCustom(new VideoDetailDialog(this, vodInfo))
+                        .show();
+            });
+        }
         findViewById(R.id.tvDownload).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -306,6 +311,83 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     }
 
     /**
+     * 平板/大屏(sw600dp)的右侧信息栏直接展示影视详情，不再弹窗。
+     * 手机布局没有这些控件，取不到就静默跳过。
+     */
+    private void fillTabletDetailInfo(VodInfo info) {
+        if (info == null) {
+            return;
+        }
+        TextView tvMeta = findViewById(R.id.tv_meta);
+        TextView tvActor = findViewById(R.id.tv_actor);
+        TextView tvDirector = findViewById(R.id.tv_director);
+        TextView tvDes = findViewById(R.id.tv_des);
+        if (tvMeta == null && tvActor == null && tvDirector == null && tvDes == null) {
+            return;
+        }
+        if (tvMeta != null) {
+            StringBuilder meta = new StringBuilder();
+            if (info.year > 0) {
+                meta.append(info.year);
+            }
+            appendMetaItem(meta, info.area);
+            appendMetaItem(meta, info.type);
+            appendMetaItem(meta, info.note);
+            if (meta.length() == 0) {
+                tvMeta.setVisibility(View.GONE);
+            } else {
+                tvMeta.setVisibility(View.VISIBLE);
+                tvMeta.setText(meta.toString());
+            }
+        }
+        if (tvActor != null) {
+            bindInfoLine(tvActor, "主演：", info.actor);
+        }
+        if (tvDirector != null) {
+            bindInfoLine(tvDirector, "导演：", info.director);
+        }
+        if (tvDes != null) {
+            String des = stripHtmlTag(info.des);
+            tvDes.setText(TextUtils.isEmpty(des) ? "暂无简介" : des);
+        }
+    }
+
+    private void appendMetaItem(StringBuilder sb, String value) {
+        if (TextUtils.isEmpty(value) || "未知".equals(value)) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append(" · ");
+        }
+        sb.append(value);
+    }
+
+    private void bindInfoLine(TextView tv, String label, String value) {
+        if (TextUtils.isEmpty(value) || "未知".equals(value)) {
+            tv.setVisibility(View.GONE);
+        } else {
+            tv.setVisibility(View.VISIBLE);
+            tv.setText(label + value);
+        }
+    }
+
+    /**
+     * 简介里常夹着 &lt;br&gt;、&amp;nbsp; 之类的标签/实体，直接展示会变成乱码。
+     */
+    private String stripHtmlTag(String info) {
+        if (TextUtils.isEmpty(info)) {
+            return "";
+        }
+        String text = info.replaceAll("\\<.*?\\>", " ")
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">");
+        return text.replaceAll("[\\r\\n]+", " ").replaceAll("[\\t ]{2,}", " ").trim();
+    }
+
+    /**
      * 平板/大屏(sw600dp)详情页顶部是「左播放器 + 右影视信息」的横向布局,
      * 播放器浮层尺寸需要按占位区的实际宽度动态计算, 这里挂上尺寸监听。
      */
@@ -340,6 +422,17 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         if (lp.height != height) {
             lp.height = height;
             place.setLayoutParams(lp);
+        }
+        //右侧信息栏(片名/元信息/简介)高度与播放器齐平;窄屏平板的 16:9 只有 160dp 左右,给个下限保证简介可见
+        View infoColumn = findViewById(R.id.ll_info_column);
+        if (infoColumn != null) {
+            int minHeight = Math.round(getResources().getDisplayMetrics().density * 230f);
+            int columnHeight = Math.max(height, minHeight);
+            ViewGroup.LayoutParams ilp = infoColumn.getLayoutParams();
+            if (ilp.height != columnHeight) {
+                ilp.height = columnHeight;
+                infoColumn.setLayoutParams(ilp);
+            }
         }
         // 等这一帧布局走完再取位置, 否则拿到的是旧坐标
         place.post(this::layoutPreviewOverPlace);
@@ -569,6 +662,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                     mBinding.tvName.setText(TextUtils.isEmpty(mVideo.name) ? "暂无信息" : mVideo.name);
                     String srcName = ApiConfig.get().getSource(mVideo.sourceKey).getName();
                     mBinding.tvSite.setText("来源：" + (TextUtils.isEmpty(srcName) ? "未知" : srcName));
+                    // 平板右侧栏直接展示影视信息（无弹窗）
+                    fillTabletDetailInfo(vodInfo);
 
                     if (vodInfo.seriesMap != null && vodInfo.seriesMap.size() > 0) {//线路
                         mBinding.mGridViewFlag.setVisibility(View.VISIBLE);

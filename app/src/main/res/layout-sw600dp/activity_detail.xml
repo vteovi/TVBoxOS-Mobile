@@ -37,10 +37,11 @@
                 android:gravity="center"
                 android:orientation="vertical" />
 
-            <!-- 右侧影视信息 -->
+            <!-- 右侧影视信息：直接展示片名 / 数据源 / 元信息 / 简介，不再弹详情窗 -->
             <LinearLayout
+                android:id="@+id/ll_info_column"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/dp_20"
                 android:layout_weight="1"
                 android:orientation="vertical">
@@ -55,7 +56,6 @@
                         android:id="@+id/tvName"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginEnd="10dp"
                         android:layout_weight="1"
                         android:ellipsize="end"
                         android:maxLines="2"
@@ -63,20 +63,12 @@
                         android:textColor="@color/text_foreground"
                         android:textSize="22sp"
                         android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="bottom"
-                        android:layout_marginEnd="10dp"
-                        android:text="详情 >>"
-                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="10dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -110,11 +102,77 @@
                         tools:visibility="visible" />
                 </LinearLayout>
 
-                <!-- 操作按钮贴到信息区底部 -->
-                <Space
-                    android:layout_width="wrap_content"
+                <!-- 元信息 + 简介：空间不足时可在区域内上下滑动，不撑高顶部区域 -->
+                <ScrollView
+                    android:layout_width="match_parent"
                     android:layout_height="0dp"
-                    android:layout_weight="1" />
+                    android:layout_marginTop="@dimen/dp_8"
+                    android:layout_weight="1"
+                    android:fadeScrollbars="true"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingBottom="@dimen/dp_4">
+
+                        <TextView
+                            android:id="@+id/tv_meta"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:alpha="0.62"
+                            android:ellipsize="end"
+                            android:maxLines="2"
+                            android:textColor="@color/text_foreground"
+                            android:textSize="13sp"
+                            tools:text="2024 · 中国 · 动画 · 连载至 12 集" />
+
+                        <TextView
+                            android:id="@+id/tv_actor"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:alpha="0.62"
+                            android:ellipsize="end"
+                            android:maxLines="2"
+                            android:textColor="@color/text_foreground"
+                            android:textSize="13sp"
+                            tools:text="主演：花江夏树 / 鬼头明里" />
+
+                        <TextView
+                            android:id="@+id/tv_director"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:alpha="0.62"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/text_foreground"
+                            android:textSize="13sp"
+                            tools:text="导演：外崎春雄" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/dp_8"
+                            android:text="简介"
+                            android:textColor="@color/text_foreground"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_des"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:alpha="0.78"
+                            android:lineSpacingExtra="4dp"
+                            android:textColor="@color/text_foreground"
+                            android:textSize="13sp"
+                            tools:text="简介内容：时值日本大正时期……" />
+                    </LinearLayout>
+                </ScrollView>
 
                 <LinearLayout
                     android:layout_width="match_parent"
