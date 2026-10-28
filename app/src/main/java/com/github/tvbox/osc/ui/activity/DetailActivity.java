@@ -123,6 +123,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
      * 选集网格的间距装饰，列数变化时要跟着重建
      */
     private GridSpacingItemDecoration mSeriesSpacing;
+    /**
+     * 选集列表是否已经做过一次强制重排（防止兜底校验反复重排）
+     */
+    private boolean seriesRelayoutTried = false;
     public String vodId;
     public String sourceKey;
     private View seriesFlagFocus = null;
@@ -347,22 +351,56 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         if (width <= 0) {
             return;
         }
-        RecyclerView.LayoutManager lm = rv.getLayoutManager();
-        if (!(lm instanceof GridLayoutManager)) {
-            return;
-        }
-        GridLayoutManager gridLm = (GridLayoutManager) lm;
         int span = Utils.getSeriesGridSpanCount(this, width, seriesAdapter.getData());
-        if (gridLm.getSpanCount() == span) {
+        RecyclerView.LayoutManager lm = rv.getLayoutManager();
+        if (lm instanceof GridLayoutManager && ((GridLayoutManager) lm).getSpanCount() == span) {
             return;
         }
-        gridLm.setSpanCount(span);
-        // 间距装饰是按列数算边距的，列数变了必须重建
+        // 直接重建 LayoutManager 比 setSpanCount 干净：旧列数留下的布局状态不会影响新的一轮测量
+        rv.setLayoutManager(new GridLayoutManager(this, span));
+        // 间距装饰是按列数算边距的，列数变了必须换掉
         if (mSeriesSpacing != null) {
             rv.removeItemDecoration(mSeriesSpacing);
         }
         mSeriesSpacing = new GridSpacingItemDecoration(span, seriesGridSpacing(), true);
         rv.addItemDecoration(mSeriesSpacing);
+    }
+
+    /**
+     * 兜底校验：ScrollView 里高度 wrap_content 的 RecyclerView 偶尔只排到可见高度就停，
+     * 表现就是「选集只显示了一部分，点全部才看到全集」。
+     * 这里确认最后一行确实排出来了，没有就强制重排一次。
+     */
+    private void ensureSeriesListFullyLaid() {
+        if (mBinding == null || seriesAdapter == null) {
+            return;
+        }
+        RecyclerView rv = mBinding.mGridView;
+        rv.post(() -> {
+            if (mBinding == null || rv.getLayoutManager() == null || rv.getAdapter() == null) {
+                return;
+            }
+            int itemCount = rv.getAdapter().getItemCount();
+            RecyclerView.LayoutManager lm = rv.getLayoutManager();
+            if (itemCount == 0 || !(lm instanceof GridLayoutManager)) {
+                return;
+            }
+            GridLayoutManager gridLm = (GridLayoutManager) lm;
+            int lastLaid = gridLm.findLastVisibleItemPosition();
+            if (lastLaid < 0) {
+                // 还没完成这一轮布局，交给正常流程
+                return;
+            }
+            if (lastLaid >= itemCount - 1) {
+                return;
+            }
+            if (seriesRelayoutTried) {
+                return;
+            }
+            seriesRelayoutTried = true;
+            rv.setLayoutManager(new GridLayoutManager(this, gridLm.getSpanCount()));
+            ensureSeriesListFullyLaid();
+        });
     }
 
     /**
@@ -511,10 +549,19 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (isTabletScreen && mBinding != null) {
+        if (mBinding == null) {
+            return;
+        }
+        if (isTabletScreen) {
             tabletSizeRetry = 0;
             mBinding.previewPlayerPlace.post(this::applyTabletPreviewSize);
         }
+        // 旋转后宽度/density 都变了，选集列数和排布要跟着重算，避免只显示一部分
+        seriesRelayoutTried = false;
+        mBinding.mGridView.post(() -> {
+            updateSeriesGridSpan();
+            ensureSeriesListFullyLaid();
+        });
     }
 
     /**
@@ -771,7 +818,9 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         seriesAdapter.setNewData(vodInfo.seriesMap.get(vodInfo.playFlag));
         // 换了线路/数据源后集名长度可能变化，列数跟着重算
+        seriesRelayoutTried = false;
         updateSeriesGridSpan();
+        ensureSeriesListFullyLaid();
     }
 
     private void initViewModel() {
@@ -1143,6 +1192,14 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
         mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
+        if (!fullWindows) {
+            // 从 GONE 恢复显示后重新测量一次，否则可能只排出一部分集数
+            seriesRelayoutTried = false;
+            mBinding.mGridView.post(() -> {
+                updateSeriesGridSpan();
+                ensureSeriesListFullyLaid();
+            });
+        }
 
         //全屏下禁用详情页几个按键的焦点 防止上键跑过来
         mBinding.tvSort.setFocusable(!fullWindows);

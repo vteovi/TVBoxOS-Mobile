@@ -404,7 +404,7 @@
                         android:textColor="@color/text_foreground" />
                 </LinearLayout>
 
-                <androidx.recyclerview.widget.RecyclerView
+                <com.github.tvbox.osc.ui.widget.WrapContentRecyclerView
                     android:id="@+id/mGridView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
