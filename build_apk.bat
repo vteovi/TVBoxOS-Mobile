@@ -2,12 +2,16 @@
 REM ============================================================
 REM  TVBoxOS-Mobile APK Builder  -  double click to run
 REM  Usage: build_apk.bat debug   or   build_apk.bat release
+REM
+REM  One APK is produced per CPU architecture flavor
+REM  (arm64v8 -> arm64-v8a, armv7a -> armeabi-v7a).
+REM  Every produced APK is copied to the project root directory.
 REM ============================================================
-setlocal
+setlocal enabledelayedexpansion
 title TVBoxOS-Mobile APK Builder
 
-set "JAVA_HOME=C:\Java\jdk-17"
-set "ANDROID_HOME=C:\Android\Sdk"
+set "JAVA_HOME=C:/Java/jdk-17"
+set "ANDROID_HOME=C:/Android/Sdk"
 cd /d "%~dp0"
 
 echo ============================================
@@ -47,7 +51,7 @@ goto :run_build
 set "BUILDTYPE=release"
 
 :run_build
-REM 停掉可能残留的旧 Gradle 守护进程，避免其缓存了旧的 kotlin 配置导致构建失败
+REM stop leftover gradle daemons (stale kotlin config cache can break the build)
 call gradlew.bat --stop >nul 2>&1
 echo.
 echo ============================================
@@ -60,39 +64,57 @@ if /i "%BUILDTYPE%"=="release" goto :build_release
 
 call gradlew.bat assembleDebug --console=plain
 if errorlevel 1 goto :build_failed
-set "OUTDIR=app\build\outputs\apk"
+set "OUTDIR=app\build\outputs\apk\debug"
 goto :show_result
 
 :build_release
 call gradlew.bat assembleRelease --console=plain
 if errorlevel 1 goto :build_failed
-set "OUTDIR=app\build\outputs\apk"
+set "OUTDIR=app\build\outputs\apk\release"
 
 :show_result
-taskkill /f /im java.exe
+taskkill /f /im java.exe >nul 2>&1
 echo.
 echo ============================================
 echo   BUILD SUCCESS
 echo ============================================
-REM one APK per ABI flavor (arm64v8 / armv7a), list every match of this build type
+REM one APK per ABI flavor: %OUTDIR%\<arm64v8|armv7a>\*.apk
 set "APKFOUND="
+set "APKCOUNT=0"
 for %%D in (arm64v8 armv7a) do (
-    for /f "delims=" %%F in ('dir /b /o-d "%OUTDIR%\%%D\%BUILDTYPE%\*.apk" 2^>nul') do (
+    for /f "delims=" %%F in ('dir /b /a-d /o-d "%OUTDIR%\%%D\*.apk" 2^>nul') do (
         set "APKFOUND=1"
-        echo   APK   : %CD%\%OUTDIR%\%%D\%BUILDTYPE%\%%F
-        for %%A in ("%OUTDIR%\%%D\%BUILDTYPE%\%%F") do echo   Size  : %%~zA bytes
-        echo   Install: adb install -r "%CD%\%OUTDIR%\%%D\%BUILDTYPE%\%%F"
-        echo.
+        set /a APKCOUNT+=1
+        set "DESTNAME=%%~nF-%BUILDTYPE%.apk"
+        copy /y "%OUTDIR%\%%D\%%F" "%CD%\!DESTNAME!" >nul
+        if exist "%CD%\!DESTNAME!" (
+            set "HASH="
+            for /f "skip=1 delims=" %%H in ('certutil -hashfile "%CD%\!DESTNAME!" SHA256 2^>nul') do if not defined HASH set "HASH=%%H"
+            echo.
+            echo   APK    : %CD%\!DESTNAME!
+            for %%A in ("%CD%\!DESTNAME!") do echo   Size   : %%~zA bytes
+            echo   Source : %OUTDIR%\%%D\%%F
+            if defined HASH echo   SHA256 : !HASH!
+            echo   Install: adb install -r "%CD%\!DESTNAME!"
+        ) else (
+            echo.
+            echo   [WARN] copy failed: %OUTDIR%\%%D\%%F
+        )
     )
 )
 if not defined APKFOUND (
-    echo   [WARN] APK file not found under %OUTDIR%
+    echo   [WARN] no APK found under %OUTDIR%
     goto :end
 )
+echo.
+echo   ------------------------------------------------------------
+echo   !APKCOUNT! APK(s) copied to project root:
+echo   %CD%
+echo   ------------------------------------------------------------
 goto :end
 
 :build_failed
-taskkill /f /im java.exe
+taskkill /f /im java.exe >nul 2>&1
 echo.
 echo ============================================
 echo   BUILD FAILED - check errors above
