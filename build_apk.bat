@@ -1,10 +1,11 @@
 @echo off
 REM ============================================================
 REM  TVBoxOS-Mobile APK Builder  -  double click to run
-REM  Usage: build_apk.bat debug   or   build_apk.bat release
+REM  Double click builds the signed RELEASE apk (no prompt, no input needed).
+REM  Usage: build_apk.bat debug   (builds a debug apk instead)
 REM
 REM  One APK is produced per CPU architecture flavor
-REM  (arm64v8 -> arm64-v8a, armv7a -> armeabi-v7a).
+REM  flavor arm64v8 gives arm64-v8a, flavor armv7a gives armeabi-v7a.
 REM  Every produced APK is copied to the project root directory.
 REM ============================================================
 setlocal enabledelayedexpansion
@@ -34,20 +35,11 @@ if defined APPVER set "APPVER=%APPVER:'=%"
 if not defined APPVER set "APPVER=unknown"
 echo   Project version: %APPVER%
 
+REM no interactive prompt: double click builds the signed release build
 set "BUILDTYPE=%~1"
 if /i "%BUILDTYPE%"=="debug" goto :run_build
 if /i "%BUILDTYPE%"=="release" goto :run_build
-
-echo.
-echo   Select build type:
-echo     [1] Debug   - for daily testing
-echo     [2] Release - signed, for install and share
-choice /c 12 /n /m "  Enter 1 or 2: "
-if errorlevel 2 goto :pick_release
-set "BUILDTYPE=debug"
-goto :run_build
-
-:pick_release
+if not "%BUILDTYPE%"=="" echo   [WARN] unknown build type "%BUILDTYPE%", using release
 set "BUILDTYPE=release"
 
 :run_build
@@ -78,7 +70,7 @@ echo.
 echo ============================================
 echo   BUILD SUCCESS
 echo ============================================
-REM one APK per ABI flavor: %OUTDIR%\<arm64v8|armv7a>\*.apk
+REM one APK per ABI flavor, under %OUTDIR%\arm64v8\ and ...\armv7a\
 set "APKFOUND="
 set "APKCOUNT=0"
 for %%D in (arm64v8 armv7a) do (
@@ -122,11 +114,13 @@ echo ============================================
 
 :end
 echo.
-pause >nul
+echo   this window closes in 45 seconds - close it manually any time
+ping -n 46 127.0.0.1 >nul
 endlocal
 exit /b 0
 
 :prereq_fail
 echo.
-pause >nul
+echo   this window closes in 45 seconds - close it manually any time
+ping -n 46 127.0.0.1 >nul
 exit /b 1
