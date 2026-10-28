@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    平板/大屏（sw600dp）详情页布局。
+    与手机版差异：顶部改为「左视频 + 右影视信息」的横向排布（参考 TV 版播放页的非全屏形态），
+    线路/选集放到下方整宽区域，触屏操作，不做电视端的焦点链。
+    注意：所有 id 必须与 layout/activity_detail.xml 保持一致且控件类型相同，
+    否则 ViewBinding 的字段类型（以默认布局为准）会与 sw600dp 实际控件不匹配导致 ClassCastException。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/llLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ================= 顶部：左播放器 + 右影视信息 ================= -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/dp_24"
+            android:paddingTop="16dp"
+            android:paddingEnd="@dimen/dp_24">
+
+            <!-- 播放器占位：宽度由 weight 决定，高度由代码按 16:9 计算并覆盖 -->
+            <LinearLayout
+                android:id="@+id/previewPlayerPlace"
+                android:layout_width="0dp"
+                android:layout_height="300dp"
+                android:layout_weight="1.15"
+                android:gravity="center"
+                android:orientation="vertical" />
+
+            <!-- 右侧影视信息 -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="@dimen/dp_20"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/ll_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvName"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="10dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:text="鬼灭之刃鬼灭之刃鬼灭之刃"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_marginEnd="10dp"
+                        android:text="详情 >>"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvSite"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_large_round_gray"
+                        android:drawableRight="@drawable/ic_change_20"
+                        android:drawablePadding="4dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="6dp"
+                        android:singleLine="true"
+                        android:textColor="@color/text_foreground"
+                        tools:text="非凡影视" />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <ImageView
+                        android:id="@+id/iv_private_browsing"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingLeft="10dp"
+                        android:src="@drawable/ic_private_browsing"
+                        android:visibility="gone"
+                        tools:visibility="visible" />
+                </LinearLayout>
+
+                <!-- 操作按钮贴到信息区底部 -->
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="end|center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/tvExternalPlay"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="外部播放"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_external_play_18"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/tvCast"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="投屏"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_cast_18"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/tvCollect"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="收藏"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_colloct_18"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/tvDownload"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="下载"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_download_18"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/ext_pip"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="画中画"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_pip"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/ext_setting"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="设置"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_player_setting"
+                        app:tint="@color/text_foreground" />
+
+                    <ImageView
+                        android:id="@+id/ext_fullscreen"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="全屏"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_fullscreen"
+                        app:tint="@color/text_foreground" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="4dp"
+                    android:background="@color/bg_gray" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ================= 下部：线路 + 选集 ================= -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/dp_24"
+                android:paddingTop="@dimen/dp_8"
+                android:paddingEnd="@dimen/dp_24"
+                android:paddingBottom="16dp">
+
+                <LinearLayout
+                    android:id="@+id/mEmptyPlaylist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="horizontal"
+                    android:paddingVertical="@dimen/dp_24"
+                    tools:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="@dimen/dp_128"
+                        android:layout_height="@dimen/dp_128"
+                        android:layout_gravity="center"
+                        android:src="@drawable/icon_empty" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginStart="@dimen/dp_10"
+                        android:text="暂无播放数据" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/parse_root"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="解析"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rv_parse"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginVertical="4dp"
+                        android:orientation="horizontal"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        tools:listitem="@layout/item_select_flag" />
+                </LinearLayout>
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerVertical="true"
+                        android:text="线路"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvChangeLine"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentRight="true"
+                        android:drawableRight="@drawable/ic_change_20"
+                        android:drawablePadding="4dp"
+                        android:paddingLeft="20dp"
+                        android:paddingVertical="6dp"
+                        android:text="快捷换线"
+                        android:textColor="@color/text_foreground" />
+                </RelativeLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/mGridViewFlag"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="4dp"
+                    android:orientation="horizontal"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    tools:listitem="@layout/item_select_flag" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="选集"
+                        android:textColor="@color/text_foreground"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:id="@+id/tvSort"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableRight="@drawable/ic_sort_18"
+                        android:drawablePadding="4dp"
+                        android:paddingVertical="6dp"
+                        android:text="倒序"
+                        android:textColor="@color/text_foreground" />
+
+                    <View
+                        android:id="@+id/line10"
+                        android:layout_width="1dp"
+                        android:layout_height="14dp"
+                        android:layout_marginHorizontal="10dp"
+                        android:background="@color/gray_darker" />
+
+                    <TextView
+                        android:id="@+id/tv_all_series"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableRight="@drawable/ic_expand_all_18"
+                        android:drawablePadding="4dp"
+                        android:paddingVertical="6dp"
+                        android:text="全部"
+                        android:textColor="@color/text_foreground" />
+                </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/mGridView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dp_12"
+                    android:layout_marginBottom="@dimen/dp_8"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
+                    app:tv_selectedItemIsCentered="true"
+                    app:tv_verticalSpacingWithMargins="@dimen/dp_10"
+                    tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    tools:listitem="@layout/item_series"
+                    tools:orientation="horizontal" />
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- 播放器浮层：非全屏时由代码定位到左上角的 previewPlayerPlace 上（初始 invisible，避免首帧全宽闪现） -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/previewPlayer"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:visibility="invisible" />
+
+</FrameLayout>

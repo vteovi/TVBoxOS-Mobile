@@ -302,6 +302,72 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             quickLineChange();
         });
         setLoadSir(mBinding.llLayout);
+        setupTabletPreview();
+    }
+
+    /**
+     * 平板/大屏(sw600dp)详情页顶部是「左播放器 + 右影视信息」的横向布局,
+     * 播放器浮层尺寸需要按占位区的实际宽度动态计算, 这里挂上尺寸监听。
+     */
+    private void setupTabletPreview() {
+        if (mBinding == null || !Utils.isTablet(this)) {
+            return;
+        }
+        isTabletScreen = true;
+        mBinding.previewPlayerPlace.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            // 只在宽度变化时重算(高度是我们自己按 16:9 设置的, 避免反复触发)
+            if (right - left != oldRight - oldLeft) {
+                applyTabletPreviewSize();
+            }
+        });
+        mBinding.previewPlayerPlace.post(this::applyTabletPreviewSize);
+    }
+
+    /**
+     * 按占位区宽度算出 16:9 高度并写回, 然后重新定位播放器浮层。
+     */
+    private void applyTabletPreviewSize() {
+        if (!isTabletScreen || mBinding == null || fullWindows) {
+            return;
+        }
+        View place = mBinding.previewPlayerPlace;
+        int width = place.getWidth();
+        if (width <= 0) {
+            return;
+        }
+        int height = Math.round(width * 9f / 16f);
+        ViewGroup.LayoutParams lp = place.getLayoutParams();
+        if (lp.height != height) {
+            lp.height = height;
+            place.setLayoutParams(lp);
+        }
+        // 等这一帧布局走完再取位置, 否则拿到的是旧坐标
+        place.post(this::layoutPreviewOverPlace);
+    }
+
+    /**
+     * 把播放器浮层贴到占位区的位置上(占位区在左列, 浮层是根布局的直接子 View)。
+     */
+    private void layoutPreviewOverPlace() {
+        if (!isTabletScreen || mBinding == null || fullWindows) {
+            return;
+        }
+        View place = mBinding.previewPlayerPlace;
+        int width = place.getWidth();
+        int height = place.getHeight();
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        // 用窗口坐标做差, 不关心中间套了几层容器(LoadSir 会把 llLayout 再包一层)
+        int[] placeLocation = new int[2];
+        place.getLocationInWindow(placeLocation);
+        int[] rootLocation = new int[2];
+        mBinding.getRoot().getLocationInWindow(rootLocation);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height);
+        lp.leftMargin = placeLocation[0] - rootLocation[0];
+        lp.topMargin = placeLocation[1] - rootLocation[1];
+        mBinding.previewPlayer.setLayoutParams(lp);
+        windowsPreview = lp;
     }
 
     @Override
@@ -821,6 +887,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     boolean showPreview = Hawk.get(HawkConfig.SHOW_PREVIEW, true);
     ; // true 开启 false 关闭
     boolean fullWindows = false;
+    /**
+     * 平板/大屏(sw600dp): 非全屏时顶部为左视频 + 右信息的横向布局, 播放器需要按占位区动态定位
+     */
+    private boolean isTabletScreen = false;
     ViewGroup.LayoutParams windowsPreview = null;
     ViewGroup.LayoutParams windowsFull = null;
 
@@ -836,7 +906,15 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         //交由fragment处理播放器全屏逻辑
         playFragment.changedLandscape(fullWindows);
         //activity处理预览尺寸(全屏/非全屏预览)
-        mBinding.previewPlayer.setLayoutParams(fullWindows ? windowsFull : windowsPreview);
+        if (fullWindows) {
+            mBinding.previewPlayer.setLayoutParams(windowsFull);
+        } else if (isTabletScreen) {
+            //平板的预览尺寸是算出来的, 旋转后可能变化, 退出全屏时重算一次
+            mBinding.previewPlayer.setLayoutParams(windowsPreview);
+            applyTabletPreviewSize();
+        } else {
+            mBinding.previewPlayer.setLayoutParams(windowsPreview);
+        }
         mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
         mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
 
