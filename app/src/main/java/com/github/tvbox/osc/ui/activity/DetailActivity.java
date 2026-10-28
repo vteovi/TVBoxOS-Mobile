@@ -32,6 +32,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.AppUtils;
 import com.blankj.utilcode.util.LogUtils;
@@ -64,7 +66,7 @@ import com.github.tvbox.osc.ui.dialog.CastDialog;
 import com.github.tvbox.osc.ui.dialog.QuickSearchDialog;
 import com.github.tvbox.osc.ui.dialog.VideoDetailDialog;
 import com.github.tvbox.osc.ui.fragment.PlayFragment;
-import com.github.tvbox.osc.ui.widget.LinearSpacingItemDecoration;
+import com.github.tvbox.osc.ui.widget.GridSpacingItemDecoration;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.PlayerHelper;
@@ -85,7 +87,6 @@ import com.lzy.okgo.OkGo;
 import com.lzy.okgo.callback.AbsCallback;
 import com.lzy.okgo.model.Response;
 import com.orhanobut.hawk.Hawk;
-import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -118,6 +119,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     private boolean isCollected = false;
     public SeriesFlagAdapter seriesFlagAdapter;
     public SeriesAdapter seriesAdapter;
+    /**
+     * 选集网格的间距装饰，列数变化时要跟着重建
+     */
+    private GridSpacingItemDecoration mSeriesSpacing;
     public String vodId;
     public String sourceKey;
     private View seriesFlagFocus = null;
@@ -172,11 +177,22 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.ivPrivateBrowsing.setOnClickListener(view -> ToastUtils.showShort("当前为无痕浏览"));
         mBinding.previewPlayerPlace.setVisibility(showPreview ? View.VISIBLE : View.GONE);
 
-        mBinding.mGridView.setHasFixedSize(true);
-        mBinding.mGridView.setLayoutManager(new V7LinearLayoutManager(this.mContext, 0, false));
-        mBinding.mGridView.addItemDecoration(new LinearSpacingItemDecoration(20, false));
+        // 选集改为「按屏宽动态列数」的网格：整页上下滚动查看，不再横向左右滑动。
+        // 列表高度随内容撑开(wrap_content) 又嵌在 ScrollView 里，必须关掉自身嵌套滚动，
+        // 否则 RecyclerView 会吞掉上下滑动手势，页面滚不动。
+        mBinding.mGridView.setHasFixedSize(false);
+        mBinding.mGridView.setNestedScrollingEnabled(false);
+        mBinding.mGridView.setLayoutManager(new GridLayoutManager(this, 4));
+        mSeriesSpacing = new GridSpacingItemDecoration(4, seriesGridSpacing(), true);
+        mBinding.mGridView.addItemDecoration(mSeriesSpacing);
+        mBinding.mGridView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            // 宽度变化(旋转/分屏)时重算列数
+            if (right - left != oldRight - oldLeft) {
+                updateSeriesGridSpan();
+            }
+        });
 
-        seriesAdapter = new SeriesAdapter(false);
+        seriesAdapter = new SeriesAdapter(true);
         mBinding.mGridView.setAdapter(seriesAdapter);
         mBinding.mGridViewFlag.setHasFixedSize(true);
         seriesFlagAdapter = new SeriesFlagAdapter();
@@ -309,6 +325,76 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         });
         setLoadSir(mBinding.llLayout);
         setupTabletPreview();
+    }
+
+    /**
+     * 选集网格条目间距(8dp)。用 dp 而不是写死像素, 平板和大屏手机上观感才一致。
+     */
+    private int seriesGridSpacing() {
+        return Math.round(getResources().getDisplayMetrics().density * 8f);
+    }
+
+    /**
+     * 选集网格列数按 RecyclerView 的实际宽度重算（宽度变化=旋转/分屏；集名长度变化=换了线路）。
+     */
+    private void updateSeriesGridSpan() {
+        if (mBinding == null || seriesAdapter == null || seriesAdapter.getData().isEmpty()) {
+            // 还没有集数数据时不动列数，避免先按空数据算窄了再跳回来
+            return;
+        }
+        RecyclerView rv = mBinding.mGridView;
+        int width = rv.getWidth();
+        if (width <= 0) {
+            return;
+        }
+        RecyclerView.LayoutManager lm = rv.getLayoutManager();
+        if (!(lm instanceof GridLayoutManager)) {
+            return;
+        }
+        GridLayoutManager gridLm = (GridLayoutManager) lm;
+        int span = Utils.getSeriesGridSpanCount(this, width, seriesAdapter.getData());
+        if (gridLm.getSpanCount() == span) {
+            return;
+        }
+        gridLm.setSpanCount(span);
+        // 间距装饰是按列数算边距的，列数变了必须重建
+        if (mSeriesSpacing != null) {
+            rv.removeItemDecoration(mSeriesSpacing);
+        }
+        mSeriesSpacing = new GridSpacingItemDecoration(span, seriesGridSpacing(), true);
+        rv.addItemDecoration(mSeriesSpacing);
+    }
+
+    /**
+     * 选集列表跟随页面整体滚动后，RecyclerView 自身不能滚，
+     * scrollToPosition 不再有效，改用 requestRectangleOnScreen 让外层 ScrollView 滚到该集。
+     */
+    private void scrollSeriesIntoView(int position) {
+        if (mBinding == null || seriesAdapter == null) {
+            return;
+        }
+        if (position < 0 || position >= seriesAdapter.getData().size()) {
+            return;
+        }
+        RecyclerView rv = mBinding.mGridView;
+        if (rv.getLayoutManager() == null) {
+            return;
+        }
+        View child = rv.getLayoutManager().findViewByPosition(position);
+        if (child != null) {
+            child.requestRectangleOnScreen(new Rect(0, 0, child.getWidth(), child.getHeight()), false);
+            return;
+        }
+        // 还没排版出来时等一帧再定位
+        rv.post(() -> {
+            if (mBinding == null || rv.getLayoutManager() == null) {
+                return;
+            }
+            View item = rv.getLayoutManager().findViewByPosition(position);
+            if (item != null) {
+                item.requestRectangleOnScreen(new Rect(0, 0, item.getWidth(), item.getHeight()), false);
+            }
+        });
     }
 
     /**
@@ -660,8 +746,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             }
             playFragment.setData(bundle);
 
-            //定位选集
-            mBinding.mGridView.scrollToPosition(vodInfo.playIndex);
+            //定位选集（网格 + 整页滚动，用外层 ScrollView 滚到当前集）
+            scrollSeriesIntoView(vodInfo.playIndex);
         }
     }
 
@@ -684,7 +770,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                 vodInfo.seriesMap.get(vodInfo.playFlag).get(vodInfo.playIndex).selected = true;
         }
         seriesAdapter.setNewData(vodInfo.seriesMap.get(vodInfo.playFlag));
-
+        // 换了线路/数据源后集名长度可能变化，列数跟着重算
+        updateSeriesGridSpan();
     }
 
     private void initViewModel() {

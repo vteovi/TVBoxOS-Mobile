@@ -412,12 +412,8 @@
                     android:layout_marginBottom="@dimen/dp_8"
                     android:clipChildren="false"
                     android:clipToPadding="false"
-                    app:tv_horizontalSpacingWithMargins="@dimen/dp_10"
-                    app:tv_selectedItemIsCentered="true"
-                    app:tv_verticalSpacingWithMargins="@dimen/dp_10"
-                    tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-                    tools:listitem="@layout/item_series"
-                    tools:orientation="horizontal" />
+                    tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                    tools:listitem="@layout/item_series" />
             </LinearLayout>
         </ScrollView>
     </LinearLayout>

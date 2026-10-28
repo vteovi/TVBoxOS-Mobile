@@ -36,10 +36,16 @@ public class SeriesAdapter extends BaseQuickAdapter<VodInfo.VodSeries, BaseViewH
         sl.setSelected(item.selected);
         tvSeries.setText(item.name);
 
-        if (!isGird){// 详情页横向展示时固定宽度
+        if (!isGird){//横向滑动展示时固定宽度
             ViewGroup.LayoutParams layoutParams = sl.getLayoutParams();
             layoutParams.width = ConvertUtils.dp2px(120);
             sl.setLayoutParams(layoutParams);
+        } else {//网格模式: 宽度交给列宽(spanCount 由屏幕宽度决定)
+            ViewGroup.LayoutParams layoutParams = sl.getLayoutParams();
+            if (layoutParams.width != ViewGroup.LayoutParams.MATCH_PARENT) {
+                layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                sl.setLayoutParams(layoutParams);
+            }
         }
     }
 

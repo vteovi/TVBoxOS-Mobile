@@ -68,6 +68,35 @@ public class Utils {
         return spanCount;
     }
 
+    /**
+     * 详情页选集网格的列数：跟着屏幕（RecyclerView 实际可用宽度）走，
+     * 宽屏一排多放几个、窄屏少放几个；集名越长单个格子需要越宽，列数相应减少。
+     *
+     * @param widthPx RecyclerView 的可用宽度（像素，已扣除外边距）
+     */
+    public static int getSeriesGridSpanCount(Context context, int widthPx, List<VodInfo.VodSeries> list) {
+        if (widthPx <= 0) {
+            return 4;
+        }
+        float density = context.getResources().getDisplayMetrics().density;
+        if (density <= 0) {
+            density = 1f;
+        }
+        int widthDp = Math.round(widthPx / density);
+        int avgLength = 2;
+        if (list != null && !list.isEmpty()) {
+            int total = 0;
+            for (VodInfo.VodSeries item : list) {
+                total += (item == null || item.name == null) ? 0 : item.name.length();
+            }
+            avgLength = Math.max(2, Math.round((float) total / list.size()));
+        }
+        // 条目文字 12sp：一个汉字约 12dp，左右内边距 20dp，再留 10dp 余量
+        int minItemDp = avgLength * 12 + 20 + 10;
+        int span = widthDp / minItemDp;
+        return Math.max(2, Math.min(span, 10));
+    }
+
     public static String stringForTime(long timeMs) {
 //        if (timeMs <= 0 || timeMs >= 24 * 60 * 60 * 1000) {
 //            return "00:00";

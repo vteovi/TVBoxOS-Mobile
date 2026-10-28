@@ -78,8 +78,9 @@ public class AllVodSeriesRightDialog extends DrawerPopupView {
     @Override
     protected void onDismiss() {
         super.onDismiss();
-        if (mDetailActivity.seriesAdapter!=null){//重置状态,避免竖屏时显示异常
-            mDetailActivity.seriesAdapter.setGird(false);
+        //详情页的选集本身就是网格(按屏宽动态列数),弹窗关闭后保持一致,不要改回固定宽度
+        if (mDetailActivity.seriesAdapter!=null){
+            mDetailActivity.seriesAdapter.setGird(true);
             mDetailActivity.seriesAdapter.notifyDataSetChanged();
         }
     }
