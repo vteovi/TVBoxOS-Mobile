@@ -30,7 +30,7 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 | 应用包名 | `com.github.tvbox.osc.mobile`（可与官方 TVBox、影视仓等版本共存安装） |
 | 系统要求 | Android 7.0 及以上（minSdk 24），目标 Android 14（targetSdk 34） |
 | CPU 架构 | `arm64-v8a` / `armeabi-v7a` 分包，按设备选一个安装 |
-| 当前版本 | 2.26.0（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
+| 当前版本 | 2.26.1（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
 
 ## ✨ 功能特性
 
@@ -160,6 +160,8 @@ Windows 下也可以直接运行 `build_apk.ps1`（默认 release，`.\build_apk
 
 ## 📝 更新记录
 
+>* **2026/10/30 TVBox Mobile v2.26.1：** 修复「检查更新」首选加速站失效（`gh.xxooo.cf` 已无法连接）：主加速改为 `gh-proxy.com`、备用 `ghfast.top`，加速前缀统一到 `ACCEL_PREFIXES` 维护，旧前缀仍兼容剥离；README 与 `update.json` 下载链接同步改用新线路。
+>
 >* **2026/10/30 TVBox Mobile v2.26.0：** 完善应用内检查更新（按架构选包、多线路回退、下载进度与包校验）；「关于」项目地址更正并移除联系方式；打包改为 GitHub Actions 在线构建。
 >
 >* **2026/10/28 TVBox Mobile v2.25.0：** 按 CPU 架构分包，同时提供 arm64v8 与 armv7a 安装包。

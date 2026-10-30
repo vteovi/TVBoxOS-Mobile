@@ -57,9 +57,9 @@ if ! grep -q '<!-- release-download' README.md; then
 fi
 
 # 下载表里两个架构的链接分别回写：arm64v8 用 apk_url，armv7a 用 apk_url_armv7a
-url_pattern='s|(https://gh\.xxooo\.cf/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-arm64v8\.apk|'"$apk_url"'|g'
+url_pattern='s|(https?://[^/[:space:]]+/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-arm64v8\.apk|'"$apk_url"'|g'
 sed -i -E "$url_pattern" README.md
-url_pattern='s|(https://gh\.xxooo\.cf/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-armv7a\.apk|'"$apk_url_armv7a"'|g'
+url_pattern='s|(https?://[^/[:space:]]+/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-armv7a\.apk|'"$apk_url_armv7a"'|g'
 sed -i -E "$url_pattern" README.md
 
 # 链接文字里的文件名（表格中显示的那一列）也一并更新到当前版本

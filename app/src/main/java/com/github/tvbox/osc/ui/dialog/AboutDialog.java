@@ -45,9 +45,16 @@ public class AboutDialog extends BottomPopupView {
     private static final String RAW_UPDATE_JSON =
             "https://raw.githubusercontent.com/vteovi/TVBoxOS-Mobile/main/update.json";
 
-    /** GitHub 访问加速，按顺序回退；最后再直连一次 */
-    private static final String ACCEL_PRIMARY = "https://gh.xxooo.cf/";
-    private static final String ACCEL_FALLBACK = "https://gh-proxy.com/";
+    /** GitHub 访问加速前缀；加速站会失效，换线路时只改这里即可 */
+    private static final String[] ACCEL_PREFIXES = {
+            "https://gh-proxy.com/",
+            "https://ghfast.top/",
+            // 已失效，仅用于剥掉旧清单里带该前缀的地址
+            "https://gh.xxooo.cf/",
+    };
+    /** 主加速与备用加速，按顺序回退；最后再直连一次 */
+    private static final String ACCEL_PRIMARY = ACCEL_PREFIXES[0];
+    private static final String ACCEL_FALLBACK = ACCEL_PREFIXES[1];
 
     private static final String TAG_CHECK = "about_check_update";
     private static final String TAG_DOWNLOAD = "about_download_update";
@@ -542,15 +549,18 @@ public class AboutDialog extends BottomPopupView {
             return null;
         }
         String value = url;
-        while (true) {
-            if (value.startsWith(ACCEL_PRIMARY)) {
-                value = value.substring(ACCEL_PRIMARY.length());
-            } else if (value.startsWith(ACCEL_FALLBACK)) {
-                value = value.substring(ACCEL_FALLBACK.length());
-            } else {
-                return value;
+        boolean stripped = true;
+        while (stripped) {
+            stripped = false;
+            for (String prefix : ACCEL_PREFIXES) {
+                if (value.startsWith(prefix)) {
+                    value = value.substring(prefix.length());
+                    stripped = true;
+                    break;
+                }
             }
         }
+        return value;
     }
 
     // ---- version utilities ----
