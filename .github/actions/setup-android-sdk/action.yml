@@ -1,0 +1,51 @@
+name: Setup Android SDK
+description: 用 sdkmanager 安装 Android SDK，不依赖已失效的第三方 setup 动作
+
+inputs:
+  packages:
+    description: 需要安装的 SDK 包（空格分隔）
+    required: false
+    default: platform-tools platforms;android-34 build-tools;34.0.0
+
+runs:
+  using: composite
+  steps:
+    - name: Locate or install command line tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+        if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
+          sdk_root="$HOME/android-sdk"
+        fi
+        mkdir -p "$sdk_root"
+
+        if [ ! -x "$sdk_root/cmdline-tools/latest/bin/sdkmanager" ]; then
+          echo "sdkmanager 不存在，下载 command line tools 到 $sdk_root"
+          zip_url="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/cmdline-tools.zip "$zip_url"
+          rm -rf "$sdk_root/cmdline-tools"
+          mkdir -p "$sdk_root/cmdline-tools"
+          unzip -q /tmp/cmdline-tools.zip -d "$sdk_root/cmdline-tools"
+          mv "$sdk_root/cmdline-tools/cmdline-tools" "$sdk_root/cmdline-tools/latest"
+          rm -f /tmp/cmdline-tools.zip
+        fi
+
+        echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+        echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+        echo "$sdk_root/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+        echo "$sdk_root/platform-tools" >> "$GITHUB_PATH"
+        echo "SDK 根目录：$sdk_root"
+
+    - name: Accept licenses and install packages
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -euo pipefail
+        sdkmanager --version
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        read -r -a packages <<< "$PACKAGES"
+        sdkmanager "${packages[@]}"
+        echo "已安装的 SDK 包："
+        sdkmanager --list_installed | sed -n '1,25p'
