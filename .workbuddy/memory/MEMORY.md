@@ -4,7 +4,7 @@
 - 环境：JDK 17 `C:\Java\jdk-17`、SDK `C:\Android\Sdk`（`local.properties` 的 `sdk.dir`）、`applicationId=com.github.tvbox.osc.mobile`（可与官方/mbox 并存）。仓库实际在 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`，**必须沙箱外执行**，否则 Gradle 缓存被拦、报假的 AAPT 错误。产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。
 - 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根目录 `*.apk`（**别 `git add -A` 误提交 APK**）。校验 `apksigner verify --print-certs`。
-- 一键脚本 `build_apk.ps1`（纯 ASCII，可用；`.bat` 版不复制产物）：自动命名、前后 `gradlew --stop`、退出码检查、复制到根目录、release 跑 apksigner+sha256。
+- **主用 CI 在线出包**（2.26.0 起，用户不再本机构建）：`.github/workflows/build.yml`；push main / workflow_dispatch → 两架构 APK 走 Artifacts；推 `v*` tag → `assembleRelease` + apksigner 校验 + 发 Release + 回写 `update.json`/README。密钥来自 secret `TVBOX_KEYSTORE_BASE64`（`base64 -w 0 TVBoxOSC.jks`），缺失时分支构建退化为 debug 包。`build_apk.bat` 已删，`build_apk.ps1` 保留作离线兜底（按 `apk/<flavor>/<buildType>/` 枚举产物）。
 - 交付前必校验（尤其 TaskStop 杀过构建）：删产物重跑 → zip 完好 + apksigner 退出码 0 + sha256，防半成品。
 - gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`。**勿设 `kotlin.compiler.execution.strategy=in_process`**（只认大写 `IN_PROCESS`，小写报 Unknown value）。
 
