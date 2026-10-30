@@ -25,7 +25,6 @@ fi
 apk_base="https://gh.xxooo.cf/https://github.com/${repository}/releases/download/${tag_name}"
 apk_url="${apk_base}/TVBox-Mobile-v${version}-arm64v8.apk"
 apk_url_armv7a="${apk_base}/TVBox-Mobile-v${version}-armv7a.apk"
-readme_apk_url="$apk_url"
 
 # changelog: 从 更新记录.md 抽当前版本的条目行, 供应用内更新弹窗展示
 changelog=""
@@ -49,21 +48,28 @@ else
     "$version" "$apk_url" "$apk_url_armv7a" > update.json
 fi
 
-if ! grep -q 'TVbox-Mobile：' README.md; then
-  echo "README download link was not found" >&2
+if ! grep -q '<!-- release-download' README.md; then
+  echo "README download section was not found" >&2
   exit 1
 fi
 
-README_APK_URL="$readme_apk_url" perl -0pi -e \
-  's{(?:https://gh\.xxooo\.cf/)+https://github\.com/[^/]+/[^/]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+(?:-[a-z0-9]+)?\.apk}{$ENV{README_APK_URL}}g' README.md
+# 下载表里两个架构的链接分别回写：arm64v8 用 apk_url，armv7a 用 apk_url_armv7a
+url_pattern='s|(https://gh\.xxooo\.cf/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-arm64v8\.apk|'"$apk_url"'|g'
+sed -i -E "$url_pattern" README.md
+url_pattern='s|(https://gh\.xxooo\.cf/)?https://github\.com/[^/[:space:]]+/[^/[:space:]]+/releases/download/v[0-9.]+/TVBox-Mobile-v[0-9.]+-armv7a\.apk|'"$apk_url_armv7a"'|g'
+sed -i -E "$url_pattern" README.md
+
+# 链接文字里的文件名（表格中显示的那一列）也一并更新到当前版本
+sed -i -E "s|TVBox-Mobile-v[0-9.]+-arm64v8\.apk|TVBox-Mobile-v${version}-arm64v8.apk|g" README.md
+sed -i -E "s|TVBox-Mobile-v[0-9.]+-armv7a\.apk|TVBox-Mobile-v${version}-armv7a.apk|g" README.md
 
 if ! grep -q "TVBox Mobile v${version}" README.md; then
   release_date=$(date -u +%Y/%m/%d)
-  entry=">* **${release_date} TVBox Mobile v${version}：** 同步发布 Android APK、应用内更新清单和下载链接。\n>\n"
+  entry=">* **${release_date} TVBox Mobile v${version}：** 同步发布 Android APK、应用内更新清单和下载链接。\n>"
   temp_file=$(mktemp)
   while IFS= read -r line || [[ -n "$line" ]]; do
     printf '%s\n' "$line"
-    if [[ "$line" == "## 𝟭. 更新记录" ]]; then
+    if [[ "$line" == "## 📝 更新记录" ]]; then
       printf '\n%b\n' "$entry"
     fi
   done < README.md > "$temp_file"
