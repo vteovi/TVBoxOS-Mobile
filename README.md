@@ -1,4 +1,4 @@
-# <p align="center"><img src="https://github.com/kukuqi666/TVBoxOS-Mobile/blob/main/website/tvbox/images/logo.png?raw=true" width="150px" /><br>​<p align="center">[TVBoxOS-Mobile](https://github.com/kukuqi666/TVBoxOS-Mobile "TVBoxOS-Mobile")   <p align="center">一个开源免费无广告的TVBox🏅
+# <p align="center"><img src="https://github.com/vteovi/TVBoxOS-Mobile/blob/main/website/tvbox/images/logo.png?raw=true" width="150px" /><br>​<p align="center">[TVBoxOS-Mobile](https://github.com/vteovi/TVBoxOS-Mobile "TVBoxOS-Mobile")   <p align="center">一个开源免费无广告的TVBox🏅
 
 <div align="center">
 
@@ -12,11 +12,11 @@
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/kukuqi666/TVBoxOS-Mobile?logo=Undertale)](https://github.com/kukuqi666/TVBoxOS-Mobile/stargazers)
-![forks](https://img.shields.io/github/forks/kukuqi666/TVBoxOS-Mobile.svg) 
-![tag](https://img.shields.io/github/tag/kukuqi666/TVBoxOS-Mobile.svg) 
-![release](https://img.shields.io/github/release/kukuqi666/TVBoxOS-Mobile.svg) 
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/kukuqi666/TVBoxOS-Mobile)](https://github.com/kukuqi666/TVBoxOS-Mobile/pulls)
+[![GitHub stars](https://img.shields.io/github/stars/vteovi/TVBoxOS-Mobile?logo=Undertale)](https://github.com/vteovi/TVBoxOS-Mobile/stargazers)
+![forks](https://img.shields.io/github/forks/vteovi/TVBoxOS-Mobile.svg) 
+![tag](https://img.shields.io/github/tag/vteovi/TVBoxOS-Mobile.svg) 
+![release](https://img.shields.io/github/release/vteovi/TVBoxOS-Mobile.svg) 
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/vteovi/TVBoxOS-Mobile)](https://github.com/vteovi/TVBoxOS-Mobile/pulls)
 
 </div>
 
@@ -37,11 +37,11 @@ https://github.com/UndCover/PyramidStore/
 
 ## 📲软件合集（软件安装）
 ### TVBox for Android
-- TVbox-Mobile：[kukuqi666/TVBoxOS-Mobile](https://gh.xxooo.cf/https://github.com/kukuqi666/TVBoxOS-Mobile/releases/download/v2.1.26/TVBox-Mobile-v2.1.26.apk)
+- TVbox-Mobile：[vteovi/TVBoxOS-Mobile](https://gh.xxooo.cf/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.1.26/TVBox-Mobile-v2.1.26.apk)
 
 
 ## 🎁福利18+
-- R18: [R18](https://raw.githubusercontent.com/kukuqi666/TVBoxOS-Mobile/main/website/tvbox/R18.json)
+- R18: [R18](https://raw.githubusercontent.com/vteovi/TVBoxOS-Mobile/main/website/tvbox/R18.json)
 
 ## 𝟭. 更新记录
 
@@ -107,6 +107,26 @@ https://github.com/UndCover/PyramidStore/
 >
 >* **2025/01/12 更新软件：** 【频道多多】测试的时候很流畅呐 各类频道不卡顿
 
+
+<img src="https://cdn.jsdelivr.net/gh/eryajf/tu@main/img/image_20240420_214408.gif" width="100%"  height="2">
+
+## 🛠️ 自行构建（GitHub Actions，无需本地环境）
+
+> 本仓库不再依赖本地 Android Studio / JDK，直接把代码推到 GitHub 即可在线出包。
+
+1. `Actions` → `Build APK` → `Run workflow`（或直接 push 到 `main`），几分钟后在该次运行的 `Artifacts` 里下载 APK。
+2. 一次构建产出两个架构的包：`TVBox-Mobile-v<版本>-arm64v8.apk`（绝大多数手机/平板）与 `TVBox-Mobile-v<版本>-armv7a.apk`（老的 32 位设备）。
+3. 想直接发布正式版：把 `app/build.gradle` 的 `versionName` 改好，打一个同名标签并推送，例如 `git tag v2.25.1 && git push origin v2.25.1`，工作流会自动打包、签名、发布 Release，并回写 `update.json` 与 README 的下载链接。
+
+**签名密钥（只需配置一次）**
+
+在仓库 `Settings` → `Secrets and variables` → `Actions` 里新增 `TVBOX_KEYSTORE_BASE64`，值是 `TVBoxOSC.jks` 经 Base64 编码后的一行文本：
+
+```bash
+base64 -w 0 TVBoxOSC.jks
+```
+
+> 未配置该密钥时，分支构建会退化为 debug 包（可以安装测试，但无法覆盖安装正式版）。密钥别名/口令默认 `TVBoxOSC`，如需不同再加 `TVBOX_KEY_ALIAS`、`TVBOX_KEY_PASSWORD`、`TVBOX_STORE_PASSWORD` 三个 secret。
 
 <img src="https://cdn.jsdelivr.net/gh/eryajf/tu@main/img/image_20240420_214408.gif" width="100%"  height="2">
 

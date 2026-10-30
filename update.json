@@ -1,4 +1,6 @@
 {
-  "version": "2.25.0",
-  "apk_url": "https://gh.xxooo.cf/https://github.com/kukuqi666/TVBoxOS-Mobile/releases/download/v2.25.0/TVBox-Mobile-v2.25.0-arm64v8.apk"
+  "version": "2.26.0",
+  "apk_url": "https://gh.xxooo.cf/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-arm64v8.apk",
+  "apk_url_armv7a": "https://gh.xxooo.cf/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-armv7a.apk",
+  "changelog": "完善检查更新：支持 ABI 自动选择、多线路回退与下载进度；关于页项目地址更新为 vteovi/TVBoxOS-Mobile，移除联系方式；改为 GitHub Actions 在线打包"
 }

@@ -9,7 +9,7 @@ fi
 
 tag_name="${1:?Usage: sync_release_metadata.sh [--skip-version-check] vX.Y.Z}"
 version="${tag_name#v}"
-repository="${GITHUB_REPOSITORY:-kukuqi666/TVBoxOS-Mobile}"
+repository="${GITHUB_REPOSITORY:-vteovi/TVBoxOS-Mobile}"
 app_version=$(sed -nE "s/^[[:space:]]*versionName '([^']+)'/\1/p" app/build.gradle)
 
 if [[ "$tag_name" != v* || ! "$version" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
@@ -22,10 +22,32 @@ if [[ "$skip_version_check" == false && "$app_version" != "$version" ]]; then
   exit 1
 fi
 
-apk_url="https://gh.xxooo.cf/https://github.com/${repository}/releases/download/${tag_name}/TVBox-Mobile-v${version}-arm64v8.apk"
+apk_base="https://gh.xxooo.cf/https://github.com/${repository}/releases/download/${tag_name}"
+apk_url="${apk_base}/TVBox-Mobile-v${version}-arm64v8.apk"
+apk_url_armv7a="${apk_base}/TVBox-Mobile-v${version}-armv7a.apk"
 readme_apk_url="$apk_url"
 
-printf '{\n  "version": "%s",\n  "apk_url": "%s"\n}\n' "$version" "$apk_url" > update.json
+# changelog: 从 更新记录.md 抽当前版本的条目行, 供应用内更新弹窗展示
+changelog=""
+if [[ -f 更新记录.md ]]; then
+  changelog=$(awk -v ver="$version" '
+    index($0, "### " ver " ") == 1 { inside = 1; next }
+    inside && index($0, "### ") == 1 { inside = 0 }
+    inside && index($0, "- ") == 1 { sub(/^- /, ""); print }
+  ' 更新记录.md)
+fi
+changelog_escaped=""
+if [[ -n "$changelog" ]]; then
+  changelog_escaped=$(printf '%s\n' "$changelog" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$/\\n/' | tr -d '\n' | sed -e 's/\\n$//')
+fi
+
+if [[ -n "$changelog_escaped" ]]; then
+  printf '{\n  "version": "%s",\n  "apk_url": "%s",\n  "apk_url_armv7a": "%s",\n  "changelog": "%s"\n}\n' \
+    "$version" "$apk_url" "$apk_url_armv7a" "$changelog_escaped" > update.json
+else
+  printf '{\n  "version": "%s",\n  "apk_url": "%s",\n  "apk_url_armv7a": "%s"\n}\n' \
+    "$version" "$apk_url" "$apk_url_armv7a" > update.json
+fi
 
 if ! grep -q 'TVbox-Mobile：' README.md; then
   echo "README download link was not found" >&2
