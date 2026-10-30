@@ -22,7 +22,10 @@ if [[ "$skip_version_check" == false && "$app_version" != "$version" ]]; then
   exit 1
 fi
 
-apk_base="https://gh.xxooo.cf/https://github.com/${repository}/releases/download/${tag_name}"
+# 下载加速前缀：gh.xxooo.cf 已不可用（连接超时），默认改用 gh-proxy.com，
+# 需要换线路时用 APK_ACCEL 覆盖，例如 APK_ACCEL=https://ghfast.top/
+accel="${APK_ACCEL:-https://gh-proxy.com/}"
+apk_base="${accel}https://github.com/${repository}/releases/download/${tag_name}"
 apk_url="${apk_base}/TVBox-Mobile-v${version}-arm64v8.apk"
 apk_url_armv7a="${apk_base}/TVBox-Mobile-v${version}-armv7a.apk"
 

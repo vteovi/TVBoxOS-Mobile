@@ -55,8 +55,8 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 
 | 设备 | 安装包 | 适用 |
 | --- | --- | --- |
-| 64 位设备（推荐） | [TVBox-Mobile-v2.26.0-arm64v8.apk](https://gh.xxooo.cf/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
-| 32 位设备 | [TVBox-Mobile-v2.26.0-armv7a.apk](https://gh.xxooo.cf/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-armv7a.apk) | 老机型、部分电视盒子 |
+| 64 位设备（推荐） | [TVBox-Mobile-v2.26.0-arm64v8.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
+| 32 位设备 | [TVBox-Mobile-v2.26.0-armv7a.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.0/TVBox-Mobile-v2.26.0-armv7a.apk) | 老机型、部分电视盒子 |
 
 - 全部版本：<https://github.com/vteovi/TVBoxOS-Mobile/releases>
 - 装好后进入「我的 → 关于 → 检查更新」即可在线升级，程序会自动匹配你的设备架构；下载完会校验包名与版本号再安装，避免装错包。
@@ -177,7 +177,7 @@ Windows 下也可以直接运行 `build_apk.ps1`（默认 release，`.\build_apk
 - <https://github.com/xyq254245/xyqonlinerule>
 - <https://github.com/UndCover/PyramidStore>
 
-GitHub 访问加速：<https://gh.xxooo.cf/>
+GitHub 访问加速：<https://gh-proxy.com/>
 
 ## ⚠️ 免责声明
 
