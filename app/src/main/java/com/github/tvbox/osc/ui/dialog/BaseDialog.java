@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -17,6 +18,7 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.github.tvbox.osc.R;
+import com.github.tvbox.osc.util.Utils;
 
 import xyz.doikki.videoplayer.util.CutoutUtil;
 
@@ -59,38 +61,93 @@ public class BaseDialog extends Dialog {
         //hideSysBar();
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
         syncStatusBarWithHost();
+        // 有的 ROM 在窗口首帧绘制完成后才重算状态栏外观，补一次
+        getWindow().getDecorView().post(this::syncStatusBarWithHost);
     }
 
     /**
      * 让状态栏外观继续由宿主 Activity 决定。
      *
-     * CustomDialogStyle 里带 windowFullscreen=true，弹窗窗口因此拿到 FLAG_FULLSCREEN，
-     * 部分系统会把它当成"拥有状态栏的窗口"，状态栏图标改用弹窗自己的外观设置：弹窗没有像
-     * BaseActivity 那样调 statusBarDarkFont，系统就退回默认的浅色图标。于是浅色模式下
-     * 状态栏本该是深色文字，打开弹窗后却变成白字看不清（深色模式本来就是白的，看不出来）。
+     * CustomDialogStyle 带 windowFullscreen=true，弹窗窗口因此按"全屏窗口"处理，系统会
+     * 把它当成拥有状态栏区域的窗口：此时状态栏的**背景色**取弹窗自己的 statusBarColor
+     * （默认偏暗），**图标明暗**取弹窗自己的 appearance（弹窗没设过，默认按深色底算）。
+     * 于是浅色模式下本该深色文字的白色状态栏，被换成了深底+白字；深色模式本来就该白字，
+     * 所以只有浅色主题下看得出来。
      *
-     * 这里做两件事：去掉 FLAG_FULLSCREEN（状态栏归 Activity），并把宿主的实际外观同步过来，
-     * 兼容个别仍然按弹窗窗口计算外观的 ROM。宿主的深浅不能只看 App 主题——详情页、直播页
-     * 是黑色状态栏，首页才跟随主题。
+     * 三件事一起做才稳：清全屏标记（别抢状态栏）、状态栏底色照抄宿主（弹窗和首页/详情页
+     * 用同一个底色，不会被弹窗主题的默认色刷一层）、图标明暗按宿主的实际情况同步。
+     * 宿主的深浅不能看 App 主题——详情页、直播页是黑色状态栏，首页才跟随主题。
      */
-    private void syncStatusBarWithHost() {
+    protected void syncStatusBarWithHost() {
         Window window = getWindow();
         if (window == null) {
             return;
         }
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // 加上这个标记后系统才会用我们给的 statusBarColor（否则按默认深色刷一层）
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
 
         Activity activity = findHostActivity(getContext());
-        if (activity == null || activity.isFinishing() || activity.getWindow() == null) {
-            return;
+        Window hostWindow = (activity != null && !activity.isFinishing()) ? activity.getWindow() : null;
+
+        // 状态栏底色照抄宿主：宿主透明就透明（露出顶栏），宿主黑色就黑色（详情页/直播页）
+        window.setStatusBarColor(hostWindow != null ? hostWindow.getStatusBarColor() : Color.TRANSPARENT);
+
+        boolean lightBars = resolveLightStatusBar(hostWindow);
+        View decor = window.getDecorView();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // 老通道：部分 ROM / 低版本只认 systemUiVisibility
+            int visibility = decor.getSystemUiVisibility();
+            visibility &= ~View.SYSTEM_UI_FLAG_FULLSCREEN;
+            if (lightBars) {
+                visibility |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            } else {
+                visibility &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            }
+            decor.setSystemUiVisibility(visibility);
         }
-        Window hostWindow = activity.getWindow();
-        WindowInsetsControllerCompat host = WindowCompat.getInsetsController(hostWindow, hostWindow.getDecorView());
-        WindowInsetsControllerCompat self = WindowCompat.getInsetsController(window, window.getDecorView());
-        if (host == null || self == null) {
-            return;
+        // 新通道：Android 11+ 的正式接口
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, decor);
+        if (controller != null) {
+            controller.setAppearanceLightStatusBars(lightBars);
         }
-        self.setAppearanceLightStatusBars(host.isAppearanceLightStatusBars());
+    }
+
+    /**
+     * 判断宿主现在是不是"浅色状态栏"（即需要深色图标）。
+     *
+     * 不能只看 App 主题：详情页、直播页的状态栏是黑的。
+     * 也不能只读 window 的 appearance：ImmersionBar 走的是 View 那一路，
+     * 而 WindowCompat 读的是 Window 自己记录的值，可能读回来是 false（于是图标又被设成白色，
+     * 表现就是"改了没变化"）。这里先按状态栏底色亮度判断，再依次尝试两条 appearance 通道。
+     */
+    private boolean resolveLightStatusBar(Window hostWindow) {
+        if (hostWindow == null) {
+            // 拿不到宿主（极少见）才退回 App 主题
+            return !Utils.isDarkTheme();
+        }
+        int barColor = hostWindow.getStatusBarColor();
+        if (Color.alpha(barColor) == 0xFF) {
+            return isColorLight(barColor);
+        }
+        View hostDecor = hostWindow.getDecorView();
+        WindowInsetsControllerCompat hostController = WindowCompat.getInsetsController(hostWindow, hostDecor);
+        if (hostController != null && hostController.isAppearanceLightStatusBars()) {
+            return true;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && (hostDecor.getSystemUiVisibility() & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) != 0) {
+            return true;
+        }
+        return !Utils.isDarkTheme();
+    }
+
+    private boolean isColorLight(int color) {
+        double luminance = (0.299 * Color.red(color)
+                + 0.587 * Color.green(color)
+                + 0.114 * Color.blue(color)) / 255d;
+        return luminance > 0.6;
     }
 
     private Activity findHostActivity(Context context) {

@@ -133,5 +133,7 @@ public class GridFilterDialog extends BaseDialog {
         layoutParams.dimAmount = 0f;
         getWindow().getDecorView().setPadding(0, 0, 0, 0);
         getWindow().setAttributes(layoutParams);
+        // 上面重新 setAttributes 会触发一次窗口 relayout，状态栏外观在这里再同步一次
+        syncStatusBarWithHost();
     }
 }
