@@ -24,6 +24,15 @@ import xyz.doikki.videoplayer.util.CutoutUtil;
 
 public class BaseDialog extends Dialog {
 
+    /**
+     * 背景遮罩浓度。0 表示不加遮罩，此时也不会加 FLAG_DIM_BEHIND。
+     *
+     * 为什么要在意这个：FLAG_DIM_BEHIND 的遮罩层是铺满**整个屏幕**的（含状态栏区域），
+     * 系统据此认为状态栏也被这个弹窗盖住了，于是把状态栏的外观（图标明暗）算到弹窗头上。
+     * 弹窗的主题是 Theme.Dialog（深色），默认外观就是"白图标"，而浅色模式下状态栏是白底，
+     * 结果就是白字白底看不清。不需要遮罩的弹窗把它设为 0，直接不参与这件事。
+     */
+    protected float dimAmountBehind = 0.5f;
 
     public BaseDialog(@NonNull Context context) {
         super(context, R.style.CustomDialogStyle);
@@ -45,10 +54,14 @@ public class BaseDialog extends Dialog {
         lp.copyFrom(getWindow().getAttributes());
         lp.gravity = Gravity.BOTTOM | Gravity.START | Gravity.END;
         lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-        lp.dimAmount = 0.5f;
+        lp.dimAmount = dimAmountBehind;
         getWindow().setAttributes(lp);
         getWindow().setWindowAnimations(R.style.BottomDialogAnimation); // Set the animation style
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        if (dimAmountBehind > 0f) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
         // 见 syncStatusBarWithHost()：弹窗不该以"全屏窗口"的身份接管状态栏，
         // 在 attach 之前就去掉，避免弹窗刚出现时状态栏图标先闪一下白色
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -65,18 +78,30 @@ public class BaseDialog extends Dialog {
         getWindow().getDecorView().post(this::syncStatusBarWithHost);
     }
 
+    @Override
+    public void dismiss() {
+        super.dismiss();
+        // 兜底：部分机型关掉弹窗后不会立刻把状态栏外观还给 Activity
+        Activity activity = findHostActivity(getContext());
+        if (activity != null && !activity.isFinishing() && activity.getWindow() != null) {
+            setLightStatusBars(activity.getWindow(), resolveLightStatusBars(activity.getWindow()));
+        }
+    }
+
     /**
      * 让状态栏外观继续由宿主 Activity 决定。
      *
-     * CustomDialogStyle 带 windowFullscreen=true，弹窗窗口因此按"全屏窗口"处理，系统会
-     * 把它当成拥有状态栏区域的窗口：此时状态栏的**背景色**取弹窗自己的 statusBarColor
-     * （默认偏暗），**图标明暗**取弹窗自己的 appearance（弹窗没设过，默认按深色底算）。
-     * 于是浅色模式下本该深色文字的白色状态栏，被换成了深底+白字；深色模式本来就该白字，
-     * 所以只有浅色主题下看得出来。
+     * 弹窗（CustomDialogStyle）是"全屏 + 半透明 + 带遮罩"的窗口，系统容易把它当成拥有状态栏
+     * 区域的窗口：此时状态栏的**图标明暗**取弹窗自己的 appearance——弹窗主题是 Theme.Dialog
+     * （深色），默认就是白图标，于是浅色模式下白底白字看不清。深色模式本来就该白字，所以只有
+     * 浅色主题下看得出来。
      *
-     * 三件事一起做才稳：清全屏标记（别抢状态栏）、状态栏底色照抄宿主（弹窗和首页/详情页
-     * 用同一个底色，不会被弹窗主题的默认色刷一层）、图标明暗按宿主的实际情况同步。
-     * 宿主的深浅不能看 App 主题——详情页、直播页是黑色状态栏，首页才跟随主题。
+     * 做法是四件事一起上（任何一条单独都可能被某个 ROM 忽略）：
+     * 1. 清掉 FLAG_FULLSCREEN，别以全屏窗口身份抢状态栏；
+     * 2. 状态栏底色照抄宿主，避免弹窗用自己主题的默认色刷一层；
+     * 3. 图标明暗按宿主的实际设置，在 View / WindowInsetsController 两条通道上都写一遍；
+     * 4. 顺手把宿主也按同样的值再写一遍——个别 ROM 会在弹窗出现时把 Activity 的
+     *    状态栏外观重算一次（重算结果就是白图标）。
      */
     protected void syncStatusBarWithHost() {
         Window window = getWindow();
@@ -94,8 +119,22 @@ public class BaseDialog extends Dialog {
         // 状态栏底色照抄宿主：宿主透明就透明（露出顶栏），宿主黑色就黑色（详情页/直播页）
         window.setStatusBarColor(hostWindow != null ? hostWindow.getStatusBarColor() : Color.TRANSPARENT);
 
-        boolean lightBars = resolveLightStatusBar(hostWindow);
+        boolean lightBars = resolveLightStatusBars(hostWindow);
+        setLightStatusBars(window, lightBars);
+        if (hostWindow != null) {
+            setLightStatusBars(hostWindow, lightBars);
+        }
+    }
+
+    /** 把"深色/白色图标"同时写进两条通道 */
+    private void setLightStatusBars(Window window, boolean lightBars) {
+        if (window == null) {
+            return;
+        }
         View decor = window.getDecorView();
+        if (decor == null) {
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // 老通道：部分 ROM / 低版本只认 systemUiVisibility
             int visibility = decor.getSystemUiVisibility();
@@ -115,14 +154,14 @@ public class BaseDialog extends Dialog {
     }
 
     /**
-     * 判断宿主现在是不是"浅色状态栏"（即需要深色图标）。
+     * 宿主现在是不是"浅色状态栏"（即需要深色图标）。
      *
      * 不能只看 App 主题：详情页、直播页的状态栏是黑的。
-     * 也不能只读 window 的 appearance：ImmersionBar 走的是 View 那一路，
-     * 而 WindowCompat 读的是 Window 自己记录的值，可能读回来是 false（于是图标又被设成白色，
-     * 表现就是"改了没变化"）。这里先按状态栏底色亮度判断，再依次尝试两条 appearance 通道。
+     * 也不能只读 window 的 appearance：ImmersionBar 可能走的是 View 那一路，
+     * 而 WindowCompat 读的是 Window 自己记录的值，可能读回来是 false。
+     * 这里先按状态栏底色亮度判断，再依次尝试两条 appearance 通道，最后才退回 App 主题。
      */
-    private boolean resolveLightStatusBar(Window hostWindow) {
+    private boolean resolveLightStatusBars(Window hostWindow) {
         if (hostWindow == null) {
             // 拿不到宿主（极少见）才退回 App 主题
             return !Utils.isDarkTheme();
@@ -132,13 +171,15 @@ public class BaseDialog extends Dialog {
             return isColorLight(barColor);
         }
         View hostDecor = hostWindow.getDecorView();
-        WindowInsetsControllerCompat hostController = WindowCompat.getInsetsController(hostWindow, hostDecor);
-        if (hostController != null && hostController.isAppearanceLightStatusBars()) {
-            return true;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && (hostDecor.getSystemUiVisibility() & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) != 0) {
-            return true;
+        if (hostDecor != null) {
+            WindowInsetsControllerCompat hostController = WindowCompat.getInsetsController(hostWindow, hostDecor);
+            if (hostController != null && hostController.isAppearanceLightStatusBars()) {
+                return true;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    && (hostDecor.getSystemUiVisibility() & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) != 0) {
+                return true;
+            }
         }
         return !Utils.isDarkTheme();
     }
@@ -159,18 +200,5 @@ public class BaseDialog extends Dialog {
             ctx = ((ContextWrapper) ctx).getBaseContext();
         }
         return null;
-    }
-
-    private void hideSysBar() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            int uiOptions = getWindow().getDecorView().getSystemUiVisibility();
-            uiOptions |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            uiOptions |= View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
-            uiOptions |= View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
-            uiOptions |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-            uiOptions |= View.SYSTEM_UI_FLAG_FULLSCREEN;
-            uiOptions |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            getWindow().getDecorView().setSystemUiVisibility(uiOptions);
-        }
     }
 }

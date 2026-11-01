@@ -28,6 +28,10 @@ public class GridFilterDialog extends BaseDialog {
 
     public GridFilterDialog(@NonNull @NotNull Context context) {
         super(context);
+        // 这个弹窗本来就不加背景遮罩（dimAmount=0）。显式告诉基类"不要遮罩"，
+        // 基类就不会加 FLAG_DIM_BEHIND——那层遮罩铺满整个屏幕，会把状态栏也算成被弹窗盖住，
+        // 导致浅色模式下弹窗期间状态栏图标变白、看不清。
+        dimAmountBehind = 0f;
 
         setCancelable(true);
         setContentView(R.layout.dialog_grid_filter);
@@ -125,15 +129,19 @@ public class GridFilterDialog extends BaseDialog {
     @Override
     public void show() {
         selectChange = false;
-        super.show();
+        // 窗口参数要在 show() 之前设好：show() 里基类会按 dimAmountBehind 决定加不加遮罩，
+        // 事后再改属性的话，窗口已经带着遮罩加进来过一帧了。
         WindowManager.LayoutParams layoutParams = getWindow().getAttributes();
         layoutParams.gravity = Gravity.BOTTOM;
         layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
         layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         layoutParams.dimAmount = 0f;
-        getWindow().getDecorView().setPadding(0, 0, 0, 0);
+        layoutParams.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
         getWindow().setAttributes(layoutParams);
-        // 上面重新 setAttributes 会触发一次窗口 relayout，状态栏外观在这里再同步一次
+        getWindow().getDecorView().setPadding(0, 0, 0, 0);
+
+        super.show();
+        // 上面重新设置过窗口属性，状态栏外观在这里再同步一次
         syncStatusBarWithHost();
     }
 }

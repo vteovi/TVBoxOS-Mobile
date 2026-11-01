@@ -21,7 +21,10 @@
         <!--        <item name="android:windowBackground">@drawable/main_bg</item>-->
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
-    <!-- 自定义dialog样式 -->
+    <!-- 自定义dialog样式
+         注意：不要加 android:windowFullscreen。全屏窗口会被系统当成"拥有状态栏的窗口"，
+         状态栏图标的明暗就改由弹窗自己的主题（Theme.Dialog，深色）决定，弹窗一出现
+         浅色模式下的状态栏就从深色图标变成白色，白底白字看不清。 -->
     <style name="CustomDialogStyle" parent="@android:style/Theme.Dialog">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
@@ -30,7 +33,6 @@
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowFullscreen">true</item>
     </style>
     <style name="CustomDialogStyleDim" parent="@android:style/Theme.Dialog">
         <item name="android:windowBackground">@android:color/transparent</item>
@@ -40,7 +42,6 @@
         <item name="android:backgroundDimEnabled">true</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowFullscreen">true</item>
     </style>
 
     <style name="epg_window_btn">

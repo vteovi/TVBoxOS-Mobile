@@ -1,13 +1,12 @@
 name: Build APK
 
-# 在线打包：不需要本地 Android 环境
-#   push 到 main / 手动运行  -> 产出两个架构的 APK（Artifacts 可下载）
-#   打 v* 标签              -> 产出正式包并自动发布 Release + 更新 update.json
+# 在线打包（当前只用于发版，日常不再自动构建）
+#   打 v* 标签  -> 产出正式包并自动发布 Release + 更新 update.json
+#   手动运行    -> 需要时在 Actions 页面点 "Run workflow"
+# 说明：推送 main 不再触发构建；日常开发在本地构建，只有发版时才走这里。
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
