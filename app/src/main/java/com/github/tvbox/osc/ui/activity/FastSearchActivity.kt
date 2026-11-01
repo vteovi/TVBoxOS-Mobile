@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.ui.activity
 
 import android.content.DialogInterface
+import android.content.res.Configuration
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextUtils
@@ -12,7 +13,9 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.angcyo.tablayout.DslTabLayout
 import com.angcyo.tablayout.DslTabLayoutConfig
 import com.blankj.utilcode.util.KeyboardUtils
@@ -37,6 +40,7 @@ import com.github.tvbox.osc.ui.widget.LinearSpacingItemDecoration
 import com.github.tvbox.osc.util.FastClickCheckUtil
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.SearchHelper
+import com.github.tvbox.osc.util.Utils
 import com.github.tvbox.osc.viewmodel.SourceViewModel
 import com.google.gson.Gson
 import com.google.gson.JsonArray
@@ -140,7 +144,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
                 }
         }
         mBinding.mGridView.setHasFixedSize(true)
-        mBinding.mGridView.setLayoutManager(LinearLayoutManager(this))
+        mBinding.mGridView.setLayoutManager(newResultLayoutManager())
         mBinding.mGridView.adapter = searchAdapter
         searchAdapter.setOnItemClickListener { _, view, position ->
             FastClickCheckUtil.check(view)
@@ -159,7 +163,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
             bundle.putString("sourceKey", video.sourceKey)
             jumpActivity(DetailActivity::class.java, bundle)
         }
-        mBinding.mGridViewFilter.setLayoutManager(LinearLayoutManager(this))
+        mBinding.mGridViewFilter.setLayoutManager(newResultLayoutManager())
 
         mBinding.mGridViewFilter.adapter = searchAdapterFilter
         searchAdapterFilter.setOnItemClickListener { _, view, position ->
@@ -183,6 +187,34 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         }
 
         setLoadSir(mBinding.llLayout)
+    }
+
+    /**
+     * 搜索结果列表的布局管理器。
+     * 竖版海报是「左图右文」单列列表；开启横版海报后按屏宽排成 16:9 卡片网格，与首页/收藏/历史一致。
+     */
+    private fun newResultLayoutManager(): RecyclerView.LayoutManager {
+        return if (Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) {
+            GridLayoutManager(this, Utils.getPosterSpanCount(this))
+        } else {
+            LinearLayoutManager(this)
+        }
+    }
+
+    // 本页声明了 configChanges，旋转时不会重建，横版网格的列数要自己按新屏宽重算
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) return
+        val spanCount = Utils.getPosterSpanCount(this)
+        updateGridSpan(mBinding.mGridView, spanCount)
+        updateGridSpan(mBinding.mGridViewFilter, spanCount)
+    }
+
+    private fun updateGridSpan(recyclerView: RecyclerView, spanCount: Int) {
+        val layoutManager = recyclerView.layoutManager
+        if (layoutManager is GridLayoutManager && layoutManager.spanCount != spanCount) {
+            layoutManager.spanCount = spanCount
+        }
     }
 
     /**
