@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 搜索结果横版卡片：开启"横版海报"后使用，比例与首页/收藏/历史的 16:9 卡片保持一致 -->
+<!-- 搜索结果卡片：比例跟随「横版海报」设置（竖版 2:3 / 横版 16:9），与首页海报卡片一致 -->
 <com.github.tvbox.osc.ui.widget.RatioShadowLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -24,8 +24,8 @@
             android:layout_alignParentBottom="true"
             android:background="@drawable/bg_gradient_black_b2t"
             android:orientation="vertical"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="8dp">
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="7dp">
 
             <TextView
                 android:id="@+id/tvName"
@@ -34,7 +34,7 @@
                 android:ellipsize="end"
                 android:singleLine="true"
                 android:textColor="@color/white"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 tools:text="肖申克的救赎" />
 
             <LinearLayout
@@ -49,6 +49,7 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:maxLines="1"
+                    android:maxWidth="80dp"
                     android:textColor="#CCFFFFFF"
                     android:textSize="11sp"
                     tools:text="剪片小站" />

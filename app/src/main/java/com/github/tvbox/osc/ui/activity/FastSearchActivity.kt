@@ -14,7 +14,6 @@ import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.angcyo.tablayout.DslTabLayout
 import com.angcyo.tablayout.DslTabLayoutConfig
@@ -190,21 +189,16 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     }
 
     /**
-     * 搜索结果列表的布局管理器。
-     * 竖版海报是「左图右文」单列列表；开启横版海报后按屏宽排成 16:9 卡片网格，与首页/收藏/历史一致。
+     * 搜索结果列表的布局管理器：统一用海报卡片网格，列数按屏宽自适应（与首页卡片一致）。
+     * 卡片是竖版还是横版由卡片自身的 RatioShadowLayout 按设置决定，这里只负责列数。
      */
     private fun newResultLayoutManager(): RecyclerView.LayoutManager {
-        return if (Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) {
-            GridLayoutManager(this, Utils.getPosterSpanCount(this))
-        } else {
-            LinearLayoutManager(this)
-        }
+        return GridLayoutManager(this, Utils.getPosterSpanCount(this))
     }
 
-    // 本页声明了 configChanges，旋转时不会重建，横版网格的列数要自己按新屏宽重算
+    // 本页声明了 configChanges，旋转时不会重建，列数要按新屏宽自己重算
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (!Hawk.get(HawkConfig.LANDSCAPE_CARD, false)) return
         val spanCount = Utils.getPosterSpanCount(this)
         updateGridSpan(mBinding.mGridView, spanCount)
         updateGridSpan(mBinding.mGridViewFilter, spanCount)

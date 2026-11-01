@@ -9,35 +9,22 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.SourceBean;
-import com.github.tvbox.osc.picasso.RoundTransformation;
 import com.github.tvbox.osc.util.DefaultConfig;
-import com.github.tvbox.osc.util.HawkConfig;
-import com.github.tvbox.osc.util.MD5;
-import com.orhanobut.hawk.Hawk;
 import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
 
-import me.jessyan.autosize.utils.AutoSizeUtils;
-
 /**
  * 搜索结果适配器。
  *
- * <p>默认是「左图右文」的列表条目（图按竖版裁剪）；设置里开启「横版海报」后改用
- * {@link R.layout#item_search_landscape} 的 16:9 卡片，与首页 / 收藏 / 历史的横版卡片保持一致。
- * 布局在构造时按设置决定，convert 里用同一个标记分支，避免布局与渲染方式不匹配。
+ * <p>统一使用海报卡片（{@link R.layout#item_search_card}）：海报铺满卡片，名称与「来源 · 备注」
+ * 压在底部渐变上。卡片比例由 {@code RatioShadowLayout} 按「横版海报」设置自动切换
+ * （竖版 2:3 / 横版 16:9），列数由 {@code Utils.getPosterSpanCount()} 按屏宽决定，与首页保持一致。
  */
 public class FastSearchAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
 
-    private final boolean landscapeCard;
-
     public FastSearchAdapter() {
-        super(landscapeCard() ? R.layout.item_search_landscape : R.layout.item_search, new ArrayList<>());
-        this.landscapeCard = landscapeCard();
-    }
-
-    private static boolean landscapeCard() {
-        return Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
+        super(R.layout.item_search_card, new ArrayList<>());
     }
 
     private static String sourceName(String sourceKey) {
@@ -58,29 +45,16 @@ public class FastSearchAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHol
             helper.setText(R.id.tvNote, item.note);
         }
         ImageView ivThumb = helper.getView(R.id.ivThumb);
-        if (landscapeCard) {
-            // 卡片本身就是 16:9，直接 centerCrop 铺满即可，不再按固定像素裁剪，否则横图会被切变形
-            Picasso.get().cancelRequest(ivThumb);
-            ivThumb.setImageDrawable(null);
-            if (TextUtils.isEmpty(item.pic)) {
-                ivThumb.setImageResource(R.drawable.img_loading_placeholder);
-            } else {
-                Picasso.get()
-                        .load(DefaultConfig.checkReplaceProxy(item.pic.trim()))
-                        .error(R.drawable.img_loading_placeholder)
-                        .into(ivThumb);
-            }
-        } else if (!TextUtils.isEmpty(item.pic)) {
+        // 卡片已按比例定高，直接 centerCrop 铺满即可；按固定像素裁剪会把海报切变形
+        Picasso.get().cancelRequest(ivThumb);
+        ivThumb.setImageDrawable(null);
+        if (TextUtils.isEmpty(item.pic)) {
+            ivThumb.setImageResource(R.drawable.img_loading_placeholder);
+        } else {
             Picasso.get()
-                    .load(item.pic)
-                    .transform(new RoundTransformation(MD5.string2MD5(item.pic + "position=" + helper.getLayoutPosition()))
-                            .centerCorp(true)
-                            .override(AutoSizeUtils.dp2px(mContext, 110), AutoSizeUtils.dp2px(mContext, 160))
-                            .roundRadius(AutoSizeUtils.dp2px(mContext, 20), RoundTransformation.RoundType.ALL))
+                    .load(DefaultConfig.checkReplaceProxy(item.pic.trim()))
                     .error(R.drawable.img_loading_placeholder)
                     .into(ivThumb);
-        } else {
-            ivThumb.setImageResource(R.drawable.img_loading_placeholder);
         }
     }
 }
