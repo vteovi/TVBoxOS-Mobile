@@ -55,6 +55,7 @@
 - 首页顶栏：`tvName`（数据源名，可点切换/长按刷新）+ 搜索框；2.22.8 已**移除右上角历史记录图标入口**（历史改从「我的 → 观看历史」进）。
 
 ## 踩坑教训
+- ⚠️ **弹窗会改状态栏图标颜色**：`CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 拿到 `FLAG_FULLSCREEN`，系统把它当"拥有状态栏的窗口"，状态栏图标改用弹窗 window 的 appearance（弹窗没设深色图标 → 浅色模式下变白看不见）。`BaseDialog` 已在 onCreate 清 `FLAG_FULLSCREEN`、show() 里同步**宿主 Activity** 的 `isAppearanceLightStatusBars()`；新写 Dialog 别继承 `@android:style/Theme.Dialog` 后不管状态栏。判断深浅必须读宿主窗口，不能用 App 主题（详情/直播页是黑状态栏）。
 - ⚠️ **"缓存/守护进程"诊断极易误判**：曾三次误判 Gradle 缓存，实际是 `ApiConfig.java` 多一个 `}`。**铁律：用户杀 java+删 app/build+重建仍逐字节复现 → 就是真 bug**。改完 Java 大段嵌套/括号务必做括号平衡自检。
 - ⚠️ **多模块 manifest 权限**：:app / :player / :crash / :quickjs / :TabLayout / :ViewPager1Delegate 需逐模块查，且 :app 用 `tools:node="remove"` 兜底，只在 :app 删等于没删。
 - Edit 工具会把 CRLF 改 LF 造成 diff 噪音：批量替换用 Python bytes 级替换并保留行尾。
