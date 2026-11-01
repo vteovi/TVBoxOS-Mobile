@@ -10,6 +10,8 @@
 
 - **CI 发版踩坑（2.26.0/2.26.1 已修）**：`ubuntu-latest` 2026-10-19 起切 Ubuntu 26 → `android-actions/setup-android@v3` 必挂（23s 退），改自建 `.github/actions/setup-android-sdk`（sdkmanager）+ `runs-on: ubuntu-24.04`；脚本在 git 里若是 `100644`，CI 用 `./x.sh` 会 Permission denied → `git update-index --chmod=+x` 且工作流改 `bash x.sh`；加速站 `gh.xxooo.cf` 已死，用 `gh-proxy.com`/`ghfast.top`；发版后 main 多一条 bot 的 `chore: sync release metadata`，本地要 `pull --rebase`。
 
+- **推 GitHub 的网络三连**（本机必踩）：① shell 里被注入 `http_proxy=127.0.0.1:53356` → `git push` 报 `CONNECT tunnel failed, response 502`，先 `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`；② 直连后可能 `Recv failure: Connection was reset` / `Empty reply from server`（github.com 443 抖动，`api.github.com` 正常）→ 用 `git -c http.version=HTTP/1.1 push origin main` 一次就过；③ 只是查 CI 状态无需登录，匿名 `curl api.github.com/repos/.../actions/runs` 够用（`/logs` 需 403）。
+
 ## 架构要点
 - `MainActivity`(Kt)：ViewPager2 两页 Home/My，`isUserInputEnabled=false`；`HomeFragment` 内旧 ViewPager+DslTabLayout 由 `ViewPager1Delegate` 绑定=首页分栏。底部导航 4 项（首页/我的走 vp，直播/订阅独立 Activity）。
 - 底部导航 `include_bottom_navigation.xml`（MainActivity/LiveActivity/SubscriptionActivity 三处 include）：高 58dp、图标 24dp、背景纯白 `#FFFFFFFF`（用户要求勿动）；item 高度 <~56dp 图标文字必重叠。
