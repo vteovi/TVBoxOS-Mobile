@@ -4,7 +4,7 @@
 - 环境：JDK 17 `C:\Java\jdk-17`、SDK `C:\Android\Sdk`（`local.properties` 的 `sdk.dir`）、`applicationId=com.github.tvbox.osc.mobile`（可与官方/mbox 并存）。仓库实际在 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`，**必须沙箱外执行**，否则 Gradle 缓存被拦、报假的 AAPT 错误。产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。
 - 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根目录 `*.apk`（**别 `git add -A` 误提交 APK**）。校验 `apksigner verify --print-certs`。
-- **主用 CI 在线出包**（2.26.0 起，用户不再本机构建）：`.github/workflows/build.yml`；push main / workflow_dispatch → 两架构 APK 走 Artifacts；推 `v*` tag → `assembleRelease` + apksigner 校验 + 发 Release + 回写 `update.json`/README。密钥来自 secret `TVBOX_KEYSTORE_BASE64`（`base64 -w 0 TVBoxOSC.jks`），缺失时分支构建退化为 debug 包。`build_apk.bat` 已删，`build_apk.ps1` 保留作离线兜底（按 `apk/<flavor>/<buildType>/` 枚举产物）。
+- **打包策略（2.26.7 起变更）**：**日常本机构建**（用户 2026-11-01 明确要求，CI 太慢/懒得下载），`.github/workflows/build.yml` 已去掉 `push: branches:[main]` 与 `pull_request`，只剩 `push: tags:["v*"]` + `workflow_dispatch`。**推 main 不再触发构建**；只有打 `v*` tag 才走 `publish-github-release`（该 job 自带构建，不依赖 build-apk）→ `assembleRelease` + apksigner 校验 + 发 Release + 回写 `update.json`/README；**用户说"发布"时才打 tag**。密钥来 secret `TVBOX_KEYSTORE_BASE64`。`build_apk.bat` 已删，`build_apk.ps1` 保留作离线兜底（按 `apk/<flavor>/<buildType>/` 枚举产物）。
 - 交付前必校验（尤其 TaskStop 杀过构建）：删产物重跑 → zip 完好 + apksigner 退出码 0 + sha256，防半成品。
 - gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`。**勿设 `kotlin.compiler.execution.strategy=in_process`**（只认大写 `IN_PROCESS`，小写报 Unknown value）。
 
@@ -57,7 +57,7 @@
 - 首页顶栏：`tvName`（数据源名，可点切换/长按刷新）+ 搜索框；2.22.8 已**移除右上角历史记录图标入口**（历史改从「我的 → 观看历史」进）。
 
 ## 踩坑教训
-- ⚠️ **弹窗会改状态栏图标颜色**：`CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 拿到 `FLAG_FULLSCREEN`，系统把它当"拥有状态栏的窗口"，状态栏图标改用弹窗 window 的 appearance（弹窗没设深色图标 → 浅色模式下变白看不见）。`BaseDialog` 已在 onCreate 清 `FLAG_FULLSCREEN`、show() 里同步**宿主 Activity** 的 `isAppearanceLightStatusBars()`；新写 Dialog 别继承 `@android:style/Theme.Dialog` 后不管状态栏。判断深浅必须读宿主窗口，不能用 App 主题（详情/直播页是黑状态栏）。
+- ⚠️ **弹窗会改状态栏图标颜色（连修 3 次才对）**：浅色模式下打开弹窗（筛选等）状态栏文字变白看不清。根因有两层：① `CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 被系统当"拥有状态栏的窗口"，图标明暗改用弹窗主题（`Theme.Dialog` 深色）的默认白图标；② `FLAG_DIM_BEHIND` 的遮罩铺满整屏（含状态栏），系统同样把状态栏外观算到弹窗头上。**运行时 `clearFlags` / 改 appearance 都没用**（2.26.5、2.26.6 实测无效），必须从窗口层面拆：样式里**删掉 `windowFullscreen`** + 无遮罩弹窗**不加 `FLAG_DIM_BEHIND`**（`BaseDialog.dimAmountBehind=0f`）+ 弹窗 show 后把**宿主 Activity** 也按同值双通道写一遍。判断深浅必须读宿主窗口（底色亮度最稳），不能用 App 主题（详情/直播页是黑状态栏）。改窗口参数要在 `super.show()` 之前设。
 - ⚠️ **"缓存/守护进程"诊断极易误判**：曾三次误判 Gradle 缓存，实际是 `ApiConfig.java` 多一个 `}`。**铁律：用户杀 java+删 app/build+重建仍逐字节复现 → 就是真 bug**。改完 Java 大段嵌套/括号务必做括号平衡自检。
 - ⚠️ **多模块 manifest 权限**：:app / :player / :crash / :quickjs / :TabLayout / :ViewPager1Delegate 需逐模块查，且 :app 用 `tools:node="remove"` 兜底，只在 :app 删等于没删。
 - Edit 工具会把 CRLF 改 LF 造成 diff 噪音：批量替换用 Python bytes 级替换并保留行尾。
