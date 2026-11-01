@@ -1,6 +1,6 @@
 {
-  "version": "2.26.2",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-armv7a.apk",
-  "changelog": "修复：设置里开启「横版海报」后，搜索结果仍按竖版裁剪显示的问题\n搜索改用 16:9 横版卡片（`item_search_landscape`）：海报铺满卡片、名称与「来源 · 备注」压在图底部渐变上\n结果列表随之改为按屏宽自适应的网格：手机竖屏一行一张，平板 / 横屏自动 2~3 列，列数与首页卡片一致\n旋转屏幕后按新屏宽重算列数（本页声明了 `configChanges`，不会重建）\n竖版海报模式下的搜索列表保持原样，不受影响"
+  "version": "2.26.3",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.3/TVBox-Mobile-v2.26.3-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.3/TVBox-Mobile-v2.26.3-armv7a.apk",
+  "changelog": "搜索结果统一为海报卡片：竖版海报模式下也改成「海报铺满 + 名称/来源 · 备注压底部」，去掉「左图右文」的列表条目\n卡片比例跟随「横版海报」开关（竖版 2:3 / 横版 16:9），与首页、收藏、历史共用同一个 `RatioShadowLayout` 卡片\n搜索列表固定为按屏宽自适应的网格：手机竖屏竖版 2 列、横版整宽 1 列，横屏 / 平板自动更多列\n海报改为铺满 `centerCrop`，不再按 110×160 固定像素裁剪，横图不会被切变形\n取不到搜索源名称时用源 key 兜底显示，避免空指针\nCI：发布任务的「回写 update.json」改为从 tag 的树生成清单再提交到 main（tag 提交不在 main 上时也能抽到正确 changelog），推送失败会把错误打进日志并重试"
 }
