@@ -30,7 +30,7 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 | 应用包名 | `com.github.tvbox.osc.mobile`（可与官方 TVBox、影视仓等版本共存安装） |
 | 系统要求 | Android 7.0 及以上（minSdk 24），目标 Android 14（targetSdk 34） |
 | CPU 架构 | `arm64-v8a` / `armeabi-v7a` 分包，按设备选一个安装 |
-| 当前版本 | 2.26.4（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
+| 当前版本 | 2.26.5（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
 
 ## ✨ 功能特性
 
@@ -160,6 +160,8 @@ Windows 下也可以直接运行 `build_apk.ps1`（默认 release，`.\build_apk
 
 ## 📝 更新记录
 
+>* **2026/11/01 TVBox Mobile v2.26.5：** 修复弹窗（筛选、选集、提示等）打开后状态栏文字变白、看不清的问题：弹窗不再以「全屏窗口」身份接管状态栏，外观交回 Activity 决定，浅色模式下恢复深色图标。
+>
 >* **2026/11/01 TVBox Mobile v2.26.4：** 修复分类页「筛选」不生效：筛选结果不再复用筛选前的本地缓存、对话框每次打开都重建选项并还原选中高亮、切换分类自动清掉旧条件、旧请求响应不再覆盖新列表。
 >
 >* **2026/11/01 TVBox Mobile v2.26.3：** 搜索结果统一为海报卡片：竖版模式也改成「海报铺满 + 名称/来源/备注压底部」，去掉「左图右文」列表；卡片比例随「横版海报」开关（2:3 / 16:9），列数按屏宽自适应。
