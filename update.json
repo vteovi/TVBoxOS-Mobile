@@ -1,6 +1,6 @@
 {
-  "version": "2.26.1",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.1/TVBox-Mobile-v2.26.1-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.1/TVBox-Mobile-v2.26.1-armv7a.apk",
-  "changelog": "修复「检查更新 / 下载更新」首选加速站已失效的问题：原 `gh.xxooo.cf` 已无法连接，每次检查都要先等它超时\n主加速改为 `gh-proxy.com`，备用改为 `ghfast.top`，仍保留最后一条直连\n加速前缀收敛为 `ACCEL_PREFIXES` 数组统一维护，以后换线路只改一处；旧清单里带 `gh.xxooo.cf` 前缀的地址依然能被正确剥离\n发版脚本、README 与 `update.json` 里的下载链接同步改用 `gh-proxy.com`（支持 `APK_ACCEL` 覆盖）"
+  "version": "2.26.2",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-armv7a.apk",
+  "changelog": "修复：设置里开启「横版海报」后，搜索结果仍按竖版裁剪显示的问题\n搜索改用 16:9 横版卡片（`item_search_landscape`）：海报铺满卡片、名称与「来源 · 备注」压在图底部渐变上\n结果列表随之改为按屏宽自适应的网格：手机竖屏一行一张，平板 / 横屏自动 2~3 列，列数与首页卡片一致\n旋转屏幕后按新屏宽重算列数（本页声明了 `configChanges`，不会重建）\n竖版海报模式下的搜索列表保持原样，不受影响"
 }

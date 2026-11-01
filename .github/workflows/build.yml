@@ -154,6 +154,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          # 发布任务最后要把 update.json / README.md 提交回 main，需要完整历史才能切分支与 rebase
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -238,17 +241,31 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          git fetch origin main
-          git checkout -B main origin/main
-          GITHUB_REPOSITORY="${{ github.repository }}" bash scripts/sync_release_metadata.sh --skip-version-check "$TAG_NAME"
-          if git diff --quiet -- update.json README.md; then exit 0; fi
+          set -uo pipefail
+          # 上一步已在 tag 的树上生成好 update.json / README.md（含本次版本的 changelog），
+          # 这里只负责把它们带到 main；不再在 main 的树上重新生成，避免 tag 提交不在 main 上时抽不到 changelog。
+          mkdir -p /tmp/relmeta
+          cp update.json README.md /tmp/relmeta/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- update.json README.md
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/relmeta/update.json /tmp/relmeta/README.md .
+          if git diff --quiet -- update.json README.md; then
+            echo "update.json / README.md 已经与 main 一致，无需提交"
+            exit 0
+          fi
           git add update.json README.md
           git commit -m "chore: sync release metadata for ${TAG_NAME} [skip ci]"
           for attempt in 1 2 3; do
-            if git push origin HEAD:main; then exit 0; fi
-            git pull --rebase origin main
+            if git push origin HEAD:main 2>&1; then
+              echo "已把 update.json / README.md 回写到 main"
+              exit 0
+            fi
+            echo "::warning::第 ${attempt} 次推送到 main 失败，稍后重试"
+            sleep 1
+            git pull --rebase origin main 2>&1 || true
           done
-          echo "::error::Unable to publish update manifest after three attempts"
+          echo "::error::连续 3 次推送失败，update.json 没能回写到 main（Release 本身已发布，可手动提交这两个文件）"
           exit 1

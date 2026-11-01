@@ -30,7 +30,7 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 | 应用包名 | `com.github.tvbox.osc.mobile`（可与官方 TVBox、影视仓等版本共存安装） |
 | 系统要求 | Android 7.0 及以上（minSdk 24），目标 Android 14（targetSdk 34） |
 | CPU 架构 | `arm64-v8a` / `armeabi-v7a` 分包，按设备选一个安装 |
-| 当前版本 | 2.26.2（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
+| 当前版本 | 2.26.3（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
 
 ## ✨ 功能特性
 
@@ -55,8 +55,8 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 
 | 设备 | 安装包 | 适用 |
 | --- | --- | --- |
-| 64 位设备（推荐） | [TVBox-Mobile-v2.26.1-arm64v8.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.1/TVBox-Mobile-v2.26.1-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
-| 32 位设备 | [TVBox-Mobile-v2.26.1-armv7a.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.1/TVBox-Mobile-v2.26.1-armv7a.apk) | 老机型、部分电视盒子 |
+| 64 位设备（推荐） | [TVBox-Mobile-v2.26.2-arm64v8.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
+| 32 位设备 | [TVBox-Mobile-v2.26.2-armv7a.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.26.2/TVBox-Mobile-v2.26.2-armv7a.apk) | 老机型、部分电视盒子 |
 
 - 全部版本：<https://github.com/vteovi/TVBoxOS-Mobile/releases>
 - 装好后进入「我的 → 关于 → 检查更新」即可在线升级，程序会自动匹配你的设备架构；下载完会校验包名与版本号再安装，避免装错包。
@@ -160,7 +160,9 @@ Windows 下也可以直接运行 `build_apk.ps1`（默认 release，`.\build_apk
 
 ## 📝 更新记录
 
->* **2026/11/01 TVBox Mobile v2.26.2：** 搜索结果整体改为海报卡片（海报铺满 + 名称/来源/备注压底部渐变），比例跟随「横版海报」开关（竖版 2:3 / 横版 16:9），列数按屏宽自适应并与首页一致。
+>* **2026/11/01 TVBox Mobile v2.26.3：** 搜索结果统一为海报卡片：竖版模式也改成「海报铺满 + 名称/来源/备注压底部」，去掉「左图右文」列表；卡片比例随「横版海报」开关（2:3 / 16:9），列数按屏宽自适应。
+>
+>* **2026/11/01 TVBox Mobile v2.26.2：** 修复开启「横版海报」后搜索结果仍用竖版裁剪：搜索卡片先改为 16:9 横版并铺满海报，列表按屏宽排成网格。
 >
 >* **2026/10/30 TVBox Mobile v2.26.1：** 修复「检查更新」首选加速站失效（`gh.xxooo.cf` 已无法连接）：主加速改为 `gh-proxy.com`、备用 `ghfast.top`，加速前缀统一到 `ACCEL_PREFIXES` 维护，旧前缀仍兼容剥离；README 与 `update.json` 下载链接同步改用新线路。
 >
