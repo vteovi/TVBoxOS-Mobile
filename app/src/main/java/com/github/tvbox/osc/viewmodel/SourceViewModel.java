@@ -248,8 +248,16 @@ public class SourceViewModel extends ViewModel {
             sortResult.postValue(null);
         }
     }
+    /**
+     * 列表请求序号：只把「最新一次」getList 的结果投递给 UI。
+     * 否则改完筛选条件后，上一次（甚至上一页）的响应回来会把新列表覆盖掉，
+     * 表现就是"筛选点了没生效"。
+     */
+    private volatile int listSeq = 0;
+
     // categoryContent
     public void getList(MovieSort.SortData sortData, int page) {
+        final int seq = ++listSeq;
         SourceBean homeSourceBean = ApiConfig.get().getHomeSourceBean();
         int type = homeSourceBean.getType();
         if (type == 3) {
@@ -258,7 +266,9 @@ public class SourceViewModel extends ViewModel {
                 public void run() {
                     try {
                         Spider sp = ApiConfig.get().getCSP(homeSourceBean);
-                        json(listResult, sp.categoryContent(sortData.id, page + "", true, sortData.filterSelect), homeSourceBean.getKey());
+                        String result = sp.categoryContent(sortData.id, page + "", true, sortData.filterSelect);
+                        if (seq != listSeq) return;
+                        json(listResult, result, homeSourceBean.getKey());
                     } catch (Throwable th) {
                         th.printStackTrace();
                     }
@@ -285,6 +295,7 @@ public class SourceViewModel extends ViewModel {
 
                         @Override
                         public void onSuccess(Response<String> response) {
+                            if (seq != listSeq) return;
                             if (type == 0) {
                                 String xml = response.body();
                                 xml(listResult, xml, homeSourceBean.getKey());
@@ -297,6 +308,7 @@ public class SourceViewModel extends ViewModel {
                         @Override
                         public void onError(Response<String> response) {
                             super.onError(response);
+                            if (seq != listSeq) return;
                             listResult.postValue(null);
                         }
                     });
@@ -332,6 +344,7 @@ public class SourceViewModel extends ViewModel {
 
                     @Override
                     public void onSuccess(Response<String> response) {
+                        if (seq != listSeq) return;
                         String json = response.body();
                         LOG.i(json);
                         json(listResult, json, homeSourceBean.getKey());
@@ -340,6 +353,7 @@ public class SourceViewModel extends ViewModel {
                     @Override
                     public void onError(Response<String> response) {
                         super.onError(response);
+                        if (seq != listSeq) return;
                         listResult.postValue(null);
                     }
                 });

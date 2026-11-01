@@ -108,7 +108,17 @@ public class GridFragment extends BaseLazyFragment {
         outState.putString("sortDataJson", GsonUtils.toJson(sortData));
     }
 
+    /** 清空当前分类的筛选条件（换分类/返回上级时用） */
+    private void clearFilterSelect() {
+        if (sortData != null && sortData.filterSelect != null) {
+            sortData.filterSelect.clear();
+        }
+    }
+
     private void changeView(String id, Boolean isFolder){
+        // 换了分类后筛选项可能完全不同，旧条件不能带过去，
+        // 否则请求会带上新分类不认识的参数，看起来就是"筛选不生效"
+        clearFilterSelect();
         if(isFolder){
             this.sortData.flag ="1"; // 修改sortData.flag
         }else {
@@ -146,6 +156,8 @@ public class GridFragment extends BaseLazyFragment {
         ((ViewGroup) mGridView.getParent()).removeView(this.mGridView); // 重父窗口移除当前控件
         GridInfo info = mGrids.pop();// 还原上次保存的控件
         this.sortData.id = info.sortID;
+        // 返回上一级时同样不带旧分类的筛选条件
+        clearFilterSelect();
         this.mGridView = info.mGridView;
         this.gridAdapter = info.gridAdapter;
         this.page = info.page;
@@ -349,7 +361,17 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
-        if (ApiConfig.get().getHomeSourceBean().getApi()==null){// 系统杀死app恢复缓存的fragment后会直接getList,此时首页api都未加载完
+        initData(false);
+    }
+
+    /**
+     * @param skipCache 是否跳过本地缓存直接请求。
+     *                  筛选条件变化时必须跳过：缓存里是上一次（可能是无筛选）的结果，
+     *                  先铺旧数据会让用户以为筛选没生效。
+     */
+    private void initData(boolean skipCache) {
+        SourceBean homeBean = ApiConfig.get().getHomeSourceBean();
+        if (homeBean == null || homeBean.getApi() == null) {// 系统杀死app恢复缓存的fragment后会直接getList,此时首页api都未加载完
             showEmpty();
             return;
         }
@@ -357,7 +379,7 @@ public class GridFragment extends BaseLazyFragment {
         scrollTop();
 
         // 第一页先读本地缓存，立即显示上次内容，后台再发网络请求刷新
-        if (page == 1) {
+        if (page == 1 && !skipCache) {
             try {
                 String cacheKey = cacheKey();
                 String cacheJson = Hawk.get(cacheKey, "");
@@ -382,8 +404,16 @@ public class GridFragment extends BaseLazyFragment {
 
     private String cacheKey() {
         try {
-            String sourceKey = ApiConfig.get().getHomeSourceBean().getKey();
-            return "grid_cache_" + sourceKey + "_" + (sortData != null ? sortData.id : "");
+            SourceBean homeBean = ApiConfig.get().getHomeSourceBean();
+            String sourceKey = homeBean == null ? "" : homeBean.getKey();
+            StringBuilder key = new StringBuilder("grid_cache_").append(sourceKey)
+                    .append('_').append(sortData != null ? sortData.id : "");
+            // 筛选条件参与区分：否则筛选结果会被写进"无筛选"的缓存，
+            // 下次进来（或筛选请求失败时）就用错误的数据铺列表
+            if (sortData != null && sortData.filterSelect != null && !sortData.filterSelect.isEmpty()) {
+                key.append('_').append(new java.util.TreeMap<>(sortData.filterSelect).toString().hashCode());
+            }
+            return key.toString();
         } catch (Exception e) {
             return "grid_cache_unknown";
         }
@@ -399,18 +429,43 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     public void showFilter() {
-        if (sortData!=null && !sortData.filters.isEmpty() && gridFilterDialog == null) {
+        if (sortData == null || sortData.filters == null || sortData.filters.isEmpty()) {
+            Toast.makeText(getContext(), "当前分类不支持筛选", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (gridFilterDialog == null) {
             gridFilterDialog = new GridFilterDialog(mContext);
-            gridFilterDialog.setData(sortData);
             gridFilterDialog.setOnDismiss(new GridFilterDialog.Callback() {
                 @Override
                 public void change() {
-                    page = 1;
-                    initData();
+                    // 筛选条件已写入 sortData.filterSelect，重新拉第一页
+                    applyFilter();
                 }
             });
         }
-        if (gridFilterDialog != null)
-            gridFilterDialog.show();
+        // 每次打开都按当前分类重建选项：既保证换了分类后选项不串，
+        // 也能按 filterSelect 还原上一次的选中高亮
+        gridFilterDialog.setData(sortData);
+        gridFilterDialog.show();
+    }
+
+    /**
+     * 筛选条件变化后重新加载。
+     *
+     * 这里必须清空旧列表并跳过本地缓存：
+     * 缓存用的是筛选前的数据，先铺上去会让人以为"点了筛选没反应"。
+     */
+    private void applyFilter() {
+        if (sortData == null) return;
+        page = 1;
+        maxPage = 1;
+        isLoad = false;
+        mLoading = false;
+        if (gridAdapter != null) {
+            gridAdapter.setNewData(new java.util.ArrayList<Movie.Video>());
+            gridAdapter.setEnableLoadMore(true);
+        }
+        showLoading();
+        initData(true);
     }
 }
