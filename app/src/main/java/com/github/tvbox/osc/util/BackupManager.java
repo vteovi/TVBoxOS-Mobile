@@ -79,6 +79,7 @@ public class BackupManager {
             HawkConfig.HISTORY_SEARCH,
             HawkConfig.POSTER_SIZE,
             HawkConfig.LANDSCAPE_CARD,
+            HawkConfig.SEARCH_CARD_MODE,
             HawkConfig.SHOW_PREVIEW,
             HawkConfig.DEBUG_OPEN
     };

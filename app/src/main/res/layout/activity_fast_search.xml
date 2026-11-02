@@ -37,6 +37,17 @@
             />
 
         <ImageView
+            android:id="@+id/iv_view_mode"
+            android:layout_width="36dp"
+            android:layout_height="40dp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="8dp"
+            android:src="@drawable/ic_view_list"
+            app:tint="@color/text_foreground"
+            android:layout_marginRight="2dp"
+            android:contentDescription="切换显示方式"/>
+
+        <ImageView
             android:id="@+id/iv_filter"
             android:layout_width="40dp"
             android:layout_height="40dp"

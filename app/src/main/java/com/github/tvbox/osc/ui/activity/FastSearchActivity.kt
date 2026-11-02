@@ -14,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.angcyo.tablayout.DslTabLayout
 import com.angcyo.tablayout.DslTabLayoutConfig
@@ -73,8 +74,10 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     }
 
     private lateinit var sourceViewModel : SourceViewModel
-    private var searchAdapter = FastSearchAdapter()
-    private var searchAdapterFilter = FastSearchAdapter()
+    /** 搜索结果显示方式：true 卡片（海报网格），false 列表（左图右文）。下次进搜索页沿用上次的选择 */
+    private var cardMode: Boolean = Hawk.get(HawkConfig.SEARCH_CARD_MODE, true)
+    private var searchAdapter = FastSearchAdapter(cardMode)
+    private var searchAdapterFilter = FastSearchAdapter(cardMode)
     private var searchTitle: String? = ""
     private var spNames = HashMap<String, String>()
     private var isFilterMode = false
@@ -132,6 +135,8 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         }
         mBinding.etSearch.addTextChangedListener(this)
         mBinding.ivFilter.setOnClickListener { filterSearchSource() }
+        mBinding.ivViewMode.setOnClickListener { toggleViewMode() }
+        updateViewModeIcon()
         mBinding.ivBack.setOnClickListener { finish() }
         mBinding.ivSearch.setOnClickListener {
             search(mBinding.etSearch.text.toString())
@@ -189,11 +194,37 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     }
 
     /**
-     * 搜索结果列表的布局管理器：统一用海报卡片网格，列数按屏宽自适应（与首页卡片一致）。
-     * 卡片是竖版还是横版由卡片自身的 RatioShadowLayout 按设置决定，这里只负责列数。
+     * 搜索结果列表的布局管理器：
+     * - 卡片模式：海报卡片网格，列数按屏宽自适应（与首页卡片一致）。卡片是竖版还是横版由卡片自身的
+     *   RatioShadowLayout 按设置决定，这里只负责列数。
+     * - 列表模式：单列左图右文条目。
      */
     private fun newResultLayoutManager(): RecyclerView.LayoutManager {
-        return GridLayoutManager(this, Utils.getPosterSpanCount(this))
+        return if (cardMode) {
+            GridLayoutManager(this, Utils.getPosterSpanCount(this))
+        } else {
+            LinearLayoutManager(this)
+        }
+    }
+
+    /** 切换「卡片 / 列表」显示方式，并把选择记住，下次进搜索页继续用这种 */
+    private fun toggleViewMode() {
+        cardMode = !cardMode
+        Hawk.put(HawkConfig.SEARCH_CARD_MODE, cardMode)
+        // 两个列表（全部结果 / 按源过滤）用同一套模式
+        searchAdapter.setCardMode(cardMode)
+        searchAdapterFilter.setCardMode(cardMode)
+        mBinding.mGridView.layoutManager = newResultLayoutManager()
+        mBinding.mGridViewFilter.layoutManager = newResultLayoutManager()
+        updateViewModeIcon()
+        ToastUtils.showShort(if (cardMode) "已切换为卡片显示" else "已切换为列表显示")
+    }
+
+    /** 图标显示"点一下会切到的模式"：当前卡片就显示列表图标，反之显示网格图标 */
+    private fun updateViewModeIcon() {
+        mBinding.ivViewMode.setImageResource(
+            if (cardMode) R.drawable.ic_view_list else R.drawable.ic_view_grid
+        )
     }
 
     // 本页声明了 configChanges，旋转时不会重建，列数要按新屏宽自己重算

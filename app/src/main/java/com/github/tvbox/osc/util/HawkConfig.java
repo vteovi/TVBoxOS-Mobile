@@ -67,6 +67,10 @@ public class HawkConfig {
      */
     public static final String HISTORY_SEARCH = "history_search";
     /**
+     * 搜索结果页的显示方式：true 卡片（海报网格），false 列表（左图右文）。默认卡片。
+     */
+    public static final String SEARCH_CARD_MODE = "search_card_mode";
+    /**
      * 首页海报尺寸 0 小 1 中 2 大
      */
     public static final String POSTER_SIZE = "poster_size";
