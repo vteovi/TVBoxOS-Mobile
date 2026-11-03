@@ -37,6 +37,7 @@ import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
 import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
+import com.squareup.picasso.Picasso;
 import java.util.List;
 import java.util.Stack;
 import android.view.ViewGroup;
@@ -186,16 +187,46 @@ public class GridFragment extends BaseLazyFragment {
             mGridView.setVisibility(View.VISIBLE);
         }
         mGridView.setHasFixedSize(true);
+        // 大屏一屏可见十几张卡片：加大 item 缓存，滑动时就不用频繁 inflate/measure 新卡片
+        //（RecyclerView 默认只缓存 2 个，大屏上明显不够）。
+        int spanCount = Utils.getPosterSpanCount(this.mContext);
+        mGridView.setItemViewCacheSize(Math.max(12, spanCount * 6));
+        // 加载更多时一批新卡片若同时做淡入动画，会一次性掉帧（滚到底“卡一下”）；列表直接出现即可
+        mGridView.setItemAnimator(null);
+        // 惯性滑动（快速上滑松手后）期间暂停海报解码，停稳后恢复：
+        // 避免滚动抢解码/上传显存带宽导致掉帧，停下马上补齐图片。
+        mGridView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                    Picasso.get().pauseTag(GridAdapter.PICASSO_TAG);
+                } else if (newState == RecyclerView.SCROLL_STATE_IDLE
+                        || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    Picasso.get().resumeTag(GridAdapter.PICASSO_TAG);
+                }
+            }
+        });
         gridAdapter = new GridAdapter();
         this.page =1;
         this.maxPage =1;
         this.isLoad = false;
     }
 
+    /**
+     * 统一的网格 LayoutManager 创建：带上预取数量，滑动时提前绑定下一页卡片，减少“滑到时才 bind”的空档。
+     */
+    private void applyGridLayoutManager() {
+        if (mGridView == null) return;
+        int spanCount = Utils.getPosterSpanCount(this.mContext);
+        V7GridLayoutManager lm = new V7GridLayoutManager(this.mContext, spanCount);
+        lm.setInitialPrefetchItemCount(spanCount * 2);
+        mGridView.setLayoutManager(lm);
+    }
+
     private void initView() {
         this.createView();
         mGridView.setAdapter(gridAdapter);
-        mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, Utils.getPosterSpanCount(this.mContext)));
+        applyGridLayoutManager();
 
         gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
             @Override
@@ -266,8 +297,7 @@ public class GridFragment extends BaseLazyFragment {
         // 已创建的分栏直接按新配置重建 LayoutManager，保证所有已加载分栏列数立即更新；
         // 未创建的分栏会在首次 initView() 时用新配置创建。
         if (mGridView != null) {
-            int spanCount = Utils.getPosterSpanCount(this.mContext);
-            mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+            applyGridLayoutManager();
         }
     }
 
@@ -279,10 +309,11 @@ public class GridFragment extends BaseLazyFragment {
         if (mConfigChanged) {
             mConfigChanged = false;
             if (mGridView != null) {
-                int spanCount = Utils.getPosterSpanCount(this.mContext);
-                mGridView.setLayoutManager(new V7GridLayoutManager(this.mContext, spanCount));
+                applyGridLayoutManager();
             }
         }
+        // 页面切回来时恢复被暂停的海报请求，避免切走后停在暂停状态导致图片不加载
+        Picasso.get().resumeTag(GridAdapter.PICASSO_TAG);
         // 从其他分栏切回来时，兜底重置加载状态，防止之前的请求回调丢失导致永久卡住
         if (mLoading) {
             mLoading = false;

@@ -16,6 +16,19 @@ import com.orhanobut.hawk.Hawk;
  */
 public class RatioShadowLayout extends ShadowLayout {
 
+    /**
+     * 缓存「横版海报」开关：onMeasure 在滑动时会被高频调用，每次都 Hawk.get 会走
+     * SharedPreferences + 反序列化，大屏一屏十几个卡片时是明显的掉帧来源。
+     */
+    private static volatile Boolean sLandscapeCard = null;
+
+    /**
+     * 设置里切换「横版海报」后调用，让下一次 measure 重新读取最新设置。
+     */
+    public static void invalidateRatioCache() {
+        sLandscapeCard = Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
+    }
+
     public RatioShadowLayout(Context context) {
         super(context);
     }
@@ -49,6 +62,11 @@ public class RatioShadowLayout extends ShadowLayout {
     }
 
     private boolean useLandscapeRatio() {
-        return Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
+        Boolean cached = sLandscapeCard;
+        if (cached == null) {
+            cached = Hawk.get(HawkConfig.LANDSCAPE_CARD, false);
+            sLandscapeCard = cached;
+        }
+        return cached;
     }
 }

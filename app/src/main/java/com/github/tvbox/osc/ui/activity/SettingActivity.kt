@@ -168,6 +168,8 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             val newConfig = !Hawk.get(HawkConfig.LANDSCAPE_CARD, false)
             mBinding.switchLandscapeCard.setChecked(newConfig)
             Hawk.put(HawkConfig.LANDSCAPE_CARD, newConfig)
+            // 卡片比例在 measure 阶段读缓存，切换后立即刷新，避免仍按旧比例显示
+            com.github.tvbox.osc.ui.widget.RatioShadowLayout.invalidateRatioCache()
         }
 
         mBinding.llLiveApi.setOnClickListener {

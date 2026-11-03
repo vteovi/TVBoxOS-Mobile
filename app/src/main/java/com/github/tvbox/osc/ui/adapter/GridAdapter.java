@@ -21,6 +21,17 @@ import java.util.ArrayList;
  */
 public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
 
+    /**
+     * 图片请求统一 tag：滑动时用来整组暂停/恢复解码请求，避免快速滑动时解码洪峰导致掉帧。
+     */
+    public static final Object PICASSO_TAG = "grid_adapter_poster";
+
+    /**
+     * 记录 ImageView 当前已绑定的图片地址，复用到同一个地址时直接跳过请求，
+     * 省掉重复的取消/占位/解码，滑动更顺。
+     */
+    private static final int TAG_PIC_URL = R.id.ivThumb;
+
     public GridAdapter() {
         super(R.layout.item_grid, new ArrayList<>());
 
@@ -44,18 +55,29 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
             helper.setText(R.id.tvNote, item.note);
         }
         helper.setText(R.id.tvName, item.name);
+
         ImageView ivThumb = helper.getView(R.id.ivThumb);
-        // 快速滑动时取消之前的请求并清空旧图，避免复用时显示上一个位置的海报
-        Picasso.get().cancelRequest(ivThumb);
-        ivThumb.setImageDrawable(null);
-        //由于部分电视机使用glide报错
         if (!TextUtils.isEmpty(item.pic)) {
-            item.pic=item.pic.trim();
-            Picasso.get()
-                    .load(DefaultConfig.checkReplaceProxy(item.pic))
-                    .error(R.drawable.img_loading_placeholder)
-                    .into(ivThumb);
+            item.pic = item.pic.trim();
+            String pic = DefaultConfig.checkReplaceProxy(item.pic);
+            // 复用池里同一个 View 再次绑同一张图时无需重新请求
+            if (!pic.equals(ivThumb.getTag(TAG_PIC_URL))) {
+                ivThumb.setTag(TAG_PIC_URL, pic);
+                // 先占位，避免复用时短暂显示上一个位置的海报
+                ivThumb.setImageResource(R.drawable.img_loading_placeholder);
+                //由于部分电视机使用glide报错
+                Picasso.get()
+                        .load(pic)
+                        .tag(PICASSO_TAG)
+                        // 按 View 实际显示尺寸解码：不写 resize 时 Picasso 会按原图整张解码，
+                        // 大屏一屏十几张高分辨率海报，滑动时解码 + 上传显存会明显掉帧
+                        .fit()
+                        .centerCrop()
+                        .error(R.drawable.img_loading_placeholder)
+                        .into(ivThumb);
+            }
         } else {
+            ivThumb.setTag(TAG_PIC_URL, null);
             ivThumb.setImageResource(R.drawable.img_loading_placeholder);
         }
     }
