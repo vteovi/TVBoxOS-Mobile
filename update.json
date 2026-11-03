@@ -1,6 +1,6 @@
 {
-  "version": "2.28.0",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.0/TVBox-Mobile-v2.28.0-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.0/TVBox-Mobile-v2.28.0-armv7a.apk",
-  "changelog": "**切换订阅源秒开**：spider 爬虫 jar 由单一全局缓存（`filesDir/csp.jar`）改为**按源分份缓存**（`filesDir/csp_<md5(jar地址)>.jar`），每个订阅源各存一份互不覆盖；切换到加载过的订阅源时直接命中本地缓存秒加载，不再每次重新下载几 MB 的 jar（之前两个源来回切换会互相覆盖缓存、每次都要重下，这正是切源时首页转圈几秒的主要原因）\n旧的全局 `csp.jar` 在升级后首次使用时自动迁移到对应源的分份缓存，不额外浪费一次下载\n订阅页切换订阅源后重启首页时改走「缓存优先」路径（与首页切源、设置页行为对齐）：先用本地配置与缓存秒出内容，后台再静默拉取更新\njar 下载失败时若本地还留有上次可用的缓存，先加载旧缓存兜底，网络抖动也不白屏"
+  "version": "2.28.7",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.7/TVBox-Mobile-v2.28.7-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.7/TVBox-Mobile-v2.28.7-armv7a.apk",
+  "changelog": "**图片下载单独限并发**：一屏十几张海报在绑定时会同时发起请求，全部并行建连/握手时 CPU 峰值很高，会和渲染线程抢核心（正是「新内容刷出来那一下卡」的最后一环）。现在给图片一个独立 `Dispatcher`（共享连接池与线程池，只隔离并发计数），per-host 并发收到 8；接口请求仍走原来的调度器，多源并发搜索不受影响\n**卡片层级扁平化**：海报卡片去掉了一层多余的 `RelativeLayout`——卡片根布局本身就是 `FrameLayout`，年份角标与底部文字条直接用 `layout_gravity` 定位即可，每张卡片少一层 measure/layout/draw（一屏十几张、滑动时持续受益）。搜索结果卡片同步处理\n**关闭过卷拉伸效果**：列表加上 `overScrollMode=\"never\"`，去掉 Android 12+ 滚动到边界时的拉伸动画（那层动画每帧都要额外合成，也是之前「内容从上往下掉一截」观感的来源）"
 }
