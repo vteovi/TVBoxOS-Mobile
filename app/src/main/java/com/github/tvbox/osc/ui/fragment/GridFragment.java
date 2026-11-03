@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.GsonUtils;
@@ -314,6 +315,8 @@ public class GridFragment extends BaseLazyFragment {
                 gridAdapter.setEnableLoadMore(true);
             }
         }
+        // 分栏切回来时补一次「是否满屏」检查：旋屏后列数变化也可能又变成滑不动
+        scheduleAutoFill();
     }
 
     private void initViewModel() {
@@ -323,6 +326,9 @@ public class GridFragment extends BaseLazyFragment {
             @Override
             public void onChanged(AbsXml absXml) {
 //                if(mGridView != null) mGridView.requestFocus();
+                // 自动补页是后台行为，不该弹「没有更多了」打扰用户
+                boolean autoFill = mAutoFilling;
+                mAutoFilling = false;
                 if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
                     if (page == 1) {
                         // 如果已经从本地缓存显示过数据，后台返回时更新缓存文件；
@@ -332,8 +338,11 @@ public class GridFragment extends BaseLazyFragment {
                             Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
                         } catch (Exception ignore) {}
                         if (shownFromCache) {
-                            // 用后台最新数据替换，避免旧缓存和第二页重叠
-                            gridAdapter.setNewData(absXml.movie.videoList);
+                            // 内容没变就别整表替换：setNewData 会让 RecyclerView 重新布局并
+                            // 丢掉当前浏览位置，表现就是正在滑动的列表“内容突然往下掉一截”。
+                            if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)) {
+                                replaceDataKeepingScroll(absXml.movie.videoList);
+                            }
                         } else {
                             showSuccess();
                             isLoad = true;
@@ -360,7 +369,7 @@ public class GridFragment extends BaseLazyFragment {
                     if (page > maxPage) {
                         gridAdapter.loadMoreEnd();
                         gridAdapter.setEnableLoadMore(false);
-                        if(page>2)Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+                        if(page>2 && !autoFill)Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
                     } else {
                         gridAdapter.loadMoreComplete();
                         gridAdapter.setEnableLoadMore(true);
@@ -369,14 +378,85 @@ public class GridFragment extends BaseLazyFragment {
                     if(page == 1){
                         showEmpty();
                     }else{
-                        Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+                        if (!autoFill) {
+                            Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+                        }
                         gridAdapter.loadMoreEnd();
                     }
                     gridAdapter.setEnableLoadMore(false);
                 }
                 mLoading = false;
+                scheduleAutoFill();
             }
         });
+    }
+
+    /** 连续自动补页的次数上限：避免「源本身每页只给一两条」时把整个目录都拉下来 */
+    private int mAutoFillCount = 0;
+    /** 当前这次请求是否是自动补页发起的（用于抑制额外的提示） */
+    private boolean mAutoFilling = false;
+
+    private final Runnable mAutoFillRunnable = new Runnable() {
+        @Override
+        public void run() {
+            autoFillViewport();
+        }
+    };
+
+    /** 数据落盘后检查一下是否满屏（延后一点，等 RecyclerView 完成这一轮布局） */
+    private void scheduleAutoFill() {
+        if (mGridView == null) return;
+        mGridView.removeCallbacks(mAutoFillRunnable);
+        mGridView.postDelayed(mAutoFillRunnable, 90);
+    }
+
+    /**
+     * 大屏上「一页数据」经常还填不满一屏：这时候列表没有可滚动余量，
+     * 上拉加载（滚动到最后一个才触发）永远触发不了，用户看到的就是「滑不动」，
+     * 手指滑动只会出现过卷拉伸效果（内容被拽下去一截又弹回来）。
+     * 这里在列表仍不能滚动时自动补下一页，直到能滚起来为止。
+     */
+    private void autoFillViewport() {
+        if (mGridView == null || gridAdapter == null || sortData == null) return;
+        if (mLoading || !isLoad) return;
+        if (gridAdapter.getData().isEmpty()) return;
+        if (page > maxPage) return;
+        if (mAutoFillCount >= 3) return;
+        if (mGridView.canScrollVertically(1) || mGridView.canScrollVertically(-1)) return;
+        mAutoFillCount++;
+        mAutoFilling = true;
+        mLoading = true;
+        sourceViewModel.getList(sortData, page);
+    }
+
+    /** 两个列表的影片 id（顺序也一致）完全相同，用于跳过无意义的整表刷新 */
+    private static boolean sameVideoIds(List<Movie.Video> a, List<Movie.Video> b) {
+        if (a == null || b == null || a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            Movie.Video x = a.get(i), y = b.get(i);
+            if (x == null || y == null) return false;
+            if (!TextUtils.equals(x.id, y.id)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 整表替换但保持当前浏览位置：后台刷新返回时用户可能已经在滑动，
+     * 直接 setNewData 会让 RecyclerView 重新布局并把列表拽回顶部。
+     */
+    private void replaceDataKeepingScroll(List<Movie.Video> data) {
+        int firstPos = -1, offset = 0;
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        if (lm instanceof GridLayoutManager && mGridView.getChildCount() > 0) {
+            firstPos = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
+            View first = lm.findViewByPosition(firstPos);
+            if (first != null) offset = first.getTop() - mGridView.getPaddingTop();
+        }
+        gridAdapter.setNewData(data);
+        if (firstPos > 0 && lm instanceof GridLayoutManager && !data.isEmpty()) {
+            ((GridLayoutManager) lm).scrollToPositionWithOffset(
+                    Math.min(firstPos, data.size() - 1), offset);
+        }
     }
 
     public boolean isLoad() {
@@ -399,6 +479,7 @@ public class GridFragment extends BaseLazyFragment {
             return;
         }
         isLoad = false;
+        mAutoFillCount = 0;
         scrollTop();
 
         // 第一页先读本地缓存，立即显示上次内容，后台再发网络请求刷新
