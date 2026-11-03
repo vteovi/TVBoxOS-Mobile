@@ -30,7 +30,7 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 | 应用包名 | `com.github.tvbox.osc.mobile`（可与官方 TVBox、影视仓等版本共存安装） |
 | 系统要求 | Android 7.0 及以上（minSdk 24），目标 Android 14（targetSdk 34） |
 | CPU 架构 | `arm64-v8a` / `armeabi-v7a` 分包，按设备选一个安装 |
-| 当前版本 | 2.27.1（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
+| 当前版本 | 2.27.2（以 [Releases](https://github.com/vteovi/TVBoxOS-Mobile/releases) 为准） |
 
 ## ✨ 功能特性
 

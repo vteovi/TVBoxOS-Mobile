@@ -66,6 +66,9 @@ sed -i -E "$url_pattern" README.md
 sed -i -E "s|TVBox-Mobile-v[0-9.]+-arm64v8\.apk|TVBox-Mobile-v${version}-arm64v8.apk|g" README.md
 sed -i -E "s|TVBox-Mobile-v[0-9.]+-armv7a\.apk|TVBox-Mobile-v${version}-armv7a.apk|g" README.md
 
+# 「当前版本」信息行同步到当前发布版本
+sed -i -E "s/^(\| 当前版本 \| )[0-9][0-9.]*（/\1${version}（/" README.md
+
 if ! grep -q "TVBox Mobile v${version}" README.md; then
   release_date=$(date -u +%Y/%m/%d)
   entry=">* **${release_date} TVBox Mobile v${version}：** 同步发布 Android APK、应用内更新清单和下载链接。\n>"
