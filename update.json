@@ -1,6 +1,6 @@
 {
-  "version": "2.27.0",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.0/TVBox-Mobile-v2.27.0-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.0/TVBox-Mobile-v2.27.0-armv7a.apk",
-  "changelog": "搜索页支持**卡片 / 列表两种显示方式**：搜索框右侧新增切换按钮，点一下在「海报卡片网格」和「左图右文列表」之间切换，并弹提示\n选择会**记住**（`HawkConfig.SEARCH_CARD_MODE`，默认卡片），下次进搜索页直接沿用上次的显示方式\n卡片模式仍然跟随首页那套规则：竖版 2:3 / 横版 16:9，列数按屏宽自适应；列表模式为单列，缩略图裁切 + 圆角（与旧版搜索结果样式一致）\n按钮图标显示「点一下会切到的模式」：当前是卡片就显示列表图标，反之显示网格图标；「全部结果」与「按源过滤」两个列表同时切换"
+  "version": "2.27.1",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-armv7a.apk",
+  "changelog": "修复：设置里开启「横版海报」后，搜索页**列表显示模式**的缩略图仍是竖版（2:3），现在改为跟随设置显示 **16:9**\n列表条目改为自适应高度：竖版缩略图 80×120dp（2:3）、横版 160×90dp（16:9），文字区留白同步收紧，图片与文字高度对齐\n缩略图裁剪的缓存 key 加上尺寸，切换「横版海报」后不会命中旧比例的缓存图；圆角随比例微调（竖版 20dp / 横版 14dp）\n卡片模式的显示不受影响（比例本来就由 `RatioShadowLayout` 按设置自动切换）"
 }
