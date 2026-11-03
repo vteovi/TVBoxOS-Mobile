@@ -14,6 +14,7 @@ import com.github.tvbox.osc.R
 import com.github.tvbox.osc.base.BaseVbActivity
 import com.github.tvbox.osc.bean.Source
 import com.github.tvbox.osc.bean.Subscription
+import com.github.tvbox.osc.constant.IntentKey
 import com.github.tvbox.osc.databinding.ActivitySubscriptionBinding
 import com.github.tvbox.osc.ui.adapter.SubscriptionAdapter
 import com.github.tvbox.osc.ui.dialog.ChooseSourceDialog
@@ -530,10 +531,12 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
         if (destination != null || (!TextUtils.isEmpty(mSelectedUrl) && mBeforeUrl != mSelectedUrl)) {
             val intent = Intent(this, MainActivity::class.java)
             intent.putExtra(MainActivity.EXTRA_START_DESTINATION, destination ?: R.id.navigation_home)
-            intent.flags = if (mBeforeUrl != mSelectedUrl) {
-                Intent.FLAG_ACTIVITY_CLEAR_TASK
+            if (mBeforeUrl != mSelectedUrl) {
+                // 切换了订阅源: 配置已写盘, 让首页直接走本地缓存秒开, 后台再静默刷新
+                intent.putExtra(IntentKey.CACHE_CONFIG_CHANGED, true)
+                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK
             } else {
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
             startActivity(intent)
             overridePendingTransition(0, 0)

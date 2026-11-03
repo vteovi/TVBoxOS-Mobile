@@ -315,7 +315,17 @@ public class ApiConfig {
         String[] urls = spider.split(";md5;");
         String jarUrl = urls[0];
         String md5 = urls.length > 1 ? urls[1].trim() : "";
-        File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp.jar");
+        // 按 jar 地址分源缓存: 每个订阅源的 jar 各存一份, 切换订阅源时直接命中本地缓存秒加载,
+        // 不再共用单一 csp.jar 导致来回切源时互相覆盖、每次都要重新下载几 MB 的 jar。
+        File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp_" + MD5.encode(jarUrl) + ".jar");
+        // 旧版全局缓存文件, 仅用于升级后的一次性迁移, 避免升级后第一次切源要重新下载
+        File legacyCache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp.jar");
+
+        if (!cache.exists() && legacyCache.exists()
+                && (useCache || md5.isEmpty() || MD5.getFileMd5(legacyCache).equalsIgnoreCase(md5))) {
+            // 旧缓存内容与该源匹配时改名迁移过来, 省一次下载
+            legacyCache.renameTo(cache);
+        }
 
         if (!md5.isEmpty() || useCache) {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
@@ -379,6 +389,12 @@ public class ApiConfig {
                 super.onError(response);
                 System.out.println("csp.jar 下载失败: " + jarUrlLog + " -> "
                         + (response.getException() != null ? response.getException().getMessage() : ""));
+                // 下载失败时若本地还留着上次可用的 jar(比如网络抖动), 先加载旧缓存兜底,
+                // 不让首页空转; 后续重新进首页/冷启动时会再校验更新。
+                if (cache.exists() && jarLoader.load(cache.getAbsolutePath())) {
+                    callback.success();
+                    return;
+                }
                 callback.error("");
             }
         });
