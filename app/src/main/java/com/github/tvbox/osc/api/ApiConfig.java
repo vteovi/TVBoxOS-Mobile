@@ -134,26 +134,36 @@ public class ApiConfig {
             callback.error("-1");
             return;
         }
-        File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl));
+        String cacheName = MD5.encode(apiUrl);
+        File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + cacheName);
+        File meta = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + cacheName + ".meta");
         // 冷启动也先读本地缓存立即回调，让 UI 快速显示；后台继续下载新配置刷新
-        boolean cacheHitRaw = false;
+        String cachedHash = readCacheMetaHash(meta);
+        boolean cacheHit = false;
         if (cache.exists()) {
             try {
                 parseJson(apiUrl, cache);
-                callback.success();
-                cacheHitRaw = true;
+                cacheHit = true;
+                // 即时从本地缓存秒出，fromCache=true 表示本次未走网络
+                callback.success(true);
             } catch (Throwable th) {
                 th.printStackTrace();
+                // 缓存损坏（写到一半被杀/写入被中断）：删掉坏缓存与元数据，下次走网络重新拉取自愈
+                cache.delete();
+                deleteCacheMeta(meta);
             }
         }
-        final boolean cacheHit = cacheHitRaw;
         if (useCache && cacheHit) {
+            // 设置页等场景：仅用缓存渲染，不再请求网络
             return;
         }
         if (apiUrl.startsWith("assets://")) {
             try {
-                parseJson(apiUrl, readAssetConfig(apiUrl.substring("assets://".length())));
-                callback.success();
+                String json = readAssetConfig(apiUrl.substring("assets://".length()));
+                parseJson(apiUrl, json);
+                writeConfigCache(cache, json);
+                writeCacheMeta(meta, MD5.string2MD5(json), System.currentTimeMillis());
+                callback.success(false);
             } catch (Throwable th) {
                 th.printStackTrace();
                 callback.error("加载内置配置失败");
@@ -165,7 +175,8 @@ public class ApiConfig {
                 String json = readContentConfig(Uri.parse(apiUrl));
                 parseJson(apiUrl, json);
                 writeConfigCache(cache, json);
-                callback.success();
+                writeCacheMeta(meta, MD5.string2MD5(json), System.currentTimeMillis());
+                callback.success(false);
             } catch (Throwable th) {
                 th.printStackTrace();
                 callback.error("无法读取本地配置文件");
@@ -199,16 +210,22 @@ public class ApiConfig {
                     public void onSuccess(Response<String> response) {
                         try {
                             String json = response.body();
+                            String hash = MD5.string2MD5(json);
+                            // 内容没变：跳过重新解析，不打扰 UI（cacheHit 时尤其重要，避免无谓闪烁）
+                            if (cacheHit && hash != null && hash.equals(cachedHash)) {
+                                writeCacheMeta(meta, hash, System.currentTimeMillis());
+                                return;
+                            }
                             parseJson(apiUrl, json);
                             try {
                                 writeConfigCache(cache, json);
+                                writeCacheMeta(meta, hash, System.currentTimeMillis());
                             } catch (Throwable th) {
                                 th.printStackTrace();
                             }
-                            // 已用本地缓存快速回调过，这里只后台刷新配置，不重复回调 UI
-                            if (!cacheHit) {
-                                callback.success();
-                            }
+                            // cacheHit 为真时已用缓存秒出，这里仅在内容确有变化时才刷新 UI；
+                            // 否则（首拉/缓存缺失）正常回调成功
+                            callback.success(false);
                         } catch (Throwable th) {
                             th.printStackTrace();
                             if (!cacheHit) {
@@ -227,7 +244,7 @@ public class ApiConfig {
                         if (cache.exists()) {
                             try {
                                 parseJson(apiUrl, cache);
-                                callback.success();
+                                callback.success(false);
                                 return;
                             } catch (Throwable th) {
                                 th.printStackTrace();
@@ -252,6 +269,42 @@ public class ApiConfig {
                         return result;
                     }
                 });
+    }
+
+    private String readCacheMetaHash(File meta) {
+        if (meta == null || !meta.exists()) return null;
+        try {
+            BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(meta), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            JSONObject obj = new JSONObject(sb.toString());
+            return obj.optString("hash", null);
+        } catch (Throwable th) {
+            return null;
+        }
+    }
+
+    private void writeCacheMeta(File meta, String hash, long time) {
+        if (meta == null || hash == null) return;
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("hash", hash);
+            obj.put("time", time);
+            File p = meta.getParentFile();
+            if (p != null && !p.exists()) p.mkdirs();
+            try (FileOutputStream out = new FileOutputStream(meta)) {
+                out.write(obj.toString().getBytes("UTF-8"));
+                out.flush();
+            }
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
+    }
+
+    private void deleteCacheMeta(File meta) {
+        if (meta != null && meta.exists()) meta.delete();
     }
 
 
@@ -780,6 +833,11 @@ public class ApiConfig {
     }
 
     public interface LoadConfigCallback {
+        // fromCache=true 表示本次数据来自本地缓存（未走网络），false 表示来自网络拉取
+        default void success(boolean fromCache) {
+            success();
+        }
+
         void success();
 
         void retry();
