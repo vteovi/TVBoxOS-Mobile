@@ -55,8 +55,8 @@ TVBoxOS-Mobile 是基于 CatVod（TVBox）开源方案的 Android 客户端改�
 
 | 设备 | 安装包 | 适用 |
 | --- | --- | --- |
-| 64 位设备（推荐） | [TVBox-Mobile-v2.27.1-arm64v8.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
-| 32 位设备 | [TVBox-Mobile-v2.27.1-armv7a.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-armv7a.apk) | 老机型、部分电视盒子 |
+| 64 位设备（推荐） | [TVBox-Mobile-v2.27.2-arm64v8.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-arm64v8.apk) | 绝大多数 2018 年之后的手机 / 平板 |
+| 32 位设备 | [TVBox-Mobile-v2.27.2-armv7a.apk](https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-armv7a.apk) | 老机型、部分电视盒子 |
 
 - 全部版本：<https://github.com/vteovi/TVBoxOS-Mobile/releases>
 - 装好后进入「我的 → 关于 → 检查更新」即可在线升级，程序会自动匹配你的设备架构；下载完会校验包名与版本号再安装，避免装错包。
@@ -159,6 +159,9 @@ Windows 下也可以直接运行 `build_apk.ps1`（默认 release，`.\build_apk
 - 安装包名固定为 `TVBox-Mobile-v<版本>-<flavor>.apk`。
 
 ## 📝 更新记录
+
+>* **2026/11/03 TVBox Mobile v2.27.2：** 同步发布 Android APK、应用内更新清单和下载链接。
+>
 
 >* **2026/11/03 TVBox Mobile v2.27.1：** 修复开启「横版海报」后搜索页列表模式的缩略图仍是竖版的问题，现在跟随设置显示 16:9（竖版 80×120dp / 横版 160×90dp）。
 >

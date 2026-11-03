@@ -1,6 +1,6 @@
 {
-  "version": "2.27.1",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.1/TVBox-Mobile-v2.27.1-armv7a.apk",
-  "changelog": "修复：设置里开启「横版海报」后，搜索页**列表显示模式**的缩略图仍是竖版（2:3），现在改为跟随设置显示 **16:9**\n列表条目改为自适应高度：竖版缩略图 80×120dp（2:3）、横版 160×90dp（16:9），文字区留白同步收紧，图片与文字高度对齐\n缩略图裁剪的缓存 key 加上尺寸，切换「横版海报」后不会命中旧比例的缓存图；圆角随比例微调（竖版 20dp / 横版 14dp）\n卡片模式的显示不受影响（比例本来就由 `RatioShadowLayout` 按设置自动切换）"
+  "version": "2.27.2",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-armv7a.apk",
+  "changelog": "优化订阅源切换的加载可靠性与读取速度（`ApiConfig.loadConfig`）\n切换订阅源（如 `https://box.iqinu.com`）时，先**立即读取本地缓存秒出**内容，后台再静默拉取更新；网络抖动时也能正常显示，不再偶发白屏\n新增缓存元信息（`filesDir/<md5(url)>.meta`，存内容 hash + 时间戳）：后台拉取回来后比对 hash，**内容没变就不再重解、不打扰 UI**，只有内容确有变化时才刷新（即「有更新时再同步更新」）\n缓存文件损坏（上次写到一半被杀 / 写入被中断）时自动删除坏缓存并自愈，避免坏缓存一直卡住、每次切换都落到网络导致空白\n`LoadConfigCallback` 增加 `success(boolean fromCache)` 默认方法，向后兼容现有调用方"
 }
