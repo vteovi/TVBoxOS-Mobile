@@ -31,6 +31,7 @@ import javax.net.ssl.SSLSocketFactory;
 
 import okhttp3.Cache;
 import okhttp3.ConnectionSpec;
+import okhttp3.Dispatcher;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.dnsoverhttps.DnsOverHttps;
@@ -171,8 +172,19 @@ public class OkGoHelper {
     }
 
     static void initPicasso(OkHttpClient client) {
+        // OkGo 继续用共享 dispatcher 的高并发（多源并发搜索依赖较高的 per-host 并发）
         client.dispatcher().setMaxRequestsPerHost(32);
-        MyOkhttpDownLoader downloader = new MyOkhttpDownLoader(client, App.getInstance());
+
+        // 图片下载单独限并发：一屏十几张海报在 bind 时会同时发起请求，若全部并行建连/握手，
+        // CPU 峰值很高，会和渲染线程抢核心——这正是「新内容刷出来那一下掉帧」的最后一环。
+        // 这里给 Picasso 一个独立 Dispatcher：共享连接池与 OkHttp 线程池，只隔离并发计数，
+        // 因此 OkGo 的接口请求并发完全不受影响。
+        Dispatcher imageDispatcher = new Dispatcher(client.dispatcher().executorService());
+        imageDispatcher.setMaxRequests(16);
+        imageDispatcher.setMaxRequestsPerHost(8);
+        OkHttpClient imageClient = client.newBuilder().dispatcher(imageDispatcher).build();
+
+        MyOkhttpDownLoader downloader = new MyOkhttpDownLoader(imageClient, App.getInstance());
         Picasso picasso = new Picasso.Builder(App.getInstance())
                 .downloader(downloader)
                 // 独立的解码线程池（3 线程 + 略低优先级）。

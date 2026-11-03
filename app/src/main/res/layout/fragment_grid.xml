@@ -14,6 +14,7 @@
         tools:listitem="@layout/item_grid"
         tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
         tools:spanCount="3"
+        android:overScrollMode="never"
         android:paddingHorizontal="10dp"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

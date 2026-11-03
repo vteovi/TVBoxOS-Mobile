@@ -8,65 +8,60 @@
     app:pcCornerRadius="14dp"
     >
 
-    <RelativeLayout
+    <com.github.tvbox.osc.ui.widget.PosterImageView
+        android:id="@+id/ivThumb"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
 
-        <com.github.tvbox.osc.ui.widget.PosterImageView
-            android:id="@+id/ivThumb"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop" />
+    <TextView
+        android:id="@+id/tvYear"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:maxWidth="70dp"
+        android:ellipsize="end"
+        android:padding="5dp"
+        android:singleLine="true"
+        android:background="@drawable/bg_year_badge"
+        tools:text="1970"
+        android:textColor="@color/white"
+        android:textSize="10dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:orientation="vertical"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="6dp"
+        android:background="@drawable/bg_gradient_black_b2t">
 
         <TextView
-            android:id="@+id/tvYear"
+            android:id="@+id/tvNote"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="70dp"
+            android:layout_gravity="bottom"
             android:ellipsize="end"
-            android:padding="5dp"
+            android:gravity="center"
             android:singleLine="true"
-            android:background="@drawable/bg_year_badge"
-            tools:text="1970"
             android:textColor="@color/white"
-            android:textSize="10dp" />
+            tools:text="更新至10集"
+            android:textSize="12sp"
+            android:drawablePadding="4dp"
+            />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/tvName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:orientation="vertical"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="6dp"
-            android:layout_alignParentBottom="true"
-            android:background="@drawable/bg_gradient_black_b2t">
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/white"
+            tools:text="爱上大大"
+            android:singleLine="true"/>
 
-            <TextView
-                android:id="@+id/tvNote"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:ellipsize="end"
-                android:gravity="center"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                tools:text="更新至10集"
-                android:textSize="12sp"
-                android:drawablePadding="4dp"
-                />
-
-            <TextView
-                android:id="@+id/tvName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="marquee"
-                android:marqueeRepeatLimit="marquee_forever"
-                android:layout_marginTop="4dp"
-                android:textColor="@color/white"
-                tools:text="爱上大大"
-                android:singleLine="true"/>
-
-        </LinearLayout>
-    </RelativeLayout>
+    </LinearLayout>
 
 </com.github.tvbox.osc.ui.widget.PosterCardLayout>
