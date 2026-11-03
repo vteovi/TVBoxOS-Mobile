@@ -170,6 +170,8 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             Hawk.put(HawkConfig.LANDSCAPE_CARD, newConfig)
             // 卡片比例在 measure 阶段读缓存，切换后立即刷新，避免仍按旧比例显示
             com.github.tvbox.osc.ui.widget.RatioShadowLayout.invalidateRatioCache()
+            // 16:9 / 2:3 变了，海报解码尺寸同步重算
+            com.github.tvbox.osc.ui.adapter.GridAdapter.resetDecodeSize()
         }
 
         mBinding.llLiveApi.setOnClickListener {
@@ -447,6 +449,8 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 override fun click(value: Int?, pos: Int) {
                     Hawk.put(HawkConfig.POSTER_SIZE, value)
                     mBinding.tvPosterSize.text = getPosterSizeName(value?:1)
+                    // 列数变了，海报解码尺寸要按新布局重算
+                    com.github.tvbox.osc.ui.adapter.GridAdapter.resetDecodeSize()
                 }
 
                 override fun getDisplay(value: Int?): String {
