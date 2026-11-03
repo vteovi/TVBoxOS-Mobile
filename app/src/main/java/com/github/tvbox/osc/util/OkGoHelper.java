@@ -21,6 +21,9 @@ import com.squareup.picasso.Picasso;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -172,10 +175,43 @@ public class OkGoHelper {
         MyOkhttpDownLoader downloader = new MyOkhttpDownLoader(client, App.getInstance());
         Picasso picasso = new Picasso.Builder(App.getInstance())
                 .downloader(downloader)
-                .executor(HeavyTaskUtil.getBigTaskExecutorService())
+                // 独立的解码线程池（3 线程 + 略低优先级）。
+                // 之前复用 HeavyTaskUtil 的池：最多 6 线程，在 4 核平板上等于占满所有核心，
+                // 滑动时解码会和 UI/渲染线程直接抢 CPU——这正是「回看已加载内容很流畅、
+                // 新图片刚刷出来那一下掉帧」的根源：只有需要解码的帧才会抢不到 CPU。
+                .executor(imageDecodeExecutor())
                 .defaultBitmapConfig(Bitmap.Config.RGB_565)
                 .build();
         Picasso.setSingletonInstance(picasso);
+    }
+
+    /**
+     * 图片解码专用线程池：固定 3 线程，线程优先级比默认低一档（渲染/UI 优先），
+     * 空闲 30 秒后回收，避免常驻占用。
+     */
+    private static ExecutorService sImageDecodeExecutor;
+
+    private static synchronized ExecutorService imageDecodeExecutor() {
+        if (sImageDecodeExecutor == null) {
+            // 4 个线程：比原来的 6 个少，但仍能并发拉取+解码，不至于让图片出现变慢
+            final int threads = 4;
+            ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                    threads, threads, 30L, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<Runnable>(),
+                    runnable -> {
+                        Thread t = new Thread(() -> {
+                            // nice +1：让出 CPU 给 UI/渲染线程，滑动时不再互相拖累
+                            android.os.Process.setThreadPriority(
+                                    android.os.Process.THREAD_PRIORITY_DEFAULT + 1);
+                            runnable.run();
+                        }, "picasso-decode");
+                        t.setDaemon(true);
+                        return t;
+                    });
+            executor.allowCoreThreadTimeOut(true);
+            sImageDecodeExecutor = executor;
+        }
+        return sImageDecodeExecutor;
     }
 
     private static synchronized void setOkHttpSsl(OkHttpClient.Builder builder) {
