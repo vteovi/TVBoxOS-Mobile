@@ -55,7 +55,8 @@
 - 详情页"外部播放"走系统 `ACTION_VIEW` 选择器（MX/VLC/Reex/Kodi）；**Android11+ 检测已装 App 必须在 manifest `<queries>` 声明 `video/*` 与包名**，否则全失败。
 - 内置源：`strings.xml` 的 `api_name` = 饭太硬/王二小/龙门影视。
 - 首页顶栏：`tvName`（数据源名，可点切换/长按刷新）+ 搜索框；2.22.8 已**移除右上角历史记录图标入口**（历史改从「我的 → 观看历史」进）。
-- 搜索页（FastSearchActivity）2.27.0 起有**卡片/列表两套显示**：`FastSearchAdapter` 走多布局（`getDefItemViewType` + `onCreateDefViewHolder`），模式存 `HawkConfig.SEARCH_CARD_MODE`（默认卡片，已加入 BackupManager 备份键）；卡片=GridLayoutManager+`item_search_card`，列表=LinearLayoutManager+`item_search`（左图右文，RoundTransformation 110x160 圆角 20dp）。
+- 搜索页（FastSearchActivity）2.27.0 起有**卡片/列表两套显示**：`FastSearchAdapter` 走多布局（`getDefItemViewType` + `onCreateDefViewHolder`，**不要**覆写 `getItemViewType`），模式存 `HawkConfig.SEARCH_CARD_MODE`（默认卡片，已加入 BackupManager 备份键）；卡片=GridLayoutManager+`item_search_card`，列表=LinearLayoutManager+`item_search`。
+- 列表模式缩略图（2.27.1 起）**跟随 `HawkConfig.LANDSCAPE_CARD`**：竖版 80x120dp(2:3) / 横版 160x90dp(16:9)，由 `FastSearchAdapter.applyListMetrics()` 动态设 ImageView LayoutParams，并同步 `llText` padding（12/2dp）与 `tvNote` 上间距（20/6dp）；`item_search.xml` 根为 `wrap_content`+`center_vertical`。`RoundTransformation` 缓存 key 必须带尺寸（`MD5(url@宽x高)`），否则切比例后命中旧位图。
 
 ## 踩坑教训
 - ⚠️ **弹窗会改状态栏图标颜色（连修 3 次才对）**：浅色模式下打开弹窗（筛选等）状态栏文字变白看不清。根因有两层：① `CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 被系统当"拥有状态栏的窗口"，图标明暗改用弹窗主题（`Theme.Dialog` 深色）的默认白图标；② `FLAG_DIM_BEHIND` 的遮罩铺满整屏（含状态栏），系统同样把状态栏外观算到弹窗头上。**运行时 `clearFlags` / 改 appearance 都没用**（2.26.5、2.26.6 实测无效），必须从窗口层面拆：样式里**删掉 `windowFullscreen`** + 无遮罩弹窗**不加 `FLAG_DIM_BEHIND`**（`BaseDialog.dimAmountBehind=0f`）+ 弹窗 show 后把**宿主 Activity** 也按同值双通道写一遍。判断深浅必须读宿主窗口（底色亮度最稳），不能用 App 主题（详情/直播页是黑状态栏）。改窗口参数要在 `super.show()` 之前设。
