@@ -139,11 +139,13 @@ public class ApiConfig {
         File meta = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + cacheName + ".meta");
         // 冷启动也先读本地缓存立即回调，让 UI 快速显示；后台继续下载新配置刷新
         String cachedHash = readCacheMetaHash(meta);
-        boolean cacheHit = false;
+        // cacheHit 需要被匿名内部类 AbsCallback 捕获，必须是事实 final；
+        // 故用一个可变本地 cacheHitRaw 承载赋值，再转成 final 的 cacheHit
+        boolean cacheHitRaw = false;
         if (cache.exists()) {
             try {
                 parseJson(apiUrl, cache);
-                cacheHit = true;
+                cacheHitRaw = true;
                 // 即时从本地缓存秒出，fromCache=true 表示本次未走网络
                 callback.success(true);
             } catch (Throwable th) {
@@ -153,6 +155,7 @@ public class ApiConfig {
                 deleteCacheMeta(meta);
             }
         }
+        final boolean cacheHit = cacheHitRaw;
         if (useCache && cacheHit) {
             // 设置页等场景：仅用缓存渲染，不再请求网络
             return;
