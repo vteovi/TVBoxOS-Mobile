@@ -1,6 +1,6 @@
 {
-  "version": "2.27.2",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.27.2/TVBox-Mobile-v2.27.2-armv7a.apk",
-  "changelog": "优化订阅源切换的加载可靠性与读取速度（`ApiConfig.loadConfig`）\n切换订阅源（如 `https://box.iqinu.com`）时，先**立即读取本地缓存秒出**内容，后台再静默拉取更新；网络抖动时也能正常显示，不再偶发白屏\n新增缓存元信息（`filesDir/<md5(url)>.meta`，存内容 hash + 时间戳）：后台拉取回来后比对 hash，**内容没变就不再重解、不打扰 UI**，只有内容确有变化时才刷新（即「有更新时再同步更新」）\n缓存文件损坏（上次写到一半被杀 / 写入被中断）时自动删除坏缓存并自愈，避免坏缓存一直卡住、每次切换都落到网络导致空白\n`LoadConfigCallback` 增加 `success(boolean fromCache)` 默认方法，向后兼容现有调用方"
+  "version": "2.28.0",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.0/TVBox-Mobile-v2.28.0-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.0/TVBox-Mobile-v2.28.0-armv7a.apk",
+  "changelog": "**切换订阅源秒开**：spider 爬虫 jar 由单一全局缓存（`filesDir/csp.jar`）改为**按源分份缓存**（`filesDir/csp_<md5(jar地址)>.jar`），每个订阅源各存一份互不覆盖；切换到加载过的订阅源时直接命中本地缓存秒加载，不再每次重新下载几 MB 的 jar（之前两个源来回切换会互相覆盖缓存、每次都要重下，这正是切源时首页转圈几秒的主要原因）\n旧的全局 `csp.jar` 在升级后首次使用时自动迁移到对应源的分份缓存，不额外浪费一次下载\n订阅页切换订阅源后重启首页时改走「缓存优先」路径（与首页切源、设置页行为对齐）：先用本地配置与缓存秒出内容，后台再静默拉取更新\njar 下载失败时若本地还留有上次可用的缓存，先加载旧缓存兜底，网络抖动也不白屏"
 }
