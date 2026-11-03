@@ -175,6 +175,7 @@ public class FastSearchAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHol
             String url = DefaultConfig.checkReplaceProxy(item.pic.trim());
             Picasso.get()
                     .load(url)
+                    .noFade()
                     .error(R.drawable.img_loading_placeholder)
                     .into(ivThumb);
             return;

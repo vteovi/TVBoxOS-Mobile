@@ -192,6 +192,13 @@ public class GridFragment extends BaseLazyFragment {
         mGridView.setItemViewCacheSize(Math.min(Math.max(8, spanCount * 3), 15));
         // 加载更多时一批新卡片若同时做淡入动画，会一次性掉帧（滚到底“卡一下”）；列表直接出现即可
         mGridView.setItemAnimator(null);
+        // 加大复用池：快速滑动时新出现的卡片优先从池里取（只需 bind，不用 inflate），
+        // 默认池只有 5 个，一屏十几张卡片时会频繁新建 view 造成掉帧
+        try {
+            mGridView.getRecycledViewPool()
+                    .setMaxRecycledViews(0, Math.min(Math.max(8, spanCount * 2), 14));
+        } catch (Throwable ignore) {
+        }
         gridAdapter = new GridAdapter();
         this.page =1;
         this.maxPage =1;

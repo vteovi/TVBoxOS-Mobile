@@ -101,6 +101,9 @@ public class GridAdapter extends BaseQuickAdapter<Movie.Video, BaseViewHolder> {
                         .resize(sDecodeW, sDecodeH)
                         .onlyScaleDown()
                         .centerCrop()
+                        // 关掉 Picasso 默认的 200ms 淡入：一屏十几张海报同时做 alpha 混合动画，
+                        // 滑动时每帧都要额外合成，正是“图片刚加载出来那一刻掉帧”的来源之一
+                        .noFade()
                         .placeholder(R.drawable.img_loading_placeholder)
                         .error(R.drawable.img_loading_placeholder)
                         .into(ivThumb);
