@@ -169,6 +169,7 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             mBinding.switchLandscapeCard.setChecked(newConfig)
             Hawk.put(HawkConfig.LANDSCAPE_CARD, newConfig)
             // 卡片比例在 measure 阶段读缓存，切换后立即刷新，避免仍按旧比例显示
+            com.github.tvbox.osc.ui.widget.PosterCardLayout.invalidateRatioCache()
             com.github.tvbox.osc.ui.widget.RatioShadowLayout.invalidateRatioCache()
             // 16:9 / 2:3 变了，海报解码尺寸同步重算
             com.github.tvbox.osc.ui.adapter.GridAdapter.resetDecodeSize()

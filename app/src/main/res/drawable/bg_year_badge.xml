@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 海报右上角的年份角标背景：橙色，仅右下角圆角（与原来 ShadowLayout 的 hl_cornerRadius_rightBottom 一致） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/orange" />
+    <corners android:bottomRightRadius="8dp" />
+</shape>

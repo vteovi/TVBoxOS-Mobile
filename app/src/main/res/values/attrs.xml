@@ -48,4 +48,9 @@
         <attr name="endColor" />
         <attr name="topDelta" />
     </declare-styleable>
+
+    <!-- 海报卡片容器：圆角由 GPU outline 裁切（替代软件 clipPath） -->
+    <declare-styleable name="PosterCardLayout">
+        <attr name="pcCornerRadius" format="dimension" />
+    </declare-styleable>
 </resources>
