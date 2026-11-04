@@ -1,5 +1,13 @@
 # TVBoxOS-Mobile 项目长期笔记
 
+## 分支策略（2026-11-04 起，用户明确要求）
+- **`dev` = 开发/测试分支，日常所有代码改动都在这里**（本地已 `git switch dev`，跟踪 `origin/dev`）。
+- **`main` = 稳定版，只接受从 dev 合并**（外加 CI 发版后 bot 的 `chore: sync release metadata` 提交）。**不要直接在 main 上写代码/提交功能**。
+- 稳定后合并：`git switch main && git pull --rebase origin main && git merge --no-ff dev && git push origin main`，然后打 tag 发版。
+- 发版后 main 会多一条 bot 元数据提交 → 回 dev 开工前先 `git switch dev && git merge origin/main`（或 rebase），避免下次合并冲突。
+- 推 `dev` **不会**触发 CI（workflow 只监听 `push: tags:["v*"]` + `workflow_dispatch`），可以放心多推。
+- 版本号仍在 dev 上改：功能做完就升（feat→MINOR / fix→PATCH），合并进 main 即发布态。
+
 ## 构建 / 签名 / 安装（Windows）
 - 环境：JDK 17 `C:\Java\jdk-17`、SDK `C:\Android\Sdk`（`local.properties` 的 `sdk.dir`）、`applicationId=com.github.tvbox.osc.mobile`（可与官方/mbox 并存）。仓库实际在 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`，**必须沙箱外执行**，否则 Gradle 缓存被拦、报假的 AAPT 错误。产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。
