@@ -1,6 +1,6 @@
 {
-  "version": "2.28.9",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.9/TVBox-Mobile-v2.28.9-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.9/TVBox-Mobile-v2.28.9-armv7a.apk",
-  "changelog": "**修复「导入本地 JSON 后再切回在线订阅，首页数据源被换掉」**：首页站点原来只用一个全局 key（`home_api`）记录，切到本地配置时会被改成本地站点，再切回在线配置就找不到这个 key，于是退回配置里的**第一个**站点。第一个站点不一定支持快速搜索，表现就是「点海报不再进聚合搜索，而是进详情页且没有内容」。现在按订阅配置分别记忆各自选过的首页站点，切走再切回来会恢复原站点\n**点击海报时校验影片所属数据源是否还存在**：切过订阅/配置后列表上可能还留着旧数据，这时进详情只会拿到空白。现在这种情况直接用标题走聚合搜索，去其它源里找同名影片\n**详情/搜索/快速搜索/播放接口补空源保护**：数据源不存在时原来会直接空指针，现在返回空结果，界面走空态而不会闪退\n**详情接口异常时补发空结果**：spider 取详情抛异常时原来一个结果都不回，详情页会一直停在加载中（看起来就是空白页）"
+  "version": "2.29.0",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.0/TVBox-Mobile-v2.29.0-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.0/TVBox-Mobile-v2.29.0-armv7a.apk",
+  "changelog": "**新增「重置软件」（设置页 → 重置软件）**：效果等同系统设置里的「清除应用数据」，但不用退出软件去系统设置里操作。覆盖安装（尤其跨多个版本升级）时，设置、数据库、缓存文件会带着旧版本的残留状态过来，一些\"莫名其妙\"的问题——首页加载不出来、切源后源列表异常、播放器行为怪异——往往清一次数据就好，以后再遇到可以先试试这里\n**清除范围**：全部设置项（界面、播放器、主题等）、订阅源与直播源配置、观看历史与收藏、搜索记录、配置缓存与播放器插件（`csp_*.jar`）、海报图片缓存；外置存储里的备份文件不受影响\n**两步确认防误触**：先弹说明窗列出会清除的内容，点「重置软件」后再弹一次最后确认；说明窗里也提示了「建议先到数据备份还原导出备份」，避免手抖丢掉收藏和订阅\n**重置后自动重启**：清除完成会提示并重启进程，回到刚安装的状态（自动恢复内置订阅），内存里的旧状态一并消失，不需要手动划掉后台"
 }
