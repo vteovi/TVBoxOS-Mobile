@@ -20,8 +20,10 @@ import com.github.tvbox.osc.ui.adapter.SelectDialogAdapter.SelectDialogInterface
 import com.github.tvbox.osc.ui.dialog.BackupDialog
 import com.github.tvbox.osc.ui.dialog.DeviceSyncDialog
 import com.github.tvbox.osc.ui.dialog.LiveApiDialog
+import com.github.tvbox.osc.ui.dialog.ResetAppDialog
 import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.util.FastClickCheckUtil
+import com.github.tvbox.osc.util.AppResetHelper
 import com.github.tvbox.osc.util.BackupManager
 import com.github.tvbox.osc.util.FileUtils
 import com.github.tvbox.osc.util.HawkConfig
@@ -503,6 +505,13 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 .isDarkTheme(Utils.isDarkTheme())
                 .asConfirm("提示", "确定清空吗？") { onClickClearCache(view) }.show()
         }
+        mBinding.llResetApp.setOnClickListener {
+            ResetAppDialog(this@SettingActivity, object : ResetAppDialog.OnActionListener {
+                override fun onReset() {
+                    confirmResetApp()
+                }
+            }).show()
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             mBinding.llTheme.visibility = View.GONE
         }
@@ -641,6 +650,41 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
             }
         }.start()
         ToastUtils.showLong("缓存已清空")
+    }
+
+    /**
+     * 「重置软件」的二次确认。
+     *
+     * 说明弹窗关掉之后隔一小段再弹，避免两个窗口叠在一起（第二个会被前一个的退出动画盖住）。
+     */
+    private fun confirmResetApp() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (isFinishing) return@postDelayed
+            XPopup.Builder(this)
+                .isDarkTheme(Utils.isDarkTheme())
+                .asConfirm(
+                    "最后确认",
+                    "所有设置、订阅源、观看历史和收藏都会被清除，且无法恢复。\n确定重置吗？"
+                ) { doResetApp() }
+                .show()
+        }, 150)
+    }
+
+    /**
+     * 真正执行重置：清设置、清历史收藏、清私有目录与缓存目录，然后重启进程。
+     *
+     * 必须重启：Hawk、数据库、配置缓存都已经清空，但内存里还是旧对象，不重启等于没重置干净。
+     */
+    private fun doResetApp() {
+        AppResetHelper.resetAll(object : AppResetHelper.Callback {
+            override fun onFinished(success: Boolean, message: String?) {
+                if (isFinishing) return
+                ToastUtils.showLong(if (success) "已重置，正在重启…" else (message ?: "重置未完成"))
+                Handler(Looper.getMainLooper()).postDelayed({
+                    AppUtils.relaunchApp(true)
+                }, 1500)
+            }
+        })
     }
 
     private fun getHomeRecName(type: Int): String {

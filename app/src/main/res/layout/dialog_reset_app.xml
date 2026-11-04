@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_bottom_dialog"
+        android:orientation="vertical"
+        android:paddingHorizontal="36dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="22dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="重置软件"
+            android:textColor="@color/text_foreground"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:lineSpacingExtra="3dp"
+            android:text="相当于系统设置里的「清除应用数据」，用于解决覆盖安装后遗留的异常。清除后软件回到刚安装的状态，需要重新添加订阅源。"
+            android:textColor="@color/text_sub_foreground"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:lineSpacingExtra="4dp"
+            android:text="将会清除：\n· 全部设置（界面、播放器、主题等）\n· 订阅源与直播源配置\n· 观看历史、收藏、搜索记录\n· 配置缓存、播放器插件、图片缓存"
+            android:textColor="@color/text_foreground"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:lineSpacingExtra="3dp"
+            android:text="此操作无法撤销，建议先到「数据备份还原」导出一份备份。"
+            android:textColor="@color/red"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnCancel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/dp_6"
+                android:layout_marginRight="@dimen/dp_6"
+                android:layout_weight="1"
+                android:background="@drawable/bg_r_common_stroke_primary"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/dp_10"
+                android:text="取消"
+                android:textColor="@color/colorPrimary"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/btnReset"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp_6"
+                android:layout_marginLeft="@dimen/dp_6"
+                android:layout_weight="1"
+                android:background="@drawable/bg_r_common_solid_red"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/dp_10"
+                android:text="重置软件"
+                android:textColor="@color/color_FFFFFF"
+                android:textSize="15sp" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
