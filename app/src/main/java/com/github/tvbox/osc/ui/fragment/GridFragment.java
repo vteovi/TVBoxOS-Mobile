@@ -94,6 +94,9 @@ public class GridFragment extends BaseLazyFragment {
             //activity销毁再进入,会直接恢复fragment,从而直接getList,导致sortData为空闪退
             this.sortData = GsonUtils.fromJson(savedInstanceState.getString("sortDataJson"), MovieSort.SortData.class);
         }
+        // 分栏滑走较远时会被 FragmentStatePagerAdapter 销毁、返回时复用同一实例重建，
+        // 但此时 init() 不会再执行，必须在这里把列表订阅补挂回去（首次创建时 sourceViewModel 还是 null，会跳过）。
+        bindListResult();
     }
 
     @Override
@@ -228,8 +231,7 @@ public class GridFragment extends BaseLazyFragment {
             public void onLoadMoreRequested() {
                 if (mLoading) return; // 上一页还在加载中，跳过
                 gridAdapter.setEnableLoadMore(true);
-                mLoading = true;
-                sourceViewModel.getList(sortData, page);
+                requestList();
             }
         }, mGridView);
         gridAdapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
@@ -307,88 +309,186 @@ public class GridFragment extends BaseLazyFragment {
                 applyGridLayoutManager();
             }
         }
-        // 从其他分栏切回来时，兜底重置加载状态，防止之前的请求回调丢失导致永久卡住
-        if (mLoading) {
-            mLoading = false;
-            if (gridAdapter != null) {
-                gridAdapter.loadMoreComplete();
-                gridAdapter.setEnableLoadMore(true);
+        // 分栏被销毁重建后 view 可能重新走了一遍创建流程，这里确保列表仍然绑着 adapter/LayoutManager
+        if (mGridView != null && gridAdapter != null) {
+            if (mGridView.getAdapter() != gridAdapter) {
+                mGridView.setAdapter(gridAdapter);
+            }
+            if (mGridView.getLayoutManager() == null) {
+                applyGridLayoutManager();
             }
         }
+        // 从其他分栏切回来时，兜底恢复加载状态：
+        //  - 请求还在路上（或分栏被销毁期间回来了，等重建后由 LiveData 补投）→ 继续等，别打断
+        //  - 已经超时（回调丢失）→ 复位，让用户还能继续上滑加载
+        // 已到底（page > maxPage）时不要把"加载更多"重新打开，否则会白请求一个越界页
+        boolean requestLost = mWaitingList
+                && android.os.SystemClock.elapsedRealtime() - mListReqAt > 20000;
+        if (requestLost || (mLoading && !mWaitingList)) {
+            mWaitingList = false;
+            mLoading = false;
+            if (mGridView != null) mGridView.removeCallbacks(mListTimeoutRunnable);
+            resetLoadMoreState();
+        }
+        // 分栏重新可见时给自动补页一次新的额度：重建过 view 后列表可能又变成"滑不动"
+        if (mAutoFillCount >= 3) mAutoFillCount = 0;
         // 分栏切回来时补一次「是否满屏」检查：旋屏后列数变化也可能又变成滑不动
         scheduleAutoFill();
+    }
+
+    /** 按当前页码恢复"加载更多"的可用状态（到底了就保持关闭） */
+    private void resetLoadMoreState() {
+        if (gridAdapter == null) return;
+        if (page > maxPage) {
+            gridAdapter.loadMoreEnd();
+            gridAdapter.setEnableLoadMore(false);
+        } else {
+            gridAdapter.loadMoreComplete();
+            gridAdapter.setEnableLoadMore(true);
+        }
+    }
+
+    /**
+     * 已发出列表请求、正在等回调。
+     *
+     * <p>首页分栏用 FragmentStatePagerAdapter(offscreenPageLimit 默认 1)：滑过好几个分栏后，
+     * 前面的分栏会被销毁、返回时复用同一个 Fragment 实例重建视图。重建后 LiveData 在新订阅者
+     * 注册时会<b>重放最后一次值</b>。重放值如果被当成新的一页处理，会 page++ 越过 maxPage
+     * 直接 setEnableLoadMore(false)；如果重放的是上一次的失败结果(null)，还会弹"没有更多了"
+     * 并永久关掉加载更多——表现就是"加载到一定程度后上滑再也不加载，只能重启"。
+     * 用"有没有在等回调"来判定：没在等就是重放，直接丢弃。
+     */
+    private boolean mWaitingList = false;
+    /** 本次列表请求的发起时刻，用于判断回调是否已经丢失 */
+    private long mListReqAt = 0;
+
+    /** 列表结果订阅：必须是字段，Fragment 被销毁重建后要能重新注册同一个 observer */
+    private final Observer<AbsXml> mListObserver = new Observer<AbsXml>() {
+        @Override
+        public void onChanged(AbsXml absXml) {
+            if (!mWaitingList) return; // LiveData 重放/迟到回调，丢弃
+            mWaitingList = false;
+            if (mGridView != null) mGridView.removeCallbacks(mListTimeoutRunnable);
+            handleListResult(absXml);
+        }
+    };
+
+    /**
+     * 重新挂上列表订阅。
+     *
+     * <p>Fragment 生命周期被销毁时，observe(this) 注册的观察者会被自动移除；
+     * 而复用实例重建时 init() 不会再执行（mIsFirstVisible 已是 false），
+     * 所以必须在每次 onCreate 时补挂一次，否则所有 getList 响应都无人接收，
+     * 加载更多会永久卡死（只能重启 App）。
+     */
+    private void bindListResult() {
+        if (sourceViewModel == null) return;
+        sourceViewModel.listResult.observe(this, mListObserver);
     }
 
     private void initViewModel() {
         if(sourceViewModel != null) { return;}
         sourceViewModel = new ViewModelProvider(this).get(SourceViewModel.class);
-        sourceViewModel.listResult.observe(this, new Observer<AbsXml>() {
-            @Override
-            public void onChanged(AbsXml absXml) {
-//                if(mGridView != null) mGridView.requestFocus();
-                // 自动补页是后台行为，不该弹「没有更多了」打扰用户
-                boolean autoFill = mAutoFilling;
-                mAutoFilling = false;
-                if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
-                    if (page == 1) {
-                        // 如果已经从本地缓存显示过数据，后台返回时更新缓存文件；
-                        // 同时静默替换列表数据，避免缓存旧数据和第二页新数据重叠导致重复
-                        boolean shownFromCache = isLoad && gridAdapter.getData().size() > 0;
-                        try {
-                            Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
-                        } catch (Exception ignore) {}
-                        if (shownFromCache) {
-                            // 内容没变就别整表替换：setNewData 会让 RecyclerView 重新布局并
-                            // 丢掉当前浏览位置，表现就是正在滑动的列表“内容突然往下掉一截”。
-                            if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)) {
-                                replaceDataKeepingScroll(absXml.movie.videoList);
-                            }
-                        } else {
-                            showSuccess();
-                            isLoad = true;
-                            gridAdapter.setNewData(absXml.movie.videoList);
-                        }
-                    } else {
-                        // 加载更多：按影片 id 去重，避免分页边界数据重叠导致重复显示
-                        List<Movie.Video> existing = gridAdapter.getData();
-                        java.util.Set<String> seen = new java.util.HashSet<>();
-                        for (Movie.Video v : existing) {
-                            if (v != null && !TextUtils.isEmpty(v.id)) seen.add(v.id);
-                        }
-                        List<Movie.Video> fresh = new java.util.ArrayList<>();
-                        for (Movie.Video v : absXml.movie.videoList) {
-                            if (v != null && !TextUtils.isEmpty(v.id) && seen.add(v.id)) {
-                                fresh.add(v);
-                            }
-                        }
-                        if (!fresh.isEmpty()) gridAdapter.addData(fresh);
-                    }
-                    page++;
-                    maxPage = absXml.movie.pagecount;
+        bindListResult();
+    }
 
-                    if (page > maxPage) {
-                        gridAdapter.loadMoreEnd();
-                        gridAdapter.setEnableLoadMore(false);
-                        if(page>2 && !autoFill)Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
-                    } else {
-                        gridAdapter.loadMoreComplete();
-                        gridAdapter.setEnableLoadMore(true);
+    /** 发起一次当前分类的列表请求（page 由调用方维护），统一登记"正在等回调" */
+    private void requestList() {
+        if (sourceViewModel == null) return;
+        mWaitingList = true;
+        mListReqAt = android.os.SystemClock.elapsedRealtime();
+        mLoading = true;
+        scheduleListTimeout();
+        sourceViewModel.getList(sortData, page);
+    }
+
+    /**
+     * 请求超时兜底：网络超时是 10s，20s 还没回调说明这次回调丢了（请求被取消/异常分支漏发）。
+     * 不复位的话"加载更多"会永远停在 loading，用户怎么上滑都不再加载，只能重启 App。
+     */
+    private void scheduleListTimeout() {
+        if (mGridView == null) return;
+        mGridView.removeCallbacks(mListTimeoutRunnable);
+        mGridView.postDelayed(mListTimeoutRunnable, 20000);
+    }
+
+    private final Runnable mListTimeoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!mWaitingList) return;
+            if (android.os.SystemClock.elapsedRealtime() - mListReqAt < 20000) {
+                if (mGridView != null) mGridView.postDelayed(this, 20000);
+                return;
+            }
+            mWaitingList = false;
+            mLoading = false;
+            resetLoadMoreState();
+            scheduleAutoFill();
+        }
+    };
+
+    private void handleListResult(AbsXml absXml) {
+        // 自动补页是后台行为，不该弹「没有更多了」打扰用户
+        boolean autoFill = mAutoFilling;
+        mAutoFilling = false;
+        if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
+            if (page == 1) {
+                // 如果已经从本地缓存显示过数据，后台返回时更新缓存文件；
+                // 同时静默替换列表数据，避免缓存旧数据和第二页新数据重叠导致重复
+                boolean shownFromCache = isLoad && gridAdapter.getData().size() > 0;
+                try {
+                    Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
+                } catch (Exception ignore) {}
+                if (shownFromCache) {
+                    // 内容没变就别整表替换：setNewData 会让 RecyclerView 重新布局并
+                    // 丢掉当前浏览位置，表现就是正在滑动的列表“内容突然往下掉一截”。
+                    if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)) {
+                        replaceDataKeepingScroll(absXml.movie.videoList);
                     }
                 } else {
-                    if(page == 1){
-                        showEmpty();
-                    }else{
-                        if (!autoFill) {
-                            Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
-                        }
-                        gridAdapter.loadMoreEnd();
-                    }
-                    gridAdapter.setEnableLoadMore(false);
+                    showSuccess();
+                    isLoad = true;
+                    gridAdapter.setNewData(absXml.movie.videoList);
                 }
-                mLoading = false;
-                scheduleAutoFill();
+            } else {
+                // 加载更多：按影片 id 去重，避免分页边界数据重叠导致重复显示
+                List<Movie.Video> existing = gridAdapter.getData();
+                java.util.Set<String> seen = new java.util.HashSet<>();
+                for (Movie.Video v : existing) {
+                    if (v != null && !TextUtils.isEmpty(v.id)) seen.add(v.id);
+                }
+                List<Movie.Video> fresh = new java.util.ArrayList<>();
+                for (Movie.Video v : absXml.movie.videoList) {
+                    if (v != null && !TextUtils.isEmpty(v.id) && seen.add(v.id)) {
+                        fresh.add(v);
+                    }
+                }
+                if (!fresh.isEmpty()) gridAdapter.addData(fresh);
             }
-        });
+            page++;
+            maxPage = absXml.movie.pagecount;
+
+            if (page > maxPage) {
+                gridAdapter.loadMoreEnd();
+                gridAdapter.setEnableLoadMore(false);
+                if(page>2 && !autoFill)Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+            } else {
+                gridAdapter.loadMoreComplete();
+                gridAdapter.setEnableLoadMore(true);
+            }
+        } else {
+            if(page == 1){
+                showEmpty();
+            }else{
+                if (!autoFill) {
+                    Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+                }
+                gridAdapter.loadMoreEnd();
+            }
+            gridAdapter.setEnableLoadMore(false);
+        }
+        mLoading = false;
+        scheduleAutoFill();
     }
 
     /** 连续自动补页的次数上限：避免「源本身每页只给一两条」时把整个目录都拉下来 */
@@ -425,8 +525,7 @@ public class GridFragment extends BaseLazyFragment {
         if (mGridView.canScrollVertically(1) || mGridView.canScrollVertically(-1)) return;
         mAutoFillCount++;
         mAutoFilling = true;
-        mLoading = true;
-        sourceViewModel.getList(sortData, page);
+        requestList();
     }
 
     /** 两个列表的影片 id（顺序也一致）完全相同，用于跳过无意义的整表刷新 */
@@ -502,8 +601,7 @@ public class GridFragment extends BaseLazyFragment {
         if (page == 1 && !isLoad) {
             showLoading();
         }
-        mLoading = true;
-        sourceViewModel.getList(sortData, page);
+        requestList();
     }
 
     private String cacheKey() {

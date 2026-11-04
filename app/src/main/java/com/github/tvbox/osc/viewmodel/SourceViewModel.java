@@ -271,6 +271,8 @@ public class SourceViewModel extends ViewModel {
                         json(listResult, result, homeSourceBean.getKey());
                     } catch (Throwable th) {
                         th.printStackTrace();
+                        // 必须回一个结果：否则调用方永远等不到回调，加载更多会卡死在"正在加载"
+                        if (seq == listSeq) listResult.postValue(null);
                     }
                 }
             });
