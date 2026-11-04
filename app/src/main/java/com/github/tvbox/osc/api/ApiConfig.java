@@ -66,6 +66,11 @@ public class ApiConfig {
 
     private SourceBean emptyHome = new SourceBean();
 
+    /** 每个订阅配置各自记住"上次选中的首页站点"的前缀（key = 前缀 + md5(配置地址)） */
+    private static final String HOME_API_OF_PREFIX = "home_api_of_";
+    /** 当前正在解析的配置地址，用于按配置分组保存首页站点 */
+    private String mCurApiUrl = "";
+
     private JarLoader jarLoader = new JarLoader();
     private JsLoader jsLoader = new JsLoader();
 
@@ -455,6 +460,7 @@ public class ApiConfig {
     }
 
     private void parseJson(String apiUrl, String jsonStr) {
+        mCurApiUrl = apiUrl == null ? "" : apiUrl;
         JsonObject infoJson = new Gson().fromJson(jsonStr, JsonObject.class);
         // spider
         spider = DefaultConfig.safeJsonString(infoJson, "spider", "");
@@ -490,7 +496,11 @@ public class ApiConfig {
             sourceBeanList.put(siteKey, sb);
         }
         if (sourceBeanList != null && sourceBeanList.size() > 0) {
-            String home = Hawk.get(HawkConfig.HOME_API, "");
+            // 首页站点按"订阅配置"分别记忆：HOME_API 是全局唯一值，切到本地配置时会被改成本地站点，
+            // 再切回在线配置就找不到该 key，于是退回 firstSite —— 用户原来选的站点被悄悄换掉，
+            // 表现就是"点海报的跳转行为变了"（不再进聚合搜索，而是进详情且没有内容）。
+            String home = homeApiOf(mCurApiUrl);
+            if (TextUtils.isEmpty(home)) home = Hawk.get(HawkConfig.HOME_API, "");
             SourceBean sh = getSource(home);
             if (sh == null)
                 setSourceBean(firstSite);
@@ -879,6 +889,23 @@ public class ApiConfig {
     public void setSourceBean(SourceBean sourceBean) {
         this.mHomeSource = sourceBean;
         Hawk.put(HawkConfig.HOME_API, sourceBean.getKey());
+        // 同时按当前订阅配置记一份，切走再切回来能恢复用户选过的站点
+        if (!TextUtils.isEmpty(mCurApiUrl)) {
+            try {
+                Hawk.put(HOME_API_OF_PREFIX + MD5.encode(mCurApiUrl), sourceBean.getKey());
+            } catch (Throwable ignore) {
+            }
+        }
+    }
+
+    /** 取出某个订阅配置上次选中的首页站点 key（没有则返回空） */
+    private String homeApiOf(String apiUrl) {
+        if (TextUtils.isEmpty(apiUrl)) return "";
+        try {
+            return Hawk.get(HOME_API_OF_PREFIX + MD5.encode(apiUrl), "");
+        } catch (Throwable th) {
+            return "";
+        }
     }
 
     public void setDefaultParse(ParseBean parseBean) {

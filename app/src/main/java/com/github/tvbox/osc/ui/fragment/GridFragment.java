@@ -245,21 +245,21 @@ public class GridFragment extends BaseLazyFragment {
                     bundle.putString("sourceKey", video.sourceKey);
                     bundle.putString("title", video.name);
                     SourceBean homeSourceBean = ApiConfig.get().getHomeSourceBean();
-                    if(("12".indexOf(getUITag()) != -1) && (video.tag.equals("folder") || video.tag.equals("cover"))){
+                    // 影片所属数据源已经不存在（切过订阅/本地配置，列表上还是旧数据）：
+                    // 进详情只会拿到一片空白，直接用标题走聚合搜索，去其它源里找同名影片
+                    boolean sourceAlive = !TextUtils.isEmpty(video.sourceKey)
+                            && ApiConfig.get().getSource(video.sourceKey) != null;
+                    if (("12".indexOf(getUITag()) != -1)
+                            && ("folder".equals(video.tag) || "cover".equals(video.tag))) {
                         focusedView = view;
-                        changeView(video.id,video.tag.equals("folder"));
-                    }
-                    else if(homeSourceBean.isQuickSearch() && Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
+                        changeView(video.id, "folder".equals(video.tag));
+                    } else if (!sourceAlive
+                            || (homeSourceBean.isQuickSearch() && Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch())
+                            || TextUtils.isEmpty(video.id) || video.id.startsWith("msearch:")) {
                         jumpActivity(FastSearchActivity.class, bundle);
-                    }else{
-                        if(TextUtils.isEmpty(video.id) || video.id.startsWith("msearch:")){
-                            jumpActivity(FastSearchActivity.class, bundle);
-//                            jumpActivity(SearchActivity.class, bundle);
-                        }else {
-                            jumpActivity(DetailActivity.class, bundle);
-                        }
+                    } else {
+                        jumpActivity(DetailActivity.class, bundle);
                     }
-
                 }
             }
         });
