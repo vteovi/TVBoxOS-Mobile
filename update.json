@@ -1,6 +1,5 @@
 {
-  "version": "2.28.7",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.7/TVBox-Mobile-v2.28.7-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.7/TVBox-Mobile-v2.28.7-armv7a.apk",
-  "changelog": "**图片下载单独限并发**：一屏十几张海报在绑定时会同时发起请求，全部并行建连/握手时 CPU 峰值很高，会和渲染线程抢核心（正是「新内容刷出来那一下卡」的最后一环）。现在给图片一个独立 `Dispatcher`（共享连接池与线程池，只隔离并发计数），per-host 并发收到 8；接口请求仍走原来的调度器，多源并发搜索不受影响\n**卡片层级扁平化**：海报卡片去掉了一层多余的 `RelativeLayout`——卡片根布局本身就是 `FrameLayout`，年份角标与底部文字条直接用 `layout_gravity` 定位即可，每张卡片少一层 measure/layout/draw（一屏十几张、滑动时持续受益）。搜索结果卡片同步处理\n**关闭过卷拉伸效果**：列表加上 `overScrollMode=\"never\"`，去掉 Android 12+ 滚动到边界时的拉伸动画（那层动画每帧都要额外合成，也是之前「内容从上往下掉一截」观感的来源）"
+  "version": "2.28.8",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.8/TVBox-Mobile-v2.28.8-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.28.8/TVBox-Mobile-v2.28.8-armv7a.apk"
 }
