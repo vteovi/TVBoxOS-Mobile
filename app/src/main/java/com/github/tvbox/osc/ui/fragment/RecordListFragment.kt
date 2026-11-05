@@ -30,6 +30,12 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
     private var historyAdapter: HistoryAdapter? = null
     private var type = 0
 
+    /** 列表数据已加载完成（区分「还没查」和「查到了 0 条」） */
+    private var loaded = false
+
+    /** 条数变化回调，交给宿主页面刷新 Tab 上的数量 */
+    private var onCountChanged: ((Int) -> Unit)? = null
+
     companion object {
         const val TYPE_COLLECT = 0
         const val TYPE_HISTORY = 1
@@ -68,6 +74,7 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
                 val item = collectAdapter!!.data[position]
                 collectAdapter!!.remove(position)
                 RoomDataManger.deleteVodCollect(item.id)
+                notifyCount()
                 true
             }
         } else {
@@ -86,6 +93,7 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
                 val vodInfo = historyAdapter!!.data[position]
                 historyAdapter!!.remove(position)
                 RoomDataManger.deleteVodRecord(vodInfo.sourceKey, vodInfo)
+                notifyCount()
                 true
             }
         }
@@ -93,17 +101,42 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
         loadData()
     }
 
+    /**
+     * 设置条数回调。如果数据已经加载过，会立刻回传一次当前条数，
+     * 避免宿主设置回调的时机晚于本次加载而拿不到数量。
+     */
+    fun setOnCountChangedListener(listener: (Int) -> Unit) {
+        onCountChanged = listener
+        if (loaded) notifyCount()
+    }
+
+    private fun notifyCount() {
+        val count = when (type) {
+            TYPE_COLLECT -> collectAdapter?.data?.size
+            else -> historyAdapter?.data?.size
+        }
+        if (count != null) onCountChanged?.invoke(count)
+    }
+
     fun loadData() {
         lifecycleScope.launch(Dispatchers.IO) {
             if (type == TYPE_COLLECT) {
                 val list = RoomDataManger.getAllVodCollect()
-                withContext(Dispatchers.Main) { collectAdapter?.setNewData(list) }
+                withContext(Dispatchers.Main) {
+                    collectAdapter?.setNewData(list)
+                    loaded = true
+                    notifyCount()
+                }
             } else {
                 val records = RoomDataManger.getAllVodRecord(200)
                 for (vodInfo in records) {
                     if (!vodInfo.playNote.isNullOrEmpty()) vodInfo.note = vodInfo.playNote
                 }
-                withContext(Dispatchers.Main) { historyAdapter?.setNewData(records) }
+                withContext(Dispatchers.Main) {
+                    historyAdapter?.setNewData(records)
+                    loaded = true
+                    notifyCount()
+                }
             }
         }
     }
