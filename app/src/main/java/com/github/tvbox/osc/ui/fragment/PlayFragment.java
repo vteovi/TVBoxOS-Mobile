@@ -37,7 +37,7 @@ import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.DiffUtil;
 
-import com.blankj.utilcode.util.ColorUtils;
+import com.github.tvbox.osc.util.Utils;
 import com.blankj.utilcode.util.LogUtils;
 import com.blankj.utilcode.util.RegexUtils;
 import com.blankj.utilcode.util.ScreenUtils;
@@ -661,7 +661,7 @@ public class PlayFragment extends BaseLazyFragment {
                     SpanUtils.with(mPlayLoadTip)
                             .append("视频播放出错，")
                             .append("切换播放器")
-                            .setClickSpan(ColorUtils.getColor(R.color.orange), false, view -> {
+                            .setClickSpan(Utils.getThemeColor(requireContext(), R.color.orange), false, view -> {
                                 mController.mPlayerBtn.performClick();
                             }).create();
                 }
