@@ -1,6 +1,6 @@
 {
-  "version": "2.29.0",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.0/TVBox-Mobile-v2.29.0-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.0/TVBox-Mobile-v2.29.0-armv7a.apk",
-  "changelog": "**新增「重置软件」（设置页 → 重置软件）**：效果等同系统设置里的「清除应用数据」，但不用退出软件去系统设置里操作。覆盖安装（尤其跨多个版本升级）时，设置、数据库、缓存文件会带着旧版本的残留状态过来，一些\"莫名其妙\"的问题——首页加载不出来、切源后源列表异常、播放器行为怪异——往往清一次数据就好，以后再遇到可以先试试这里\n**清除范围**：全部设置项（界面、播放器、主题等）、订阅源与直播源配置、观看历史与收藏、搜索记录、配置缓存与播放器插件（`csp_*.jar`）、海报图片缓存；外置存储里的备份文件不受影响\n**两步确认防误触**：先弹说明窗列出会清除的内容，点「重置软件」后再弹一次最后确认；说明窗里也提示了「建议先到数据备份还原导出备份」，避免手抖丢掉收藏和订阅\n**重置后自动重启**：清除完成会提示并重启进程，回到刚安装的状态（自动恢复内置订阅），内存里的旧状态一并消失，不需要手动划掉后台"
+  "version": "2.29.1",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.1/TVBox-Mobile-v2.29.1-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.29.1/TVBox-Mobile-v2.29.1-armv7a.apk",
+  "changelog": "**修复「手机系统深色 + 软件内选浅色」时直播页文字看不见**：直播页频道列表、分组列表的未选中项用了 `ColorUtils.getColor()` 取色，这个库内部是拿 **Application** 的 Resources 解析颜色——而 AppCompat 的浅色/深色覆盖只写在 Activity 的 Resources 上，所以系统深色时会取到 `values-night` 里的**白色**，配上按 Activity 解析出的浅色背景就是白底白字。现在改用新增的 `Utils.getThemeColor(context, resId)`，统一按当前页面（Activity）的主题取色\n**同类修复覆盖到播放控制条**：投屏/线路/倍速等按钮的文字色、直播设置弹窗的分组与选项文字同样存在此问题，一并改掉（App 深色 + 系统浅色时原本是黑底黑字）\n**修复主题判断在「系统与软件设置不一致」时误判**：`Utils.isDarkTheme()` 原来直接读 `App.getInstance().getResources()` 的 `uiMode`，那永远是系统值，于是「系统深色 + 软件浅色」时误判成深色——弹窗被当成深色渲染、状态栏图标也被设成白色（浅色状态栏上白图标看不清）。现在优先看 App 实际设置的主题（`AppCompatDelegate.getDefaultNightMode()`），只有「跟随系统」时才读系统值"
 }
