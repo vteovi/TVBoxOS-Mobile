@@ -6,7 +6,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
-import com.blankj.utilcode.util.ColorUtils;
+import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.databinding.DialogPlayingControlBinding;
 import com.github.tvbox.osc.player.MyVideoView;
@@ -121,7 +121,7 @@ public class PlayingControlRightDialog extends DrawerPopupView {
     private void updatePlayInfoUi(){
         boolean on = mController.isPlayInfoVisible();
         mBinding.playInfo.setBackground(getResources().getDrawable(on ? R.drawable.bg_r_common_solid_primary : R.drawable.bg_r_common_stroke_primary));
-        mBinding.playInfo.setTextColor(ColorUtils.getColor(on ? R.color.white : R.color.text_foreground));
+        mBinding.playInfo.setTextColor(Utils.getThemeColor(getContext(), on ? R.color.white : R.color.text_foreground));
         mBinding.playInfo.setText(on ? "播放信息(开)" : "播放信息");
     }
 
@@ -158,10 +158,10 @@ public class PlayingControlRightDialog extends DrawerPopupView {
             TextView tv= (TextView) mBinding.containerSpeed.getChildAt(i);
             if (String.valueOf(mPlayer.getSpeed()).equals(tv.getText().toString().replace("x",""))){
                 tv.setBackground(getResources().getDrawable(R.drawable.bg_r_common_solid_primary));
-                tv.setTextColor(ColorUtils.getColor(R.color.white));
+                tv.setTextColor(Utils.getThemeColor(getContext(), R.color.white));
             }else {
                 tv.setBackground(getResources().getDrawable(R.drawable.bg_r_common_stroke_primary));
-                tv.setTextColor(ColorUtils.getColor(R.color.text_foreground));
+                tv.setTextColor(Utils.getThemeColor(getContext(), R.color.text_foreground));
             }
         }
     }

@@ -6,7 +6,9 @@ import android.database.Cursor;
 import android.os.Build;
 import android.provider.MediaStore;
 
+import androidx.annotation.ColorRes;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.ContextCompat;
 
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.VideoInfo;
@@ -159,9 +161,36 @@ public class Utils {
         return videoList;
     }
 
-    public static boolean isDarkTheme(){
+    /**
+     * App 当前是不是深色主题。
+     *
+     * <p>必须优先看 {@link AppCompatDelegate#getDefaultNightMode()}，不能直接用
+     * {@code App.getInstance().getResources().getConfiguration().uiMode} 判断：
+     * AppCompat 只把浅色/深色的覆盖写到 <b>Activity</b> 的 Resources 上，
+     * Application 的 configuration 始终是「系统」的值。于是「系统深色 + App 内选浅色」
+     * 这种组合会误判成深色（反之 App 深色 + 系统浅色会误判成浅色）。
+     */
+    public static boolean isDarkTheme() {
+        int mode = AppCompatDelegate.getDefaultNightMode();
+        if (mode == AppCompatDelegate.MODE_NIGHT_YES) return true;
+        if (mode == AppCompatDelegate.MODE_NIGHT_NO) return false;
+        // FOLLOW_SYSTEM / UNSPECIFIED：这时 Application 的 configuration 才是可信的
         int currentNightMode = App.getInstance().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-        return currentNightMode == Configuration.UI_MODE_NIGHT_YES || AppCompatDelegate.getDefaultNightMode()==AppCompatDelegate.MODE_NIGHT_YES;
+        return currentNightMode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /**
+     * 按 App 当前主题解析颜色资源。
+     *
+     * <p>不要用 {@code ColorUtils.getColor(id)}（androidutilcode）：它内部是
+     * {@code ContextCompat.getColor(Utils.getApp(), id)}，走的是 <b>Application</b> 的 Resources。
+     * 系统深色 + App 内选浅色时，它会取到 values-night 里的白色，而背景是按 Activity 的
+     * configuration 解析的浅色——白底白字，文字直接看不见（直播页频道列表就是这个原因）。
+     * 这里统一用调用方的 Context（Activity / Dialog 的 ContextThemeWrapper）来解析。
+     */
+    public static int getThemeColor(Context context, @ColorRes int resId) {
+        Context ctx = context != null ? context : App.getInstance();
+        return ContextCompat.getColor(ctx, resId);
     }
 
     public static void initTheme(){

@@ -117,7 +117,7 @@ class MyBatteryView : View {
 
         boxBattery.right = boxBattery.left + fullPowerSize * (battery.toFloat() / 100)
         if (battery <= 20) {
-            boxBatteryPaint.color = com.blankj.utilcode.util.ColorUtils.getColor(R.color.warn)
+            boxBatteryPaint.color = com.github.tvbox.osc.util.Utils.getThemeColor(context, R.color.warn)
         }
         canvas.drawRoundRect(boxOut, CORNER, CORNER, boxOutPaint)
         canvas.drawRoundRect(boxCap, 1F, 1F, boxCapPaint)

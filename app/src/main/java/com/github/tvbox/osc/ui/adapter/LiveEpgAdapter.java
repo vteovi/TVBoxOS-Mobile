@@ -8,6 +8,7 @@ import android.widget.TextView;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.BaseViewHolder;
 import com.github.tvbox.osc.R;
+import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.ui.tv.widget.AudioWaveView;
 import com.github.tvbox.osc.bean.Epginfo;
 
@@ -47,8 +48,10 @@ public class LiveEpgAdapter extends BaseQuickAdapter<Epginfo, BaseViewHolder> {
             textview.setTextColor(mContext.getResources().getColor(R.color.color_1890FF));
             timeview.setTextColor(mContext.getResources().getColor(R.color.color_1890FF));
         }else {
-            textview.setTextColor(Color.WHITE);
-            timeview.setTextColor(Color.WHITE);
+            // 不能写死 Color.WHITE：EPG 条底色是 bg_gray（浅色下接近白），白字会看不见
+            int normalColor = Utils.getThemeColor(mContext, R.color.text_foreground);
+            textview.setTextColor(normalColor);
+            timeview.setTextColor(normalColor);
         }
         if (new Date().compareTo(value.startdateTime) >= 0 && new Date().compareTo(value.enddateTime) <= 0) {
             shiyi.setVisibility(View.VISIBLE);

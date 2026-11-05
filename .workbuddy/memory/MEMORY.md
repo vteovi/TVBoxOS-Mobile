@@ -1,5 +1,13 @@
 # TVBoxOS-Mobile 项目长期笔记
 
+## 分支策略（2026-11-04 起，用户明确要求）
+- **`dev` = 开发/测试分支，日常所有代码改动都在这里**（本地已 `git switch dev`，跟踪 `origin/dev`）。
+- **`main` = 稳定版，只接受从 dev 合并**（外加 CI 发版后 bot 的 `chore: sync release metadata` 提交）。**不要直接在 main 上写代码/提交功能**。
+- 稳定后合并：`git switch main && git pull --rebase origin main && git merge --no-ff dev && git push origin main`，然后打 tag 发版。
+- 发版后 main 会多一条 bot 元数据提交 → 回 dev 开工前先 `git switch dev && git merge origin/main`（或 rebase），避免下次合并冲突。
+- 推 `dev` **不会**触发 CI（workflow 只监听 `push: tags:["v*"]` + `workflow_dispatch`），可以放心多推。
+- 版本号仍在 dev 上改：功能做完就升（feat→MINOR / fix→PATCH），合并进 main 即发布态。
+
 ## 构建 / 签名 / 安装（Windows）
 - 环境：JDK 17 `C:\Java\jdk-17`、SDK `C:\Android\Sdk`（`local.properties` 的 `sdk.dir`）、`applicationId=com.github.tvbox.osc.mobile`（可与官方/mbox 并存）。仓库实际在 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`，**必须沙箱外执行**，否则 Gradle 缓存被拦、报假的 AAPT 错误。产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。
@@ -59,6 +67,7 @@
 - 列表模式缩略图（2.27.1 起）**跟随 `HawkConfig.LANDSCAPE_CARD`**：竖版 80x120dp(2:3) / 横版 160x90dp(16:9)，由 `FastSearchAdapter.applyListMetrics()` 动态设 ImageView LayoutParams，并同步 `llText` padding（12/2dp）与 `tvNote` 上间距（20/6dp）；`item_search.xml` 根为 `wrap_content`+`center_vertical`。`RoundTransformation` 缓存 key 必须带尺寸（`MD5(url@宽x高)`），否则切比例后命中旧位图。
 
 ## 踩坑教训
+- ⚠️ **取主题色千万别用 `ColorUtils.getColor()`**（androidutilcode）：它内部是 `ContextCompat.getColor(Utils.getApp(), id)`，走的是 **Application** 的 Resources。而 AppCompat 的浅色/深色覆盖**只写到 Activity 的 Resources 上**，Application 的 configuration 永远是系统值。结果「系统深色 + 软件内选浅色」时它会取 `values-night` 的白色，而背景按 Activity 解析成浅色 → **白底白字看不见**（直播页频道列表就这么瞎的，2.29.1 修）。统一用 `Utils.getThemeColor(context, resId)`。同一道理：`Utils.isDarkTheme()` 不能直接读 Application 的 `uiMode`，要优先看 `AppCompatDelegate.getDefaultNightMode()`，只在「跟随系统」时才读系统值。
 - ⚠️ **弹窗会改状态栏图标颜色（连修 3 次才对）**：浅色模式下打开弹窗（筛选等）状态栏文字变白看不清。根因有两层：① `CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 被系统当"拥有状态栏的窗口"，图标明暗改用弹窗主题（`Theme.Dialog` 深色）的默认白图标；② `FLAG_DIM_BEHIND` 的遮罩铺满整屏（含状态栏），系统同样把状态栏外观算到弹窗头上。**运行时 `clearFlags` / 改 appearance 都没用**（2.26.5、2.26.6 实测无效），必须从窗口层面拆：样式里**删掉 `windowFullscreen`** + 无遮罩弹窗**不加 `FLAG_DIM_BEHIND`**（`BaseDialog.dimAmountBehind=0f`）+ 弹窗 show 后把**宿主 Activity** 也按同值双通道写一遍。判断深浅必须读宿主窗口（底色亮度最稳），不能用 App 主题（详情/直播页是黑状态栏）。改窗口参数要在 `super.show()` 之前设。
 - ⚠️ **"缓存/守护进程"诊断极易误判**：曾三次误判 Gradle 缓存，实际是 `ApiConfig.java` 多一个 `}`。**铁律：用户杀 java+删 app/build+重建仍逐字节复现 → 就是真 bug**。改完 Java 大段嵌套/括号务必做括号平衡自检。
 - ⚠️ **多模块 manifest 权限**：:app / :player / :crash / :quickjs / :TabLayout / :ViewPager1Delegate 需逐模块查，且 :app 用 `tools:node="remove"` 兜底，只在 :app 删等于没删。
