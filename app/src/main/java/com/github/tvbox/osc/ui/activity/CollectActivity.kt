@@ -28,13 +28,17 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
     )
     private var destinationAfterFinish: Int? = null
 
+    /** 两个 Tab 对应的条目数，-1 表示还没查出来（先只显示标题） */
+    private val counts = IntArray(2) { -1 }
+
     override fun init() {
+        bindTabCounts()
         mBinding.viewPager!!.adapter = object : androidx.viewpager2.adapter.FragmentStateAdapter(this) {
             override fun getItemCount() = tabs.size
             override fun createFragment(position: Int): Fragment = fragments[position]
         }
         TabLayoutMediator(mBinding.tabLayout!!, mBinding.viewPager!!) { tab, position ->
-            tab.text = tabs[position]
+            tab.text = tabText(position)
         }.attach()
 
         mBinding.titleBar.rightView.setOnClickListener {
@@ -49,13 +53,31 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
                         else RoomDataManger.deleteVodRecordAll()
                         withContext(Dispatchers.Main) {
                             dismissLoadingDialog()
-                            (fragments[pos] as RecordListFragment).loadData()
+                            fragments[pos].loadData()
                         }
                     }
                 }.show()
         }
 
         initBottomNavigation()
+    }
+
+    /**
+     * 接上两个列表的条数回调：列表首次加载完成、删除单条、清空之后都会回传，
+     * 这里把数字写到对应 Tab 的标题上（如「收藏 12」「历史记录 35」）。
+     */
+    private fun bindTabCounts() {
+        fragments.forEachIndexed { index, fragment ->
+            fragment.setOnCountChangedListener { count ->
+                counts[index] = count
+                mBinding.tabLayout?.getTabAt(index)?.text = tabText(index)
+            }
+        }
+    }
+
+    private fun tabText(position: Int): String {
+        val count = counts[position]
+        return if (count < 0) tabs[position] else "${tabs[position]} $count"
     }
 
     private fun initBottomNavigation() {
