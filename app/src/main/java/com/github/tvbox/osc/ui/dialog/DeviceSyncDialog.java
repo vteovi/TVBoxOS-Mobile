@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -23,7 +24,7 @@ import java.util.List;
 
 /**
  * 局域网设备同步: 一台"发送配置"、另一台"接收配置", 在同一 WiFi 下即可完成配置搬家。
- * 同步内容与"数据备份还原"一致(收藏 / 历史 / 设置)。
+ * 设置/订阅源以发送端为准(覆盖); 收藏/历史默认取并集合并(可在弹窗里改成覆盖)。
  */
 public class DeviceSyncDialog extends BaseDialog {
 
@@ -34,6 +35,7 @@ public class DeviceSyncDialog extends BaseDialog {
     private TextView tvStatus;
     private TextView btnSend;
     private TextView btnReceive;
+    private CheckBox cbMerge;
     private LinearLayout llDevices;
     private LinearLayout llManual;
     private EditText etIp;
@@ -48,6 +50,7 @@ public class DeviceSyncDialog extends BaseDialog {
         tvStatus = findViewById(R.id.tvStatus);
         btnSend = findViewById(R.id.btnSend);
         btnReceive = findViewById(R.id.btnReceive);
+        cbMerge = findViewById(R.id.cbMerge);
         llDevices = findViewById(R.id.llDevices);
         llManual = findViewById(R.id.llManual);
         etIp = findViewById(R.id.etIp);
@@ -174,13 +177,17 @@ public class DeviceSyncDialog extends BaseDialog {
         tvStatus.setText("正在从 " + ip + " 接收配置…");
         btnReceive.setEnabled(false);
         btnSend.setEnabled(false);
+        // 收藏/历史是累积数据，默认取并集；用户取消勾选才沿用旧的覆盖行为。
+        // 设置与订阅源始终是覆盖（配置以发送端为准）。
+        final boolean merge = cbMerge.isChecked();
         new Thread(() -> {
             File out = new File(mContext.getCacheDir(), "tvbox_lan_restore.json");
             boolean ok = false;
             String err = null;
             try {
                 if (LanSyncManager.downloadConfig(ip, port, out)) {
-                    ok = BackupManager.importBackup(out);
+                    ok = BackupManager.importBackup(out,
+                            merge ? BackupManager.ImportMode.MERGE : BackupManager.ImportMode.REPLACE);
                     if (!ok) {
                         err = "文件格式错误";
                     }
@@ -193,12 +200,17 @@ public class DeviceSyncDialog extends BaseDialog {
             }
             final boolean success = ok;
             final String error = err;
+            final String summary = BackupManager.getLastImportSummary();
             mMain.post(() -> {
                 btnReceive.setEnabled(true);
                 btnSend.setEnabled(true);
                 if (success) {
-                    ToastUtils.showShort("同步成功,即将重启应用!");
-                    tvStatus.setText("接收成功，即将重启应用…");
+                    String head = merge
+                            ? "接收成功（收藏与历史已合并，本机原有记录保留）"
+                            : "接收成功（已覆盖本机收藏与历史）";
+                    ToastUtils.showLong(head);
+                    tvStatus.setText(head + (summary.isEmpty() ? "" : "\n" + summary)
+                            + "\n即将重启应用…");
                     mMain.postDelayed(() -> AppUtils.relaunchApp(true), 2000);
                 } else {
                     tvStatus.setText("接收失败：" + (error == null ? "无法连接" : error)

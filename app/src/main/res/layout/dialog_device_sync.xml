@@ -69,6 +69,27 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
+        <!-- 接收方式：收藏/历史默认合并，取消勾选则沿用覆盖行为 -->
+        <CheckBox
+            android:id="@+id/cbMerge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:paddingHorizontal="30dp"
+            android:checked="true"
+            android:text="接收时合并收藏与历史（保留本机已有记录）"
+            android:textColor="@color/text_foreground"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="30dp"
+            android:paddingTop="4dp"
+            android:text="不勾选则完全覆盖本机收藏与历史；设置和订阅源始终以发送端为准"
+            android:textColor="@color/text_sub_foreground"
+            android:textSize="11sp" />
+
         <!--扫描到的设备列表(动态填充)-->
         <ScrollView
             android:layout_width="match_parent"

@@ -5,6 +5,7 @@ import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Update;
 
 import java.util.List;
 
@@ -29,6 +30,10 @@ public interface VodCollectDao {
 
     @Query("select * from vodCollect where `sourceKey`=:sourceKey and `vodId`=:vodId")
     VodCollect getVodCollect(String sourceKey, String vodId);
+
+    /** 按主键更新（合并同步时用于把较新的名称/海报写回已有记录，保留原 id） */
+    @Update
+    int update(VodCollect record);
 
     @Delete
     int delete(VodCollect record);

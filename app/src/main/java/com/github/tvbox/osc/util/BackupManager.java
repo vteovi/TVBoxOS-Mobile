@@ -6,7 +6,9 @@ import android.util.Base64;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.Subscription;
 import com.github.tvbox.osc.cache.VodCollect;
+import com.github.tvbox.osc.cache.VodCollectDao;
 import com.github.tvbox.osc.cache.VodRecord;
+import com.github.tvbox.osc.cache.VodRecordDao;
 import com.github.tvbox.osc.data.AppDataManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -24,13 +26,34 @@ import java.io.FileWriter;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 数据备份/恢复：导出 JSON 文件
  * 包含：收藏、历史、关键设置（订阅源、直播、播放器配置等）
  */
 public class BackupManager {
+
+    /**
+     * 导入方式：
+     * REPLACE = 先清空本机收藏/历史再写入（文件备份还原的语义，换机/重置后用）
+     * MERGE   = 并集合并，本机已有记录全部保留，重复的按 (sourceKey, vodId) 去重，
+     *           取 updateTime 较新的一条（局域网设备同步默认用这个）
+     * 注意：设置与订阅源两类"配置"始终是覆盖，只有收藏/历史这两种"累积数据"区分模式。
+     */
+    public enum ImportMode {
+        REPLACE,
+        MERGE
+    }
+
+    /** 最近一次导入的结果说明，供 UI 展示（REPLACE 时为空串）；后台线程写、主线程读 */
+    private static volatile String lastImportSummary = "";
+
+    public static String getLastImportSummary() {
+        return lastImportSummary;
+    }
 
     /**
      * 备忘: Hawk 2.0.1 内部默认 SharedPreferences 文件名(常量 STORAGE_TAG_DO_NOT_CHANGE = "Hawk2")。
@@ -223,43 +246,64 @@ public class BackupManager {
     }
 
     /**
-     * 从 JSON 文件恢复
+     * 从 JSON 文件恢复（默认覆盖，供「数据备份还原」使用）
      */
     public static boolean importBackup(File inFile) {
+        return importBackup(inFile, ImportMode.REPLACE);
+    }
+
+    /**
+     * 从 JSON 文件恢复，可指定收藏/历史的导入方式。
+     *
+     * @param mode REPLACE=清空本机后写入；MERGE=与本机数据取并集
+     */
+    public static boolean importBackup(File inFile, ImportMode mode) {
+        lastImportSummary = "";
         try {
             FileReader reader = new FileReader(inFile);
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             reader.close();
 
+            int[] collectStat = new int[]{0, 0}; // {新增, 更新}
+            int[] recordStat = new int[]{0, 0};
+
             // 1. 恢复收藏
             if (root.has("collects")) {
                 JsonArray collectArr = root.getAsJsonArray("collects");
-                // 先清空
-                AppDataManager.get().getVodCollectDao().deleteAll();
-                for (int i = 0; i < collectArr.size(); i++) {
-                    JsonObject obj = collectArr.get(i).getAsJsonObject();
-                    VodCollect c = new VodCollect();
-                    c.sourceKey = obj.has("sourceKey") ? obj.get("sourceKey").getAsString() : "";
-                    c.vodId = obj.has("vodId") ? obj.get("vodId").getAsString() : "";
-                    c.name = obj.has("name") ? obj.get("name").getAsString() : "";
-                    c.pic = obj.has("pic") ? obj.get("pic").getAsString() : "";
-                    c.updateTime = obj.has("updateTime") ? obj.get("updateTime").getAsLong() : 0;
-                    AppDataManager.get().getVodCollectDao().insert(c);
+                if (mode == ImportMode.MERGE) {
+                    collectStat = mergeCollects(collectArr);
+                } else {
+                    // 先清空
+                    AppDataManager.get().getVodCollectDao().deleteAll();
+                    for (int i = 0; i < collectArr.size(); i++) {
+                        JsonObject obj = collectArr.get(i).getAsJsonObject();
+                        VodCollect c = new VodCollect();
+                        c.sourceKey = obj.has("sourceKey") ? obj.get("sourceKey").getAsString() : "";
+                        c.vodId = obj.has("vodId") ? obj.get("vodId").getAsString() : "";
+                        c.name = obj.has("name") ? obj.get("name").getAsString() : "";
+                        c.pic = obj.has("pic") ? obj.get("pic").getAsString() : "";
+                        c.updateTime = obj.has("updateTime") ? obj.get("updateTime").getAsLong() : 0;
+                        AppDataManager.get().getVodCollectDao().insert(c);
+                    }
                 }
             }
 
             // 2. 恢复历史
             if (root.has("records")) {
                 JsonArray recordArr = root.getAsJsonArray("records");
-                AppDataManager.get().getVodRecordDao().deleteAll();
-                for (int i = 0; i < recordArr.size(); i++) {
-                    JsonObject obj = recordArr.get(i).getAsJsonObject();
-                    VodRecord r = new VodRecord();
-                    r.sourceKey = obj.has("sourceKey") ? obj.get("sourceKey").getAsString() : "";
-                    r.vodId = obj.has("vodId") ? obj.get("vodId").getAsString() : "";
-                    r.updateTime = obj.has("updateTime") ? obj.get("updateTime").getAsLong() : 0;
-                    r.dataJson = obj.has("dataJson") ? obj.get("dataJson").getAsString() : "";
-                    AppDataManager.get().getVodRecordDao().insert(r);
+                if (mode == ImportMode.MERGE) {
+                    recordStat = mergeRecords(recordArr);
+                } else {
+                    AppDataManager.get().getVodRecordDao().deleteAll();
+                    for (int i = 0; i < recordArr.size(); i++) {
+                        JsonObject obj = recordArr.get(i).getAsJsonObject();
+                        VodRecord r = new VodRecord();
+                        r.sourceKey = obj.has("sourceKey") ? obj.get("sourceKey").getAsString() : "";
+                        r.vodId = obj.has("vodId") ? obj.get("vodId").getAsString() : "";
+                        r.updateTime = obj.has("updateTime") ? obj.get("updateTime").getAsLong() : 0;
+                        r.dataJson = obj.has("dataJson") ? obj.get("dataJson").getAsString() : "";
+                        AppDataManager.get().getVodRecordDao().insert(r);
+                    }
                 }
             }
 
@@ -362,10 +406,158 @@ public class BackupManager {
                 // 所以导入后立即 relaunchApp 重启也不会丢设置(不能用异步 apply)。
             }
 
+            if (mode == ImportMode.MERGE) {
+                // 两边历史合并后可能超过设置里的条数上限，按 updateTime 保留最新的 N 条，
+                // 避免数据库里堆积永远显示不出来的旧记录
+                trimHistoryToLimit();
+                lastImportSummary = "收藏新增 " + collectStat[0] + " 条、更新 " + collectStat[1] + " 条\n"
+                        + "历史新增 " + recordStat[0] + " 条、更新 " + recordStat[1] + " 条\n"
+                        + "本机原有记录已全部保留";
+            }
+
             return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    // ============================ 合并导入（局域网设备同步） ============================
+
+    /** 收藏/历史的去重键：同一数据源下的同一部影片才算重复 */
+    private static String recordKey(String sourceKey, String vodId) {
+        return (sourceKey == null ? "" : sourceKey) + "\u0000" + (vodId == null ? "" : vodId);
+    }
+
+    private static String jsonStr(JsonObject obj, String key) {
+        try {
+            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsString() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static long jsonLong(JsonObject obj, String key) {
+        try {
+            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsLong() : 0L;
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    /**
+     * 合并收藏：本机独有的全部保留；两边都有的按 updateTime 取较新的一条。
+     * 用 Map 先按 (sourceKey, vodId) 建索引，避免表上没有唯一约束时插出重复海报。
+     *
+     * @return {新增条数, 更新条数}
+     */
+    private static int[] mergeCollects(JsonArray arr) {
+        VodCollectDao dao = AppDataManager.get().getVodCollectDao();
+        Map<String, VodCollect> local = new HashMap<>();
+        List<VodCollect> all = dao.getAll();
+        if (all != null) {
+            for (VodCollect c : all) {
+                local.put(recordKey(c.sourceKey, c.vodId), c);
+            }
+        }
+        int added = 0;
+        int updated = 0;
+        for (int i = 0; i < arr.size(); i++) {
+            try {
+                JsonObject obj = arr.get(i).getAsJsonObject();
+                String sk = jsonStr(obj, "sourceKey");
+                String vid = jsonStr(obj, "vodId");
+                if (vid.isEmpty()) continue; // 缺影片 id 无法去重，跳过脏数据
+                long time = jsonLong(obj, "updateTime");
+                String k = recordKey(sk, vid);
+                VodCollect exist = local.get(k);
+                if (exist == null) {
+                    VodCollect c = new VodCollect();
+                    c.sourceKey = sk;
+                    c.vodId = vid;
+                    c.name = jsonStr(obj, "name");
+                    c.pic = jsonStr(obj, "pic");
+                    c.updateTime = time;
+                    long rowId = dao.insert(c);
+                    c.setId((int) rowId); // 备份里若出现重复 key，后续 update 才能定位主键
+                    local.put(k, c);
+                    added++;
+                } else if (time > exist.updateTime) {
+                    String name = jsonStr(obj, "name");
+                    String pic = jsonStr(obj, "pic");
+                    // 外来字段为空时别把本机已有的名称/海报洗掉
+                    if (!name.isEmpty()) exist.name = name;
+                    if (!pic.isEmpty()) exist.pic = pic;
+                    exist.updateTime = time;
+                    dao.update(exist);
+                    updated++;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return new int[]{added, updated};
+    }
+
+    /**
+     * 合并历史记录：同一部影片取 updateTime 较新的一条（播放进度、看到第几集都在 dataJson 里）。
+     *
+     * @return {新增条数, 更新条数}
+     */
+    private static int[] mergeRecords(JsonArray arr) {
+        VodRecordDao dao = AppDataManager.get().getVodRecordDao();
+        Map<String, VodRecord> local = new HashMap<>();
+        List<VodRecord> all = dao.getAll(100000);
+        if (all != null) {
+            for (VodRecord r : all) {
+                local.put(recordKey(r.sourceKey, r.vodId), r);
+            }
+        }
+        int added = 0;
+        int updated = 0;
+        for (int i = 0; i < arr.size(); i++) {
+            try {
+                JsonObject obj = arr.get(i).getAsJsonObject();
+                String sk = jsonStr(obj, "sourceKey");
+                String vid = jsonStr(obj, "vodId");
+                String data = jsonStr(obj, "dataJson");
+                if (vid.isEmpty() || data.isEmpty()) continue; // 空播放信息插进去也是废条目
+                long time = jsonLong(obj, "updateTime");
+                String k = recordKey(sk, vid);
+                VodRecord exist = local.get(k);
+                if (exist == null) {
+                    VodRecord r = new VodRecord();
+                    r.sourceKey = sk;
+                    r.vodId = vid;
+                    r.updateTime = time;
+                    r.dataJson = data;
+                    long rowId = dao.insert(r);
+                    r.setId((int) rowId);
+                    local.put(k, r);
+                    added++;
+                } else if (time > exist.updateTime) {
+                    exist.updateTime = time;
+                    exist.dataJson = data;
+                    dao.update(exist);
+                    updated++;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return new int[]{added, updated};
+    }
+
+    /** 合并后按设置里的「历史记录条数」上限裁剪，保留最新的 N 条 */
+    private static void trimHistoryToLimit() {
+        try {
+            VodRecordDao dao = AppDataManager.get().getVodRecordDao();
+            int hisNum = HistoryHelper.getHisNum(Hawk.get(HawkConfig.HISTORY_NUM, 0));
+            if (dao.getCount() > hisNum) {
+                dao.reserver(hisNum);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 

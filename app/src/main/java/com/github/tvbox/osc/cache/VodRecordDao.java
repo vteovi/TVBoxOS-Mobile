@@ -5,6 +5,7 @@ import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Update;
 
 import java.util.List;
 
@@ -23,6 +24,10 @@ public interface VodRecordDao {
 
     @Query("select * from vodRecord where `sourceKey`=:sourceKey and `vodId`=:vodId")
     VodRecord getVodRecord(String sourceKey, String vodId);
+
+    /** 按主键更新（合并同步时用于写回较新的播放进度） */
+    @Update
+    int update(VodRecord record);
 
     @Delete
     int delete(VodRecord record);
