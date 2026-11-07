@@ -32,7 +32,7 @@
 - **备份/还原设置一律走 `Hawk.get`/`Hawk.put` 真实值**，别搬运序列化串。复杂对象导出登记 `val.getClass().getName()`，导入端 `Gson.fromJson(json, Class.forName(名))` 再 `Hawk.put`，避免退化成 LinkedTreeMap；导入端兼容 `isJsonArray/isJsonPrimitive` 两种形态。
 - 本地导入的订阅/配置 URL 是 `file:///data/data/<pkg>/files/...`（仅本机私有目录）→ 同步/备份必须把文件内容一起打包（`localFiles` Base64），接收端重建并重写 URL。`Subscription` 的 `url`/`name` 包级私有，跨包只能用 `getUrl()/setUrl()`。
 - **局域网同步**：`DeviceSyncDialog` + `LanSyncManager`（UDP 广播 45127 + 子网 /24 单播 `GET /ping`，MulticastLock 必需，端口 8099~8103 / `GET /config`），数据复用 `BackupManager`，导入后 `relaunchApp(true)`。明文 HTTP 依赖 `usesCleartextTraffic=true`。
-- **2.31.0 起收藏/历史合并**：`BackupManager.ImportMode{REPLACE,MERGE}`，设备同步默认 MERGE，文件备份还原仍 REPLACE；设置/订阅源始终覆盖。合并按 `(sourceKey, vodId)` 去重、`updateTime` 较大者胜，本机独有全保留，之后按 `HISTORY_NUM` 上限 `reserver()` 裁剪。两个表**没有唯一约束**（主键 autoGenerate），合并必须先建 Map 索引再 `@Update`，直接 insert 会插出重复海报。并集语义下「删除」不会跨设备同步，需要完全一致时取消勾选走覆盖。
+- **2.31.0 起收藏/历史合并，2.32.0 起订阅源也合并**：`BackupManager.ImportMode{REPLACE,MERGE}`，设备同步默认 MERGE，文件备份还原仍 REPLACE；只有播放器/主题等普通设置始终覆盖。收藏/历史按 `(sourceKey, vodId)` 去重、`updateTime` 较大者胜，之后按 `HISTORY_NUM` 上限 `reserver()` 裁剪；两个表**没有唯一约束**（主键 autoGenerate），合并必须先建 Map 索引再 `@Update`。订阅列表并集且全表去重：在线按归一化 URL、本地文件按**内容 MD5**（两台设备私有路径不同，只比地址会重复）；MERGE 时 `API_URL`/`HOME_API`/`LIVE_URL` 本机有值就保留，避免「列表选中 A、实际加载 B」；REPLACE 路径也走 `dedupSubscriptions()`。并集语义下「删除」不会跨设备同步，需要完全一致时取消勾选走覆盖。
 - `AppResetHelper`（2.29.0 软件内重置）：清 `Hawk.deleteAll()` + `clearAllTables()`（**只能在子线程**）+ filesDir/cacheDir，外置备份不动，清完必须重启。`App.java` 会在 `API_URL` 缺失时自愈到内置源。
 
 ## 直播页

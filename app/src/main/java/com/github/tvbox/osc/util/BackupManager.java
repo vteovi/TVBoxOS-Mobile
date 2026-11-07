@@ -26,8 +26,10 @@ import java.io.FileWriter;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -38,10 +40,12 @@ public class BackupManager {
 
     /**
      * 导入方式：
-     * REPLACE = 先清空本机收藏/历史再写入（文件备份还原的语义，换机/重置后用）
-     * MERGE   = 并集合并，本机已有记录全部保留，重复的按 (sourceKey, vodId) 去重，
-     *           取 updateTime 较新的一条（局域网设备同步默认用这个）
-     * 注意：设置与订阅源两类"配置"始终是覆盖，只有收藏/历史这两种"累积数据"区分模式。
+     * REPLACE = 清空本机收藏/历史，订阅列表与全部设置一律覆盖（文件备份还原的语义，换机/重置后用）
+     * MERGE   = 并集合并，本机已有记录全部保留：
+     *           收藏/历史按 (sourceKey, vodId) 去重、取 updateTime 较新的一条；
+     *           订阅源列表按 URL（本地文件按内容）去重，只追加发送端独有的条目；
+     *           当前生效的影视源 / 首页源 / 直播源本机已有值就保持不变。
+     *           播放器、主题等其余设置仍以发送端为准（局域网设备同步默认用这个）
      */
     public enum ImportMode {
         REPLACE,
@@ -266,6 +270,7 @@ public class BackupManager {
 
             int[] collectStat = new int[]{0, 0}; // {新增, 更新}
             int[] recordStat = new int[]{0, 0};
+            int[] subStat = new int[]{0, 0}; // {新增订阅数, 去重条数}
 
             // 1. 恢复收藏
             if (root.has("collects")) {
@@ -315,9 +320,31 @@ public class BackupManager {
                 // 复杂对象类型登记表(导出端写入)
                 JsonObject complexTypes = root.has("complexTypes") ? root.getAsJsonObject("complexTypes") : null;
                 for (String key : BACKUP_KEYS) {
+                    // 首页站点跟随当前影视源：合并模式下当前源保持本机不变，HOME_API 也必须一起保留，
+                    // 否则会被写成发送端配置里的站点 key，而本机配置中可能根本没有这个站点。
+                    if (mode == ImportMode.MERGE && key.equals(HawkConfig.HOME_API)) {
+                        try {
+                            String curHome = Hawk.get(HawkConfig.HOME_API, "");
+                            if (curHome != null && !curHome.isEmpty()) {
+                                continue;
+                            }
+                        } catch (Exception ignore) {
+                        }
+                    }
                     if (key.equals(HawkConfig.API_URL) || key.equals(HawkConfig.LIVE_URL)) {
                         // 本地文件型配置(影视源/直播源): 导出的是真实 url, 需据打包内容在接收端
                         // 重建文件后用 Hawk.put 写回"真实值"(走 editor 会绕过 Hawk 序列化导致读不出来)。
+                        // 合并模式: 本机已经在用的影视/直播源不能换成发送端的，否则订阅列表里选中的条目
+                        // 与实际加载的配置不一致（首页会莫名换源）。本机没配过才采用发送端的值。
+                        if (mode == ImportMode.MERGE) {
+                            try {
+                                String cur = Hawk.get(key, "");
+                                if (cur != null && !cur.trim().isEmpty()) {
+                                    continue;
+                                }
+                            } catch (Exception ignore) {
+                            }
+                        }
                         if (settings.has(key)) {
                             try {
                                 String raw = settings.get(key).getAsString();
@@ -391,12 +418,19 @@ public class BackupManager {
                             subs = new Gson().fromJson(subEl.getAsString(), type);
                         }
                         if (subs != null) {
-                            // 本地订阅文件: 用打包进备份的内容在私有目录重建文件, 并重写 URL,
-                            // 否则同步/换机后订阅指向发送端私有路径(文件不存在)→ 加载报"无法读取本地配置文件"。
-                            for (Subscription sub : subs) {
-                                sub.setUrl(restoreLocalFile(sub.getUrl(), lf, "subscriptions"));
+                            if (mode == ImportMode.MERGE) {
+                                // 并集合并: 本机订阅一条不删，只追加发送端独有的条目；
+                                // 本地文件订阅在追加时才重建，避免为重复条目写出一堆无用文件。
+                                subStat = mergeSubscriptions(subs, lf);
+                            } else {
+                                // 本地订阅文件: 用打包进备份的内容在私有目录重建文件, 并重写 URL,
+                                // 否则同步/换机后订阅指向发送端私有路径(文件不存在)→ 加载报"无法读取本地配置文件"。
+                                for (Subscription sub : subs) {
+                                    sub.setUrl(restoreLocalFile(sub.getUrl(), lf, "subscriptions"));
+                                }
+                                // 覆盖导入同样去掉完全重复的条目（发送端列表自己可能带着历史重复）
+                                Hawk.put(HawkConfig.SUBSCRIPTIONS, dedupSubscriptions(subs));
                             }
-                            Hawk.put(HawkConfig.SUBSCRIPTIONS, subs);
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -412,7 +446,9 @@ public class BackupManager {
                 trimHistoryToLimit();
                 lastImportSummary = "收藏新增 " + collectStat[0] + " 条、更新 " + collectStat[1] + " 条\n"
                         + "历史新增 " + recordStat[0] + " 条、更新 " + recordStat[1] + " 条\n"
-                        + "本机原有记录已全部保留";
+                        + "订阅新增 " + subStat[0] + " 项"
+                        + (subStat[1] > 0 ? "、去重 " + subStat[1] + " 项" : "") + "\n"
+                        + "本机订阅源与原有记录已全部保留";
             }
 
             return true;
@@ -558,6 +594,227 @@ public class BackupManager {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    // ============================ 合并订阅源（含去重） ============================
+
+    /**
+     * 覆盖导入时的列表内部去重：只删完全重复的条目，顺序与其余内容保持不变。
+     */
+    private static ArrayList<Subscription> dedupSubscriptions(ArrayList<Subscription> subs) {
+        ArrayList<Subscription> out = new ArrayList<>();
+        if (subs == null) {
+            return out;
+        }
+        Map<String, Integer> index = new HashMap<>();
+        for (Subscription s : subs) {
+            if (s == null) {
+                continue;
+            }
+            List<String> keys = subscriptionKeys(s.getUrl(), null);
+            if (keys.isEmpty()) {
+                out.add(s);
+                continue;
+            }
+            Integer hit = firstHit(index, keys);
+            if (hit == null) {
+                out.add(s);
+                registerKeys(index, keys, out.size() - 1);
+            } else if (subscriptionRank(s) > subscriptionRank(out.get(hit))) {
+                out.set(hit, s);
+                registerKeys(index, keys, hit);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 并集合并订阅源：本机已有的订阅全部保留，只把发送端独有的追加进来；同时全表去重。
+     * 去重覆盖三种情况：本机列表内部已有的重复、两端之间同一条订阅、发送端列表自身带重复。
+     * 去重键：在线订阅用归一化 URL（与订阅管理页的 subscriptionKey 同规则）；
+     * 本地文件订阅额外用文件内容 MD5 —— 两台设备的 file:///data/data/... 私有路径不同，
+     * 只比地址会把同一个 Json 订阅重复加进来。
+     * 重复时优先保留内置 / 当前选中的那条；追加进来的条目标记为未选中、不置顶。
+     *
+     * @return {新增订阅数, 去重条数}
+     */
+    private static int[] mergeSubscriptions(ArrayList<Subscription> incoming, JsonObject localFiles) {
+        int[] stat = new int[]{0, 0};
+        ArrayList<Subscription> stored;
+        try {
+            ArrayList<Subscription> s = Hawk.get(HawkConfig.SUBSCRIPTIONS, new ArrayList<Subscription>());
+            stored = s == null ? new ArrayList<Subscription>() : new ArrayList<>(s);
+        } catch (Exception e) {
+            stored = new ArrayList<>();
+        }
+
+        ArrayList<Subscription> merged = new ArrayList<>();
+        Map<String, Integer> index = new HashMap<>();
+        for (Subscription s : stored) {
+            if (s == null) {
+                continue;
+            }
+            List<String> keys = subscriptionKeys(s.getUrl(), null);
+            if (keys.isEmpty()) {
+                merged.add(s); // 空地址不擅自删用户数据
+                continue;
+            }
+            Integer hit = firstHit(index, keys);
+            if (hit == null) {
+                merged.add(s);
+                registerKeys(index, keys, merged.size() - 1);
+            } else {
+                stat[1]++;
+                if (subscriptionRank(s) > subscriptionRank(merged.get(hit))) {
+                    merged.set(hit, s);
+                    registerKeys(index, keys, hit);
+                }
+            }
+        }
+
+        if (incoming != null) {
+            for (Subscription sub : incoming) {
+                if (sub == null) {
+                    continue;
+                }
+                String origUrl = sub.getUrl();
+                if (origUrl == null || origUrl.trim().isEmpty()) {
+                    continue;
+                }
+                // 先用发送端备份里打包的内容判重；命中就不重建文件，避免写出无用副本
+                List<String> preKeys = subscriptionKeys(origUrl, localFiles);
+                if (preKeys.isEmpty() || firstHit(index, preKeys) != null) {
+                    if (!preKeys.isEmpty()) {
+                        stat[1]++;
+                    }
+                    continue;
+                }
+                String newUrl = restoreLocalFile(origUrl, localFiles, "subscriptions");
+                // 重写到本机路径后再查一次：之前同步过同一发送端时，两端路径已经一致了
+                List<String> postKeys = subscriptionKeys(newUrl, null);
+                if (firstHit(index, postKeys) != null) {
+                    stat[1]++;
+                    continue;
+                }
+                sub.setUrl(newUrl);
+                sub.setChecked(false);  // 本机当前选中的订阅不能被顶掉
+                sub.setTop(false);
+                sub.setBuiltIn(false);
+                merged.add(sub);
+                int idx = merged.size() - 1;
+                registerKeys(index, preKeys, idx);
+                registerKeys(index, postKeys, idx);
+                stat[0]++;
+            }
+        }
+
+        if (stat[0] > 0 || stat[1] > 0) {
+            Hawk.put(HawkConfig.SUBSCRIPTIONS, merged);
+        }
+        return stat;
+    }
+
+    /** 一条订阅的所有候选去重键：内容键(仅本地文件) + 归一化 URL 键 */
+    private static List<String> subscriptionKeys(String url, JsonObject localFiles) {
+        List<String> keys = new ArrayList<>();
+        if (url == null || url.trim().isEmpty()) {
+            return keys;
+        }
+        if (isLocalUrl(url)) {
+            byte[] data = null;
+            if (localFiles != null && localFiles.has(url)) {
+                try {
+                    data = Base64.decode(localFiles.get(url).getAsString(), Base64.NO_WRAP);
+                } catch (Exception ignore) {
+                }
+            }
+            if (data == null) {
+                data = readLocalBytes(url);
+            }
+            if (data != null && data.length > 0) {
+                keys.add("C#" + bytesMd5(data));
+            }
+        }
+        String uk = subscriptionKey(url);
+        if (!uk.isEmpty()) {
+            keys.add("U#" + uk);
+        }
+        return keys;
+    }
+
+    private static Integer firstHit(Map<String, Integer> index, List<String> keys) {
+        for (String k : keys) {
+            Integer hit = index.get(k);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    private static void registerKeys(Map<String, Integer> index, List<String> keys, int idx) {
+        for (String k : keys) {
+            index.put(k, idx);
+        }
+    }
+
+    /** 重复时谁更该留下：当前选中的 > 内置的 > 普通条目 */
+    private static int subscriptionRank(Subscription s) {
+        return (s.isChecked() ? 2 : 0) + (s.isBuiltIn() ? 1 : 0);
+    }
+
+    /**
+     * 归一化订阅地址，规则与 SubscriptionActivity.subscriptionKey 保持一致：
+     * http(s) 的 scheme/host 统一小写、去掉末尾斜杠、保留端口与查询参数；本地文件 / clan:// 原样比较。
+     */
+    private static String subscriptionKey(String url) {
+        if (url == null) {
+            return "";
+        }
+        String value = url.trim();
+        if (value.isEmpty()) {
+            return value;
+        }
+        try {
+            Uri uri = Uri.parse(value);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return value;
+            }
+            scheme = scheme.toLowerCase(Locale.ROOT);
+            if (!scheme.equals("http") && !scheme.equals("https")) {
+                return value;
+            }
+            String path = uri.getEncodedPath();
+            if (path == null) {
+                path = "";
+            }
+            while (path.endsWith("/")) {
+                path = path.substring(0, path.length() - 1);
+            }
+            int port = uri.getPort();
+            String query = uri.getEncodedQuery();
+            return scheme + "://" + host.toLowerCase(Locale.ROOT)
+                    + (port == -1 ? "" : ":" + port) + path
+                    + (query == null ? "" : "?" + query);
+        } catch (Exception e) {
+            return value;
+        }
+    }
+
+    private static String bytesMd5(byte[] data) {
+        try {
+            MessageDigest d = MessageDigest.getInstance("MD5");
+            byte[] b = d.digest(data);
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) {
+                sb.append(String.format("%02x", x));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(Arrays.hashCode(data));
         }
     }
 

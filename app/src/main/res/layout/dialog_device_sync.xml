@@ -77,7 +77,7 @@
             android:layout_marginTop="12dp"
             android:paddingHorizontal="30dp"
             android:checked="true"
-            android:text="接收时合并收藏与历史（保留本机已有记录）"
+            android:text="接收时合并订阅源与收藏/历史（保留本机已有并去重）"
             android:textColor="@color/text_foreground"
             android:textSize="13sp" />
 
@@ -86,7 +86,7 @@
             android:layout_height="wrap_content"
             android:paddingHorizontal="30dp"
             android:paddingTop="4dp"
-            android:text="不勾选则完全覆盖本机收藏与历史；设置和订阅源始终以发送端为准"
+            android:text="不勾选则完全覆盖；播放器、主题等设置仍以发送端为准，合并时本机当前使用的订阅源保持不变"
             android:textColor="@color/text_sub_foreground"
             android:textSize="11sp" />
 
