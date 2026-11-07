@@ -1,79 +1,64 @@
 # TVBoxOS-Mobile 项目长期笔记
 
-## 分支策略（2026-11-04 起，用户明确要求）
-- **`dev` = 开发/测试分支，日常所有代码改动都在这里**（本地已 `git switch dev`，跟踪 `origin/dev`）。
-- **`main` = 稳定版，只接受从 dev 合并**（外加 CI 发版后 bot 的 `chore: sync release metadata` 提交）。**不要直接在 main 上写代码/提交功能**。
-- 稳定后合并：`git switch main && git pull --rebase origin main && git merge --no-ff dev && git push origin main`，然后打 tag 发版。
-- 发版后 main 会多一条 bot 元数据提交 → 回 dev 开工前先 `git switch dev && git merge origin/main`（或 rebase），避免下次合并冲突。
-- 推 `dev` **不会**触发 CI（workflow 只监听 `push: tags:["v*"]` + `workflow_dispatch`），可以放心多推。
-- 版本号仍在 dev 上改：功能做完就升（feat→MINOR / fix→PATCH），合并进 main 即发布态。
+> 精简整理于 2026-11-07。细节按日期存 `.workbuddy/memory/YYYY-MM-DD.md`，这里只留跨会话仍会用到的规则与坑。
 
-## 构建 / 签名 / 安装（Windows）
-- 环境：JDK 17 `C:\Java\jdk-17`、SDK `C:\Android\Sdk`（`local.properties` 的 `sdk.dir`）、`applicationId=com.github.tvbox.osc.mobile`（可与官方/mbox 并存）。仓库实际在 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）。
-- 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`，**必须沙箱外执行**，否则 Gradle 缓存被拦、报假的 AAPT 错误。产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。
-- 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根目录 `*.apk`（**别 `git add -A` 误提交 APK**）。校验 `apksigner verify --print-certs`。
-- **打包策略（2.26.7 起变更）**：**日常本机构建**（用户 2026-11-01 明确要求，CI 太慢/懒得下载），`.github/workflows/build.yml` 已去掉 `push: branches:[main]` 与 `pull_request`，只剩 `push: tags:["v*"]` + `workflow_dispatch`。**推 main 不再触发构建**；只有打 `v*` tag 才走 `publish-github-release`（该 job 自带构建，不依赖 build-apk）→ `assembleRelease` + apksigner 校验 + 发 Release + 回写 `update.json`/README；**用户说"发布"时才打 tag**。密钥来 secret `TVBOX_KEYSTORE_BASE64`。`build_apk.bat` 已删，`build_apk.ps1` 保留作离线兜底（按 `apk/<flavor>/<buildType>/` 枚举产物）。
-- 交付前必校验（尤其 TaskStop 杀过构建）：删产物重跑 → zip 完好 + apksigner 退出码 0 + sha256，防半成品。
-- gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`。**勿设 `kotlin.compiler.execution.strategy=in_process`**（只认大写 `IN_PROCESS`，小写报 Unknown value）。
+## 分支与发布（用户 2026-11-04 明确要求）
+- **`dev` = 日常开发/测试，所有代码改动都在这里**；**`main` = 稳定版，只接受从 dev 合并**（外加 CI 发版后 bot 的元数据提交）。不要直接在 main 写代码。
+- 发布流程（用户说「发布」才执行）：推 dev → `git switch main && git pull --rebase origin main` → `git merge --no-ff dev` → 推 main → `git tag -a vX.Y.Z && git push origin vX.Y.Z` → 等 CI → 校验 Release/update.json/README → pull bot 提交 → 切回 dev `merge origin/main`（通常 fast-forward）→ 推 dev。
+- 推 main/dev **不触发 CI**（workflow 只监听 `push: tags:["v*"]` + `workflow_dispatch`）。`publish-github-release` 自带构建、apksigner 校验、发 Release、回写 `update.json`/README，密钥来自 secret `TVBOX_KEYSTORE_BASE64`。
+- **发版前必须先写好 `更新记录.md` 的 `### <版本> — 日期` 段落**：CI 的 `scripts/sync_release_metadata.sh` 从中抽 changelog，漏写会让 update.json 没有 changelog（2.28.8 返工过）。
+- 版本号在 dev 上就改好：feat→MINOR、fix→PATCH，versionCode 每次 +1，绝不复用。
+- **推 GitHub 网络三连**：① 先 `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`（否则 502）；② `git -c http.version=HTTP/1.1 push`，失败间隔 8s 重试（github.com:443 常抖，`api.github.com` 正常）；③ 查 CI 用匿名 `curl api.github.com/repos/vteovi/TVBoxOS-Mobile/actions/runs`，无需登录。
 
-- **CI 发版踩坑（2.26.0/2.26.1 已修）**：`ubuntu-latest` 2026-10-19 起切 Ubuntu 26 → `android-actions/setup-android@v3` 必挂（23s 退），改自建 `.github/actions/setup-android-sdk`（sdkmanager）+ `runs-on: ubuntu-24.04`；脚本在 git 里若是 `100644`，CI 用 `./x.sh` 会 Permission denied → `git update-index --chmod=+x` 且工作流改 `bash x.sh`；加速站 `gh.xxooo.cf` 已死，用 `gh-proxy.com`/`ghfast.top`；发版后 main 多一条 bot 的 `chore: sync release metadata`，本地要 `pull --rebase`。
+## 环境 / 构建 / 签名
+- 仓库 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）；`applicationId=com.github.tvbox.osc.mobile`；`local.properties` 的 `sdk.dir=C:\\Android\\Sdk`。
+- 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`（用户自己构建），产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`；**勿设小写 `kotlin.compiler.execution.strategy=in_process`**（只认 `IN_PROCESS`）。
+- 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根 `*.apk`，**别 `git add -A` 误提交 APK**。交付前校验 zip 完好 + `apksigner verify --print-certs` + sha256。
+- ⚠️ **2026-11-07 起本机编译链不可见**：`C:\Java\jdk-17`、`C:\Android\Sdk`、`~/.gradle` 全都不存在，全盘找不到 `java.exe`（沙箱内外都一样）→ 目前**跑不了 gradle 编译检查**，只能做静态校验（括号平衡、符号引用、XML 结构）。下次开工先确认 JDK/SDK 新路径。
+- 静态校验注意：剥离 Java 注释做括号自检时**必须先替换字符串再删 `//` 行注释**，否则 `"file://"` 里的 `//` 会被当成注释造成假报警。
+- CI 历史坑（已修）：`ubuntu-latest` 切 Ubuntu 26 会让 `setup-android@v3` 必挂 → 用自建 `.github/actions/setup-android-sdk` + `runs-on: ubuntu-24.04`；git 里脚本要 `git update-index --chmod=+x` 且工作流用 `bash x.sh`；加速站用 `gh-proxy.com`/`ghfast.top`（`gh.xxooo.cf` 已死）。
 
-- **推 GitHub 的网络三连**（本机必踩）：① shell 里被注入 `http_proxy=127.0.0.1:53356` → `git push` 报 `CONNECT tunnel failed, response 502`，先 `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`；② 直连后可能 `Recv failure: Connection was reset` / `Empty reply from server`（github.com 443 抖动，`api.github.com` 正常）→ 用 `git -c http.version=HTTP/1.1 push origin main` 一次就过；③ 只是查 CI 状态无需登录，匿名 `curl api.github.com/repos/.../actions/runs` 够用（`/logs` 需 403）。
+## 架构速查
+- `MainActivity`(Kt)：ViewPager2 两页 Home/My；`HomeFragment` 内旧 ViewPager+DslTabLayout = 首页分栏（`FragmentStatePagerAdapter`，offscreen 默认 1）。底部导航 4 项，直播/订阅是独立 Activity。
+- 底部导航 `include_bottom_navigation.xml`：高 58dp、图标 24dp、**背景纯白 `#FFFFFFFF`（用户要求勿动）**；item 高度 <~56dp 图标文字必重叠。大屏 `layout-sw600dp/` 用 `NavigationRailView`(88dp)，代码里 `bottom_nav` 统一强转为公共基类 `NavigationBarView`。sw600dp 触发条件 = 较短边 ≥600dp。
+- 动态 dex(csp.jar/js.jar)：SDK≥34 用 `InMemoryDexClassLoader`，需 `JarResourceClassLoader` 作 parent 才能读资源；SDK<34 用 `DexClassLoader+setReadOnly()`。dex 加载失败 = 订阅不可用。
+- `spThreadPool` 是单线程池，其中的任务别再内嵌提交它自己（会自锁）。`SourceViewModel.getSort(key)` 经 `ApiConfig.getSource(key)` 取 `SourceBean` **必须判空**。
+- 异步回调晚于 Activity 销毁 → NPE：所有「子线程→主线程改 View/播放器」先判 `isFinishing()||isDestroyed()`，onDestroy 取消请求。Android14+ 动态广播需 `RECEIVER_EXPORTED/NOT_EXPORTED`，PendingIntent 需 `FLAG_IMMUTABLE`。
+- 播放器：VOD 用 `player_vod_control_view.xml`（`box_vod_control_view.xml` 是死文件）；`dialog_playing_control.xml` 被 `PlayingControlDialog` 与 `PlayingControlRightDialog`(sw600dp) 共用，改布局两个类都要接监听。
+- **首页分栏复用 Fragment 实例的坑**（2.28.8）：`FragmentStatePagerAdapter` 滑远会销毁 Fragment、回来复用同一实例，而 `init()` 不再执行 → `observe(this)` 丢失。凡在 `init()` 里注册的观察者都要能在 `onCreate` 重挂；LiveData 重放旧值要用「是否真的在等回调」过滤。已在 `GridFragment` 用 `mWaitingList`+20s 超时兜底解决。
 
-## 架构要点
-- `MainActivity`(Kt)：ViewPager2 两页 Home/My，`isUserInputEnabled=false`；`HomeFragment` 内旧 ViewPager+DslTabLayout 由 `ViewPager1Delegate` 绑定=首页分栏。底部导航 4 项（首页/我的走 vp，直播/订阅独立 Activity）。
-- 底部导航 `include_bottom_navigation.xml`（MainActivity/LiveActivity/SubscriptionActivity 三处 include）：高 58dp、图标 24dp、背景纯白 `#FFFFFFFF`（用户要求勿动）；item 高度 <~56dp 图标文字必重叠。
-- **大屏左侧导航**：`res/layout-sw600dp/` 用 `NavigationRailView`（宽 88dp），三页 activity_* 根改 `horizontal`、导航在左；`bottom_nav` 强转类型改公共基类 `NavigationBarView`（手机 BottomNavigationView / 大屏 Rail 都继承它）。`BottomNavigationView` 无 `app:orientation`，不能靠它竖排。sw600dp 触发条件=较短边≥600dp。
-- 动态广播 Android14+ 需 `RECEIVER_EXPORTED/NOT_EXPORTED`；PendingIntent 需 `FLAG_IMMUTABLE`。
-- **动态 dex(csp.jar/js.jar)**：SDK≥34 用 `InMemoryDexClassLoader`（classes*.dex 进 ByteBuffer），SDK<34 用 `DexClassLoader+setReadOnly()`；InMemory 版无 jar 路径→资源读不到，需 `JarResourceClassLoader` 作 parent。dex 能否加载=订阅是否可用。
-- `spThreadPool` 单线程池自锁：跑在其中的任务别内嵌再提交到 spThreadPool（首页推荐已改 `homeRecThreadPool`）。
-- 异步回调晚于 Activity 销毁→NPE（直播页崩溃根因）：所有「子线程→主线程→改 View/播放器」先判 `isFinishing()||isDestroyed()` 并判空，onDestroy 取消请求。
-- `SourceViewModel.getSort(key)` 经 `ApiConfig.getSource(key)` 取 `SourceBean`，**必须 null 保护**（否则切源后首页 NPE）。
-- 播放器：VOD 真正用的是 `player_vod_control_view.xml`（`box_vod_control_view.xml` 是死文件）；`dialog_playing_control.xml` 被 `PlayingControlDialog`(手机底部) 与 `PlayingControlRightDialog`(sw600dp 抽屉) 共用，布局改一次但**两个类都要接监听**。
+## Hawk / Room / 备份同步
+- ⚠️ **Hawk 2.0.1 的 SP 文件名是 `Hawk2`**（`STORAGE_TAG_DO_NOT_CHANGE`）。用 `getSharedPreferences("Hawk")` 会静默失效。Hawk 存 `type#value` 包装串，判断内容必须 `Hawk.get` 取真实值；`Hawk.put` 内部 `editor.commit()` 同步落盘（要 `relaunchApp` 时别用 apply）。
+- **备份/还原设置一律走 `Hawk.get`/`Hawk.put` 真实值**，别搬运序列化串。复杂对象导出登记 `val.getClass().getName()`，导入端 `Gson.fromJson(json, Class.forName(名))` 再 `Hawk.put`，避免退化成 LinkedTreeMap；导入端兼容 `isJsonArray/isJsonPrimitive` 两种形态。
+- 本地导入的订阅/配置 URL 是 `file:///data/data/<pkg>/files/...`（仅本机私有目录）→ 同步/备份必须把文件内容一起打包（`localFiles` Base64），接收端重建并重写 URL。`Subscription` 的 `url`/`name` 包级私有，跨包只能用 `getUrl()/setUrl()`。
+- **局域网同步**：`DeviceSyncDialog` + `LanSyncManager`（UDP 广播 45127 + 子网 /24 单播 `GET /ping`，MulticastLock 必需，端口 8099~8103 / `GET /config`），数据复用 `BackupManager`，导入后 `relaunchApp(true)`。明文 HTTP 依赖 `usesCleartextTraffic=true`。
+- **2.31.0 起收藏/历史合并**：`BackupManager.ImportMode{REPLACE,MERGE}`，设备同步默认 MERGE，文件备份还原仍 REPLACE；设置/订阅源始终覆盖。合并按 `(sourceKey, vodId)` 去重、`updateTime` 较大者胜，本机独有全保留，之后按 `HISTORY_NUM` 上限 `reserver()` 裁剪。两个表**没有唯一约束**（主键 autoGenerate），合并必须先建 Map 索引再 `@Update`，直接 insert 会插出重复海报。并集语义下「删除」不会跨设备同步，需要完全一致时取消勾选走覆盖。
+- `AppResetHelper`（2.29.0 软件内重置）：清 `Hawk.deleteAll()` + `clearAllTables()`（**只能在子线程**）+ filesDir/cacheDir，外置备份不动，清完必须重启。`App.java` 会在 `API_URL` 缺失时自愈到内置源。
 
-## 直播页方向 / 布局（2.18~2.21 定稿）
-- 全程不锁方向。`LiveActivity.mEnteredPortrait` + `LiveNewController.setRotateToFullScreenEnabled()` 作闸门：竖屏进入才保留「转横屏自动全屏」；**横屏进入（手机横屏/大屏）直接停在左右分栏普通页，不自动全屏**（用户明确要求）。出现过竖屏即在 `onConfigurationChanged` 解锁。
-- dkplayer 退出全屏多条路径：`stopFullScreen()`、`ControlWrapper.toggleFullScreen()`(双击,硬 PORTRAIT)、`toggleFullScreenByVideoSize()`、`PlayerTitleView` 返回——改方向策略必须 grep `setRequestedOrientation` 全查。`LiveNewController` 已覆写 `stopFullScreen/toggleFullScreen` 为 UNSPECIFIED；`onOrientationLandscape/ReverseLandscape` 无 `mEnableOrientation` 保护，禁自动全屏只能覆写它们。
-- **横竖屏两套结构靠运行时改 LayoutParams，不是 layout-land**：LiveActivity 声明了 `configChanges` 旋转不重建 → `layout-land/` 不生效，只在启动时选 `layout/` 或 `layout-sw600dp/`。`applyLiveResponsiveLayout()`（由 `applyLiveVideoBoxSize()` 开头调用）用 `live_content_row`+`live_video_column` 两层容器切换：竖屏 VERTICAL / 横屏 HORIZONTAL（视频 weight=3、频道 weight=2、EPG 压 60dp）。
-- `applyLiveVideoBoxSize()`（id `live_video_box`，两种布局都有）：竖屏 `max(240, 屏宽*9/16)`、横屏 `max(240, min(屏高-120, 屏高*0.62))`；全屏/PiP 跳过，回 PLAYER_NORMAL 重算。smallestWidth 优先于 orientation，`layout-sw600dp` 会盖过 `layout-land`。
-- 全屏画中画入口：全屏时 `ic_pip` 被播放器容器盖住 → 在 `dkplayer_layout_menu_view.xml`（仅直播页用）右侧菜单加 pip 按钮 → `LiveActivity.enterPip()`；进入前先 `stopFullScreen()`+方向复位，否则白边/卡横屏。
-- 全屏频道抽屉（XPopup）列宽忽宽忽窄：必须显式 `.popupWidth(max(dp2px(260), 屏宽*0.42f))`，否则 wrap_content 测量让 `0dp+weight` 失效。
-- RelativeLayout 改定位要清**全部**同类锚点（只清 ALIGN_PARENT_BOTTOM 漏了 alignParentRight 就会重叠）。
+## 直播页
+- 不锁方向。`mEnteredPortrait` + `setRotateToFullScreenEnabled()` 作闸门：竖屏进入才允许「转横屏自动全屏」；**横屏/大屏进入直接停在左右分栏**。改方向策略必须 grep 全部 `setRequestedOrientation`（dkplayer 退出全屏有多条路径）。
+- 横竖屏结构是**运行时改 LayoutParams**（`configChanges` 使 `layout-land/` 不生效）：`applyLiveResponsiveLayout()` 切 `live_content_row`/`live_video_column` 的 VERTICAL/HORIZONTAL；`applyLiveVideoBoxSize()` 算 `live_video_box` 高度。全屏/PiP 跳过，回 NORMAL 重算。
+- 全屏画中画入口在 `dkplayer_layout_menu_view.xml`（`ic_pip` 会被播放器盖住），进入前先 `stopFullScreen()`+方向复位。全屏频道抽屉必须显式 `.popupWidth(max(dp2px(260), 屏宽*0.42f))`，否则 wrap_content 让 weight 失效。RelativeLayout 改定位要清**全部**同类锚点。
 
-## Hawk / 设置持久化（重要）
-- ⚠️ **Hawk 2.0.1 的 SharedPreferences 文件名是 `Hawk2`**（`STORAGE_TAG_DO_NOT_CHANGE="Hawk2"`）。绕开 Hawk API 用 `getSharedPreferences("Hawk")` 读写会**静默失效**（曾导致同步后 API_URL/HOME_API 等全部不生效，只有走 `Hawk.put` 的订阅正常）。备份类代码要么用 `"Hawk2"`，要么全走 Hawk API。
-- Hawk 内部存 `type#value` 包装串（`INFO_DELIMITER="#"`），sp 原始值不是纯值 → 判断内容必须 `Hawk.get` 取真实值。
-- **备份/还原设置一律走 `Hawk.get`/`Hawk.put` 真实值**，不要搬运序列化串（实测 `editor.putString(原串)` 后 HOME_REC/LANDSCAPE_CARD 不生效）。复杂对象导出登记 `val.getClass().getName()`，导入端 `Gson.fromJson(json, Class.forName(名))` 再 `Hawk.put`，避免退化成 LinkedTreeMap。
-- `Hawk.put` 内部 `editor.commit()` 同步落盘；自己写 sp 且随后要 `relaunchApp` 时**必须 commit 不能 apply**。
-- 备份 JSON 里复杂对象用「字符串 primitive」存最稳，导入端先判 `isJsonArray/isJsonPrimitive` 两种形态，别让异常静默吞掉。
-- 本地导入的订阅/配置 URL 是 `file:///data/data/<pkg>/files/...`（仅本机私有目录）→ 同步/备份必须把文件内容一起打包（`localFiles` Base64），接收端重建并重写 URL，否则报"无法读取本地配置文件"。
-- `Subscription` 的 `url`/`name` 是**包级私有**，跨包只能用 `getUrl()/setUrl()`。
+## 主题 / 颜色
+- ⚠️ **取主题色千万别用 `ColorUtils.getColor()`**（androidutilcode）：内部是 `ContextCompat.getColor(Utils.getApp(), id)`，走 **Application** 的 Resources；AppCompat 的浅/深覆盖只写在 **Activity** 上 → 「系统深色 + 软件浅色」会白底白字（2.29.1）。统一用 `Utils.getThemeColor(context, resId)`；`Utils.isDarkTheme()` 优先看 `AppCompatDelegate.getDefaultNightMode()`，只在「跟随系统」时读系统 uiMode。
+- 深色覆盖在 `values-night/colors.xml`（无 drawable-night），背景纯黑 `#000000`；`text_foreground` 浅 #050505 / 深 #FFFFFF，`text_sub_foreground` 浅 #787878 / 深 #AFAFAF。底部导航白色勿动。
+- 弹窗改状态栏图标颜色：根因是 `CustomDialogStyle` 的 `windowFullscreen=true` + `FLAG_DIM_BEHIND`，运行时改 flag 无效。解法 = 样式删 `windowFullscreen` + `BaseDialog.dimAmountBehind=0f` + show 后把宿主 Activity 同值双通道写一遍；判断深浅读宿主窗口底色，改窗口参数要在 `super.show()` 前。
 
-## 局域网设备同步（2.22.x）
-- 设置页「设备同步（局域网）」→ `DeviceSyncDialog`；核心 `util/LanSyncManager.java`（纯 JDK）。
-- 发现：UDP 广播 45127（`TVBOX_LAN_SYNC|设备名|端口`，接收端**必须拿 MulticastLock**）；Wi-Fi 常拦广播，故并行「子网 /24 逐 IP 单播 `GET /ping` 探测」（80 线程、300ms 超时），"ok" 即对方。手动连接端口默认 8099。
-- 传输：HTTP 8099~8103，`GET /config` / `GET /ping`；数据复用 `BackupManager.exportBackup/importBackup`，导入后 `AppUtils.relaunchApp(true)`。明文 HTTP 依赖 manifest `usesCleartextTraffic=true` + network_security_config base-config 放行。
+## 其它高频坑
+- **「Gradle 缓存/守护进程」诊断极易误判**：曾三次误判，实际是 Java 多一个 `}`。铁律：杀 java + 删 app/build + 重建仍逐字节复现 → 就是真 bug。改完大段 Java 必做括号平衡自检。
+- **多模块 manifest 权限**：`:app/:player/:crash/:quickjs/:TabLayout/:ViewPager1Delegate` 逐模块查，`:app` 用 `tools:node="remove"` 兜底；只在 :app 删等于没删。
+- 大屏多列一屏 ≈20 条 > 一页 20 条 → `canScrollVertically()==false` 让 LoadMore 永不触发，`GridFragment.autoFillViewport()` 自动补页解决。
+- Picasso 在 RecyclerView 里别用 `.fit()`；用 `resize+onlyScaleDown+centerCrop+noFade`，`PosterImageView` 抑制 setImage 触发的整屏 requestLayout，`PosterCardLayout` 用 `setClipToOutline` 做 GPU 圆角。解码走独立低优先级线程池（OkGoHelper）。
+- `Edit` 工具会把 CRLF 改 LF 造成 diff 噪音；`更新记录.md` 是 CRLF，批量替换用 Python 保留行尾。改了 .kt 必须单独跑 `compileArm64v8DebugKotlin`（Java 编译任务不覆盖 Kotlin）。
+- 详情页「外部播放」用系统 `ACTION_VIEW`；Android11+ 检测已装 App 必须在 manifest `<queries>` 声明 `video/*` 与包名。
 
-## 深色模式 / 主题
-- `util/Utils.isDarkTheme()` + `AppCompatDelegate.setDefaultNightMode`；深色覆盖在 `values-night/colors.xml`（无 drawable-night），不加同名 color 会沿用浅色（`windowBackground` 不覆盖会闪白）。
-- 2026-10-01 起深色背景纯黑 `#000000`（OLED）；webview 深色在 `res/raw/style.css`。底部导航白色勿动。
-
-## 已落地功能 / 修复（速查）
-- 2.5.4 SAF 备份还原（弃 MANAGE_EXTERNAL_STORAGE）；2.5.5 本地导入复制进私有目录（`util/LocalImport.kt`，`ApiConfig.readContentConfig` 加 file:// 分支）；2.5.6 删「本地视频」；2.5.8/2.5.9 逐模块删存储权限 + `tools:node="remove"` 兜底；2.5.10/2.6.1 标题栏自适应。
-- 详情页"外部播放"走系统 `ACTION_VIEW` 选择器（MX/VLC/Reex/Kodi）；**Android11+ 检测已装 App 必须在 manifest `<queries>` 声明 `video/*` 与包名**，否则全失败。
-- 内置源：`strings.xml` 的 `api_name` = 饭太硬/王二小/龙门影视。
-- 首页顶栏：`tvName`（数据源名，可点切换/长按刷新）+ 搜索框；2.22.8 已**移除右上角历史记录图标入口**（历史改从「我的 → 观看历史」进）。
-- 搜索页（FastSearchActivity）2.27.0 起有**卡片/列表两套显示**：`FastSearchAdapter` 走多布局（`getDefItemViewType` + `onCreateDefViewHolder`，**不要**覆写 `getItemViewType`），模式存 `HawkConfig.SEARCH_CARD_MODE`（默认卡片，已加入 BackupManager 备份键）；卡片=GridLayoutManager+`item_search_card`，列表=LinearLayoutManager+`item_search`。
-- 列表模式缩略图（2.27.1 起）**跟随 `HawkConfig.LANDSCAPE_CARD`**：竖版 80x120dp(2:3) / 横版 160x90dp(16:9)，由 `FastSearchAdapter.applyListMetrics()` 动态设 ImageView LayoutParams，并同步 `llText` padding（12/2dp）与 `tvNote` 上间距（20/6dp）；`item_search.xml` 根为 `wrap_content`+`center_vertical`。`RoundTransformation` 缓存 key 必须带尺寸（`MD5(url@宽x高)`），否则切比例后命中旧位图。
-
-## 踩坑教训
-- ⚠️ **取主题色千万别用 `ColorUtils.getColor()`**（androidutilcode）：它内部是 `ContextCompat.getColor(Utils.getApp(), id)`，走的是 **Application** 的 Resources。而 AppCompat 的浅色/深色覆盖**只写到 Activity 的 Resources 上**，Application 的 configuration 永远是系统值。结果「系统深色 + 软件内选浅色」时它会取 `values-night` 的白色，而背景按 Activity 解析成浅色 → **白底白字看不见**（直播页频道列表就这么瞎的，2.29.1 修）。统一用 `Utils.getThemeColor(context, resId)`。同一道理：`Utils.isDarkTheme()` 不能直接读 Application 的 `uiMode`，要优先看 `AppCompatDelegate.getDefaultNightMode()`，只在「跟随系统」时才读系统值。
-- ⚠️ **弹窗会改状态栏图标颜色（连修 3 次才对）**：浅色模式下打开弹窗（筛选等）状态栏文字变白看不清。根因有两层：① `CustomDialogStyle` 带 `android:windowFullscreen=true` → 弹窗 window 被系统当"拥有状态栏的窗口"，图标明暗改用弹窗主题（`Theme.Dialog` 深色）的默认白图标；② `FLAG_DIM_BEHIND` 的遮罩铺满整屏（含状态栏），系统同样把状态栏外观算到弹窗头上。**运行时 `clearFlags` / 改 appearance 都没用**（2.26.5、2.26.6 实测无效），必须从窗口层面拆：样式里**删掉 `windowFullscreen`** + 无遮罩弹窗**不加 `FLAG_DIM_BEHIND`**（`BaseDialog.dimAmountBehind=0f`）+ 弹窗 show 后把**宿主 Activity** 也按同值双通道写一遍。判断深浅必须读宿主窗口（底色亮度最稳），不能用 App 主题（详情/直播页是黑状态栏）。改窗口参数要在 `super.show()` 之前设。
-- ⚠️ **"缓存/守护进程"诊断极易误判**：曾三次误判 Gradle 缓存，实际是 `ApiConfig.java` 多一个 `}`。**铁律：用户杀 java+删 app/build+重建仍逐字节复现 → 就是真 bug**。改完 Java 大段嵌套/括号务必做括号平衡自检。
-- ⚠️ **多模块 manifest 权限**：:app / :player / :crash / :quickjs / :TabLayout / :ViewPager1Delegate 需逐模块查，且 :app 用 `tools:node="remove"` 兜底，只在 :app 删等于没删。
-- Edit 工具会把 CRLF 改 LF 造成 diff 噪音：批量替换用 Python bytes 级替换并保留行尾。
+## 版本 / 功能速查
+- 2.27.x 订阅源缓存自愈 + spider jar 按源分份缓存；2.28.x 大屏滑动流畅度（多轮迭代）；2.28.8 切回分栏后不加载；2.28.9 切回在线订阅后首页数据源被换掉。
+- 2.29.0 软件内「重置软件」；2.29.1 主题取色修复；2.30.0 收藏页两个 Tab 显示条目数量（数量取**列表实际条数**，不是 SQL count —— 历史有上限裁剪和失效源过滤）；2.31.0 设备同步合并收藏/历史。
+- 搜索页有卡片/列表两套（`SEARCH_CARD_MODE`），列表缩略图跟随 `LANDSCAPE_CARD`；`FastSearchAdapter` 用 `getDefItemViewType`+`onCreateDefViewHolder`，**不要**覆写 `getItemViewType`；`RoundTransformation` 缓存 key 必须带尺寸。
 
 ## 用户偏好
-- 中文沟通；改完**自动 git add+commit 本地快照（不 push）**，汇报"已提交未推送"。
-- 助手不构建（构建/出 APK 由用户做），只写代码+静态校验，并给出构建命令。
-- 介意"存储权限/能读所有文件"类权限，能删就删。系统导航栏白条问题搁置，勿主动改；外部播放无需二级列表。
+- 中文沟通；改完自动 `git add + commit` 到 **dev**（本地快照，不自动 push），汇报 commit id；发布时才按流程推 main + 打 tag。
+- **助手不负责出 APK**（用户本机构建），只写代码 + 静态校验并给出构建命令；当前环境连编译检查也跑不了，需如实说明。
+- 介意「存储权限/能读所有文件」类权限，能删就删；系统导航栏白条搁置勿主动改；外部播放无需二级列表。
