@@ -1,6 +1,6 @@
 {
-  "version": "2.30.0",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.30.0/TVBox-Mobile-v2.30.0-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.30.0/TVBox-Mobile-v2.30.0-armv7a.apk",
-  "changelog": "**收藏页的两个 Tab 直接显示数量**：现在是「收藏 12」「历史记录 35」，打开就知道有多少条，不用翻到列表底部才心里有数\n**数字取的是列表实际条数**：不是数据库总行数。历史记录会按设置里的「历史记录条数」上限裁剪、并跳过失效数据源的条目，所以显示的数字和你在列表里能看到的条目数完全一致\n**删除、清空后数字立即跟着变**：长按删掉一条、点右上角清空当前列表，Tab 上的数量会同步刷新，不需要退出重进\n顺带把 Tab 文字颜色从硬编码的黑色改成主题色（`text_foreground`），修复深色模式下选中 Tab 是黑字压黑底、完全看不见的问题"
+  "version": "2.31.0",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.31.0/TVBox-Mobile-v2.31.0-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.31.0/TVBox-Mobile-v2.31.0-armv7a.apk",
+  "changelog": "**设备同步接收配置时，收藏和历史记录改为「合并」而不是覆盖**：本机原有的记录一条不丢，发送端的记录也全部收进来，两台设备的收藏/历史会自然变成并集\n**同一部影片不会重复**：按「数据源 + 影片 ID」去重，两边都有的取更新时间较新的一条（播放进度、看到第几集按最新的为准）；收藏的名称和海报也只在较新时才更新\n**同步完会告诉你结果**：接收成功后显示新增/更新了多少条收藏与历史，不再是一句笼统的「同步成功」\n**想完全同步成发送端的样子也可以**：同步弹窗里新增「接收时合并收藏与历史」开关，默认勾选；取消勾选就沿用原来的覆盖行为（适合新设备首次初始化）\n合并后会自动按设置里的「历史记录条数」上限裁剪，只保留最新的 N 条，避免两边数据加起来撑大数据库；设置与订阅源仍以发送端为准（配置类数据本来就该覆盖）"
 }
