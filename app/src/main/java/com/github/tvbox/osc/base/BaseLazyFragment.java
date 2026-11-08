@@ -17,6 +17,7 @@ import androidx.fragment.app.FragmentManager;
 import com.github.tvbox.osc.callback.EmptyCallback;
 import com.github.tvbox.osc.callback.LoadingCallback;
 import com.kingja.loadsir.callback.Callback;
+import com.kingja.loadsir.callback.SuccessCallback;
 import com.kingja.loadsir.core.LoadService;
 import com.kingja.loadsir.core.LoadSir;
 
@@ -252,6 +253,8 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
                 public void onReload(View v) {
                 }
             });
+            // register 之后内容视图就在显示，状态即「成功」
+            mLoadState = SuccessCallback.class;
         }
     }
 
@@ -261,24 +264,36 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
             public void onReload(View v) {
             }
         });
+        mLoadState = SuccessCallback.class;
     }
 
+    /**
+     * 当前已经显示的状态。
+     *
+     * <p>LoadSir 的 showCallback() 不判断"是不是已经是这个状态"，每次调用都会把目标视图
+     * 从它的根布局里摘下来再挂回去。目标视图只是个普通布局时看不出来，但本项目里
+     * GridFragment 是把 LoadSir 直接注册在 RecyclerView 上的——重复调 showSuccess()
+     * 会让整个列表 detach/attach 一次，表现就是首页"闪一下"、位置跟着变。
+     * 这里记一下状态，重复的设置直接忽略。
+     */
+    private Class<? extends Callback> mLoadState = null;
+
     protected void showLoading() {
-        if (mLoadService != null) {
-            mLoadService.showCallback(LoadingCallback.class);
-        }
+        if (mLoadService == null || mLoadState == LoadingCallback.class) return;
+        mLoadState = LoadingCallback.class;
+        mLoadService.showCallback(LoadingCallback.class);
     }
 
     protected void showEmpty() {
-        if (null != mLoadService) {
-            mLoadService.showCallback(EmptyCallback.class);
-        }
+        if (mLoadService == null || mLoadState == EmptyCallback.class) return;
+        mLoadState = EmptyCallback.class;
+        mLoadService.showCallback(EmptyCallback.class);
     }
 
     protected void showSuccess() {
-        if (null != mLoadService) {
-            mLoadService.showSuccess();
-        }
+        if (mLoadService == null || mLoadState == SuccessCallback.class) return;
+        mLoadState = SuccessCallback.class;
+        mLoadService.showSuccess();
     }
 
     public void jumpActivity(Class<? extends BaseActivity> clazz) {

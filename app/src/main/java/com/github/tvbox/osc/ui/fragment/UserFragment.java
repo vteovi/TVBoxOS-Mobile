@@ -196,7 +196,12 @@ public class UserFragment extends BaseLazyFragment {
                                     ArrayList<Movie.Video> videos = loadHots(netJson);
                                     if (videos.size()>0){
                                         showSuccess();
-                                        adapter.setNewData(videos);
+                                        // 已经有内容在显示时不要整表替换：这份数据几秒后才回来，
+                                        // 用户可能已经在浏览，setNewData 会让列表闪一下并跳位置。
+                                        // 新数据已写进本地缓存（home_hot），下次进入自然是最新的。
+                                        if (adapter.getData().isEmpty()) {
+                                            adapter.setNewData(videos);
+                                        }
                                     }else {
                                         showEmpty();
                                     }

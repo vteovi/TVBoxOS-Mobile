@@ -149,14 +149,22 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 mSortDataList = newSortList
             }
             if (!keepFragments) {
+                // 记住用户原来停在哪一栏：分类集合变化会重建整个 ViewPager，
+                // 不还原的话正在浏览的分类会突然跳回第一栏（连带列表重新加载、闪一下）。
+                // 注意 mSortDataList 这时已经被换成新列表了，要用旧的 id 列表去查
+                val tabIndex = mBinding.tabLayout.currentItemIndex
+                val closedHome = Hawk.get(HawkConfig.HOME_REC, 0) == 2
+                mRestoreTabId = oldSortIds.getOrNull(if (closedHome) tabIndex + 1 else tabIndex)
                 initViewPager(absXml)
             } else {
-                // 分栏结构没变不重建，但要把最新的站点推荐数据更新到主页 UserFragment
+                // 分栏结构没变不重建：只把最新的站点推荐数据存给主页 UserFragment，
+                // 不主动 refresh —— refresh 会 setNewData 整表替换，用户此刻很可能正在
+                // 主页栏里浏览（它默认就是第一栏），列表会闪一下、位置也会被拽走。
+                // 新推荐会在下次重建分栏 / 重新进入时自然生效。
                 if (Hawk.get(HawkConfig.HOME_REC, 0) == 1 && absXml?.videoList != null && absXml.videoList.isNotEmpty()) {
                     for (f in fragments) {
                         if (f is com.github.tvbox.osc.ui.fragment.UserFragment) {
                             f.setHomeSourceRec(absXml.videoList)
-                            f.refreshHomeRec()
                             break
                         }
                     }
@@ -334,7 +342,12 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         return textView
     }
 
+    /** 重建分栏后要还原到哪一栏（按分类 id 记，分类增删也找得到） */
+    private var mRestoreTabId: String? = null
+
     private fun initViewPager(absXml: AbsSortXml?) {
+        val restoreTabId = mRestoreTabId
+        mRestoreTabId = null
         if (mSortDataList.isNotEmpty()) {
             mBinding.tabLayout.removeAllViews()
             fragments.clear()
@@ -372,6 +385,16 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 }
             //tab和vp绑定
             install(mBinding.mViewPager, mBinding.tabLayout, true)
+
+            // 分栏被重建时回到用户原来那一栏（id 还在的话）
+            if (!restoreTabId.isNullOrEmpty()) {
+                var index = mSortDataList.indexOfFirst { it.id == restoreTabId }
+                // 「关闭主页」时第一栏已被移除，索引整体前移一位
+                if (index > 0 && Hawk.get(HawkConfig.HOME_REC, 0) == 2) index -= 1
+                if (index in fragments.indices) {
+                    mBinding.mViewPager.setCurrentItem(index, false)
+                }
+            }
         }
     }
 
