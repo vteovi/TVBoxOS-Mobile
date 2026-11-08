@@ -332,8 +332,75 @@ public class GridFragment extends BaseLazyFragment {
         }
         // 分栏重新可见时给自动补页一次新的额度：重建过 view 后列表可能又变成"滑不动"
         if (mAutoFillCount >= 3) mAutoFillCount = 0;
+        // 分栏切回来时把列表放回离开前的位置：ViewPager 重新 attach 时 RecyclerView
+        // 可能丢掉锚点直接回到第一条，表现就是"闪一下然后跳到最顶部"。
+        // 先立即下一帧定位（下一次 layout 直接落到正确位置，不会先画一帧顶部），
+        // 再 post 一次兜底（attach/measure 还没完成时第一次调用可能不生效）。
+        restoreScrollState();
+        if (mGridView != null) {
+            mGridView.removeCallbacks(mRestoreScrollRunnable);
+            mGridView.post(mRestoreScrollRunnable);
+        }
         // 分栏切回来时补一次「是否满屏」检查：旋屏后列数变化也可能又变成滑不动
         scheduleAutoFill();
+    }
+
+    /** 离开分栏时记住的滚动位置：-1 表示还没记录过 */
+    private int mSavedFirstPos = -1;
+    private int mSavedOffset = 0;
+
+    private final Runnable mRestoreScrollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            restoreScrollState();
+        }
+    };
+
+    @Override
+    protected void onFragmentPause() {
+        super.onFragmentPause();
+        saveScrollState();
+    }
+
+    @Override
+    public void onDestroyView() {
+        // 分栏被 FragmentStatePagerAdapter 销毁前也记一次，重建回来时才能还原
+        saveScrollState();
+        if (mGridView != null) mGridView.removeCallbacks(mRestoreScrollRunnable);
+        super.onDestroyView();
+    }
+
+    /** 记住当前第一个可见条目及其偏移，切回分栏时用来还原位置 */
+    private void saveScrollState() {
+        if (mGridView == null || mGridView.getChildCount() == 0) return;
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        if (!(lm instanceof GridLayoutManager)) return;
+        int pos = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
+        View first = lm.findViewByPosition(pos);
+        if (pos < 0 || first == null) return;
+        mSavedFirstPos = pos;
+        mSavedOffset = ((GridLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
+    }
+
+    /**
+     * 把列表还原到离开分栏前的位置。
+     *
+     * <p>已经在原位置时什么都不做——避免用户刚滑到新位置就被拽回去。
+     */
+    private void restoreScrollState() {
+        if (mGridView == null || mSavedFirstPos < 0) return;
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        if (!(lm instanceof GridLayoutManager)) return;
+        int cur = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
+        View first = lm.findViewByPosition(cur);
+        if (first != null && cur == mSavedFirstPos) {
+            int curOffset = ((GridLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
+            if (curOffset == mSavedOffset) return; // 已经在原位
+        }
+        // 期间数据被刷新（条数变少）时别越界：位置取到最后一个条目
+        int count = gridAdapter == null ? 0 : gridAdapter.getItemCount();
+        int target = count > 0 ? Math.min(mSavedFirstPos, count - 1) : mSavedFirstPos;
+        ((GridLayoutManager) lm).scrollToPositionWithOffset(target, mSavedOffset);
     }
 
     /** 按当前页码恢复"加载更多"的可用状态（到底了就保持关闭） */
@@ -525,6 +592,9 @@ public class GridFragment extends BaseLazyFragment {
         if (mGridView == null || gridAdapter == null || sortData == null) return;
         if (mLoading || !isLoad) return;
         if (gridAdapter.getData().isEmpty()) return;
+        // 还没完成首轮布局（切分栏回来的瞬间）：canScrollVertically 会一律返回 false，
+        // 会被误判成"一屏没填满"而多发一次请求
+        if (mGridView.getChildCount() == 0) return;
         if (page > maxPage) return;
         if (mAutoFillCount >= 3) return;
         if (mGridView.canScrollVertically(1) || mGridView.canScrollVertically(-1)) return;
@@ -604,6 +674,9 @@ public class GridFragment extends BaseLazyFragment {
         }
         isLoad = false;
         mAutoFillCount = 0;
+        // 重新加载分类数据是主动回顶部，清掉旧的滚动位置记忆，否则切分栏回来又被拉回去
+        mSavedFirstPos = -1;
+        mSavedOffset = 0;
         scrollTop();
 
         // 第一页先读本地缓存，立即显示上次内容，后台再发网络请求刷新
