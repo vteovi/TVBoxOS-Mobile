@@ -31,6 +31,7 @@ import com.github.tvbox.osc.ui.adapter.GridAdapter;
 import com.github.tvbox.osc.ui.dialog.GridFilterDialog;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
+import com.github.tvbox.osc.util.HeavyTaskUtil;
 import com.github.tvbox.osc.util.Utils;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
@@ -528,9 +529,9 @@ public class GridFragment extends BaseLazyFragment {
                 // 如果已经从本地缓存显示过数据，后台返回时更新缓存文件；
                 // 同时静默替换列表数据，避免缓存旧数据和第二页新数据重叠导致重复
                 boolean shownFromCache = isLoad && gridAdapter.getData().size() > 0;
-                try {
-                    Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
-                } catch (Exception ignore) {}
+                // 缓存写入放子线程：Gson 序列化 20 条 + Hawk 内部 SharedPreferences.commit()
+                // 是同步落盘，在主线程做会白掉一帧（大屏一屏内容多，看起来就是「闪一下」）。
+                cacheFirstPageAsync(absXml.movie.videoList);
                 if (shownFromCache) {
                     // 静默刷新：按影片 id 做差量更新（只更新真正变化的卡片，
                     // 并把用户正在看的那一条钉回原来的屏幕位置），不再整表替换
@@ -638,7 +639,15 @@ public class GridFragment extends BaseLazyFragment {
                     // 空闲状态有可能是在布局过程中回调的，直接 notify* 会抛
                     // "Cannot call this method while RecyclerView is computing a layout or scrolling"，
                     // 放到下一帧处理
-                    if (mGridView != null) mGridView.post(() -> applyFirstPage(pending));
+                    if (mGridView != null) mGridView.post(() -> {
+                        if (mGridView == null) return;
+                        // 这一帧之间用户又滑起来了（比如惯性滑动连击）：重新暂存，别打断
+                        if (mGridView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+                            mPendingFirstPage = pending;
+                            return;
+                        }
+                        applyFirstPage(pending);
+                    });
                 }
             };
 
@@ -681,7 +690,52 @@ public class GridFragment extends BaseLazyFragment {
         applyFirstPage(data);
     }
 
-    /** 差量套用数据，并在套用后把锚点影片钉回原来的屏幕位置 */
+    /**
+     * 把第一页写进本地缓存。
+     *
+     * <p>序列化和落盘<b>全部放子线程</b>：Gson 序列化 20 条 + Hawk 内部
+     * {@code SharedPreferences.commit()} 是同步写磁盘，在主线程做会白掉一帧
+     * （大屏一屏内容多，看起来就是「闪一下」）。
+     *
+     * <p>主线程只做一次 list 快照拷贝（只拷引用，很快）：这份 list 随后会被
+     * adapter 直接拿去当数据源，子线程不能直接序列化它。
+     */
+    private void cacheFirstPageAsync(List<Movie.Video> list) {
+        if (list == null || list.isEmpty()) return;
+        final String key = cacheKey();
+        final List<Movie.Video> snapshot = new ArrayList<>(list);
+        try {
+            HeavyTaskUtil.executeNewTask(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Hawk.put(key, GsonUtils.toJson(snapshot));
+                    } catch (Exception ignore) {
+                    }
+                }
+            });
+        } catch (Exception e) {
+            // 线程池不可用（极端情况）时退回主线程写，宁可掉一帧也别丢缓存
+            try {
+                Hawk.put(key, GsonUtils.toJson(snapshot));
+            } catch (Exception ignore) {}
+        }
+    }
+
+    /**
+     * 差量套用数据，并把用户<b>当前正在看的那一条</b>钉回原来的屏幕位置。
+     *
+     * <p>两个必须做对的地方（都是实测会「闪一下 + 位置往下窜」的原因）：
+     * <ol>
+     *   <li><b>不能截断已经加载的后续页</b>：这份数据只有第一页，若列表已经被自动补页 /
+     *       上拉加载追加过，直接 clear+addAll 会把后面几十条删掉——用户正在下方浏览时
+     *       列表突然变短，位置就被拽走了。这里按 id 去重合并，保留后续页；</li>
+     *   <li><b>在最顶部也要锚定</b>：早期实现里「在顶部就不锚定、直接停在最新一条」，
+     *       但「最近更新」这类分类的新片全插在最前面，首屏所有卡片会整体往下挪 N 行。
+     *       大屏一屏能看到 20 多条，这个位移非常明显（手机上只挪 1~3 条所以不明显）。
+     *       现在统一按第一张可见卡片的影片 id 锚定，视觉上纹丝不动。</li>
+     * </ol>
+     */
     private void applyFirstPage(List<Movie.Video> data) {
         if (data == null || data.isEmpty()) return;
         if (gridAdapter == null || mGridView == null) return;
@@ -691,49 +745,72 @@ public class GridFragment extends BaseLazyFragment {
             return;
         }
 
+        // 保留已经加载的后续页：只替换前 data.size() 条，尾部原样带过来（按 id 去重）
+        List<Movie.Video> merged = new ArrayList<>(data);
+        if (old.size() > data.size()) {
+            java.util.Set<String> ids = new java.util.HashSet<>();
+            for (Movie.Video v : data) {
+                if (v != null && !TextUtils.isEmpty(v.id)) ids.add(v.id);
+            }
+            for (int i = data.size(); i < old.size(); i++) {
+                Movie.Video v = old.get(i);
+                if (v == null) continue;
+                if (!TextUtils.isEmpty(v.id) && !ids.add(v.id)) continue;
+                merged.add(v);
+            }
+        }
+
         RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-        // 在顶部时不做锚定：新条目本来就该出现在最前面
-        boolean atTop = !mGridView.canScrollVertically(-1);
+        // 锚点：第一张可见卡片（在顶部时为第 0 条），记 id + 它的屏幕偏移
         String anchorId = null;
+        int anchorOldPos = -1;
         int anchorOffset = 0;
-        if (!atTop && lm instanceof LinearLayoutManager && mGridView.getChildCount() > 0) {
+        if (lm instanceof LinearLayoutManager && mGridView.getChildCount() > 0) {
             int firstPos = ((LinearLayoutManager) lm).findFirstVisibleItemPosition();
             View first = lm.findViewByPosition(firstPos);
             if (firstPos >= 0 && firstPos < old.size()) {
                 Movie.Video anchor = old.get(firstPos);
-                if (anchor != null && !TextUtils.isEmpty(anchor.id)) anchorId = anchor.id;
+                if (anchor != null && !TextUtils.isEmpty(anchor.id)) {
+                    anchorId = anchor.id;
+                    anchorOldPos = firstPos;
+                }
             }
             if (first != null) {
-                anchorOffset = ((LinearLayoutManager) lm).getDecoratedTop(first)
-                        - mGridView.getPaddingTop();
+                // 没有 ItemDecoration，间距是 item 自己的 margin，getTop() 与
+                // getDecoratedTop() 等价，这里用 getTop() 更直白
+                anchorOffset = first.getTop() - mGridView.getPaddingTop();
             }
         }
 
-        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new VideoDiffCallback(old, data), true);
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new VideoDiffCallback(old, merged), true);
         // BaseQuickAdapter 的 getData() 就是它内部的 mData，原地替换后按差量派发，
-        // 这样未变化的条目不会重新 bind（不闪），插入/移动也只是一次布局位移
+        // 这样未变化的条目不会重新 bind（不闪）
         List<Movie.Video> target = gridAdapter.getData();
         target.clear();
-        target.addAll(data);
+        target.addAll(merged);
         diff.dispatchUpdatesTo(gridAdapter);
 
         if (!(lm instanceof LinearLayoutManager)) return;
-        if (anchorId == null) {
-            // 在顶部：停在最新的一条（不主动定位的话，新插到前面的条目会看不见）
-            ((LinearLayoutManager) lm).scrollToPositionWithOffset(0, 0);
-            return;
-        }
+        LinearLayoutManager glm = (LinearLayoutManager) lm;
+        if (merged.isEmpty()) return;
+
         int index = -1;
-        for (int i = 0; i < data.size(); i++) {
-            Movie.Video v = data.get(i);
-            if (v != null && TextUtils.equals(v.id, anchorId)) {
-                index = i;
-                break;
+        if (anchorId != null) {
+            for (int i = 0; i < merged.size(); i++) {
+                Movie.Video v = merged.get(i);
+                if (v != null && TextUtils.equals(v.id, anchorId)) {
+                    index = i;
+                    break;
+                }
             }
         }
-        if (index >= 0) {
-            ((LinearLayoutManager) lm).scrollToPositionWithOffset(index, anchorOffset);
+        if (index < 0) {
+            // 锚点影片被源下架了：按比例估算新位置，比直接跳回顶部温和得多
+            index = old.isEmpty() ? 0
+                    : (int) ((long) Math.max(anchorOldPos, 0) * merged.size() / old.size());
         }
+        index = Math.max(0, Math.min(index, merged.size() - 1));
+        glm.scrollToPositionWithOffset(index, anchorOffset);
     }
 
     /** 差量比较：id 相同即同一条影片；内容只比较卡片上真正会变的字段 */
@@ -781,8 +858,16 @@ public class GridFragment extends BaseLazyFragment {
                     && TextUtils.equals(trimPic(a.pic), trimPic(b.pic));
         }
 
+        /**
+         * 海报地址归一化后再比较：很多源会在 URL 后面拼随机参数/时间戳，
+         * 直接比较会让「同一部片」被判成内容变化，从而整批重新加载图片 —— 视觉上就是闪。
+         */
         private static String trimPic(String pic) {
-            return pic == null ? null : pic.trim();
+            if (pic == null) return null;
+            String s = pic.trim();
+            int q = s.indexOf('?');
+            if (q > 0) s = s.substring(0, q);
+            return s;
         }
     }
 
