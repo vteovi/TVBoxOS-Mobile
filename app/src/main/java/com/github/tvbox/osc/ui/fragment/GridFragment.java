@@ -442,7 +442,12 @@ public class GridFragment extends BaseLazyFragment {
                 if (shownFromCache) {
                     // 内容没变就别整表替换：setNewData 会让 RecyclerView 重新布局并
                     // 丢掉当前浏览位置，表现就是正在滑动的列表“内容突然往下掉一截”。
-                    if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)) {
+                    // 另外用户已经上滑离开顶部时也不替换：这份回来的是第一页的静默刷新，
+                    // 用户正在看缓存里的旧内容，整表替换会让所有可见卡片重新绑定（海报闪一下），
+                    // 而"最近更新"这类分类的新条目通常插在最前面，正在看的卡片还会整片换位置。
+                    // 这种情况只把新数据写进缓存（上面已 Hawk.put），下次进入该分栏时再生效。
+                    if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)
+                            && !userBrowsing()) {
                         replaceDataKeepingScroll(absXml.movie.videoList);
                     }
                 } else {
@@ -540,6 +545,22 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     /**
+     * 用户是否已经上滑离开顶部（正在浏览列表中途）。
+     *
+     * <p>用 {@code canScrollVertically(-1)} 判断而不是只看第一个可见位置：只滑了一点点时
+     * 第一行可能还露着（firstVisiblePosition 仍为 0），但列表其实已经离开顶部了。
+     */
+    private boolean userBrowsing() {
+        if (mGridView == null || mGridView.getChildCount() == 0) return false;
+        if (mGridView.canScrollVertically(-1)) return true;
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        if (lm instanceof GridLayoutManager) {
+            return ((GridLayoutManager) lm).findFirstVisibleItemPosition() > 0;
+        }
+        return false;
+    }
+
+    /**
      * 整表替换但保持当前浏览位置：后台刷新返回时用户可能已经在滑动，
      * 直接 setNewData 会让 RecyclerView 重新布局并把列表拽回顶部。
      */
@@ -549,10 +570,14 @@ public class GridFragment extends BaseLazyFragment {
         if (lm instanceof GridLayoutManager && mGridView.getChildCount() > 0) {
             firstPos = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
             View first = lm.findViewByPosition(firstPos);
-            if (first != null) offset = first.getTop() - mGridView.getPaddingTop();
+            // getTop() 不含 item 的 margin/decoration，用 getDecoratedTop 恢复得更准
+            if (first != null) offset = ((GridLayoutManager) lm).getDecoratedTop(first)
+                    - mGridView.getPaddingTop();
         }
         gridAdapter.setNewData(data);
-        if (firstPos > 0 && lm instanceof GridLayoutManager && !data.isEmpty()) {
+        // firstPos 为 0 也要恢复：滑了一点点时第一行仍在屏幕上，但不恢复 offset
+        // 就会连那一点点位移都丢掉（内容"往上跳一下"）
+        if (firstPos >= 0 && lm instanceof GridLayoutManager && !data.isEmpty()) {
             ((GridLayoutManager) lm).scrollToPositionWithOffset(
                     Math.min(firstPos, data.size() - 1), offset);
         }

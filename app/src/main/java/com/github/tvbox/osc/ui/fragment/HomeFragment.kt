@@ -116,7 +116,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             mHandler.removeCallbacks(sortTimeoutTask)
             showSuccess()
             val oldSortIds = mSortDataList.map { it.id }
-            mSortDataList =
+            val newSortList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
                     DefaultConfig.adjustSort(
                         ApiConfig.get().homeSourceBean.key,
@@ -129,16 +129,26 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             // 缓存分栏列表，下次打开立即渲染
             try {
                 val cacheKey = "sort_cache_" + ApiConfig.get().homeSourceBean.key
-                Hawk.put(cacheKey, com.blankj.utilcode.util.GsonUtils.toJson(mSortDataList))
+                Hawk.put(cacheKey, com.blankj.utilcode.util.GsonUtils.toJson(newSortList))
                 if (absXml?.videoList != null) {
                     Hawk.put(cacheKey + "_rec", com.blankj.utilcode.util.GsonUtils.toJson(absXml.videoList))
                 }
             } catch (ignore: Exception) {}
-            // 已用缓存渲染过 ViewPager，且分栏 id 序列没变，就不重建（避免跳回顶部/闪烁）
-            val newSortIds = mSortDataList.map { it.id }
+
+            val newSortIds = newSortList.map { it.id }
             val alreadyRendered = fragments.isNotEmpty()
-            val sameStructure = oldSortIds.size == newSortIds.size && oldSortIds.zip(newSortIds).all { it.first == it.second }
-            if (!alreadyRendered || !sameStructure) {
+            // 分类"集合"一致就认为结构没变：顺序不同也不重建。
+            // 重建会清空全部分栏（Fragment 重建、列表回到顶部并闪一下），而用户此刻
+            // 很可能正在某个分栏里浏览——纯粹的排序差别不值得这个代价。
+            val sameIdSet = oldSortIds.size == newSortIds.size && oldSortIds.toSet() == newSortIds.toSet()
+            val keepFragments = alreadyRendered && sameIdSet
+            if (!keepFragments) {
+                mSortDataList = newSortList
+            } else if (oldSortIds == newSortIds) {
+                // 顺序也一致：安全地换成最新对象（分类名、筛选项等可能有更新）
+                mSortDataList = newSortList
+            }
+            if (!keepFragments) {
                 initViewPager(absXml)
             } else {
                 // 分栏结构没变不重建，但要把最新的站点推荐数据更新到主页 UserFragment
@@ -165,7 +175,9 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             mBinding.tvName.postDelayed({ mBinding.tvName.isSelected = true }, 2000)
         }
 
-        showLoading()
+        // 已经渲染过分栏时不要再切到 loading 页：LoadSir 会把整块 contentLayout
+        // （连同 ViewPager 里所有列表）从布局树上摘下来，正在看的列表会闪一下并回顶部
+        if (fragments.isEmpty()) showLoading()
         when{
             dataInitOk && jarInitOk -> {
                 //正常初始化会先加载,最终到这,此时数据有以下几种情况
