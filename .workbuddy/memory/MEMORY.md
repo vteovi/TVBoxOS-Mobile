@@ -14,7 +14,12 @@
 - 仓库 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）；`applicationId=com.github.tvbox.osc.mobile`；`local.properties` 的 `sdk.dir=C:\\Android\\Sdk`。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`（用户自己构建），产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`；**勿设小写 `kotlin.compiler.execution.strategy=in_process`**（只认 `IN_PROCESS`）。
 - 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根 `*.apk`，**别 `git add -A` 误提交 APK**。交付前校验 zip 完好 + `apksigner verify --print-certs` + sha256。
-- ⚠️ **2026-11-07 起本机编译链不可见**：`C:\Java\jdk-17`、`C:\Android\Sdk`、`~/.gradle` 全都不存在，全盘找不到 `java.exe`（沙箱内外都一样）→ 目前**跑不了 gradle 编译检查**，只能做静态校验（括号平衡、符号引用、XML 结构）。下次开工先确认 JDK/SDK 新路径。
+- **2026-11-08 已重装本地编译链（assembleDebug / assembleRelease 均验证通过）**：
+  - JDK：`C:\Java\jdk-17`（Temurin 17.0.21，清华 Adoptium 镜像下 zip 解压的免安装版，**编译必须要 `JAVA_HOME`**）。
+  - SDK：`C:\Android\Sdk`（`cmdline-tools/latest` = 官方 `commandlinetools-win-11076708_latest.zip`；已装 `platform-tools`、`platforms;android-34`、`build-tools;34.0.0`，licenses 已接受）。`local.properties` 的 `sdk.dir=C:\\Android\\Sdk` 未变。
+  - 用户级环境变量已写：`JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`，PATH 追加 `jdk-17\bin`、`platform-tools`、`cmdline-tools\latest\bin`（新开的终端直接可用）。
+  - ⚠️ **助手 shell 不继承后写的用户环境变量**，命令里要自带：`export JAVA_HOME=/c/Java/jdk-17 && export PATH="/c/Java/jdk-17/bin:$PATH" && export ANDROID_HOME=/c/Android/Sdk`。
+  - 首次构建 17m45s（拉 Gradle 8.7 + AGP 8.5.2 + 全部依赖，`~/.gradle` 约 350M+），之后增量几十秒；产物 `app/build/outputs/apk/<flavor>/<type>/TVBox-Mobile-v<versionName>-<flavor>.apk`（约 44MB），`build-tools/34.0.0/apksigner.bat verify --print-certs` 通过（CN=TVBoxOSC）。
 - 静态校验注意：剥离 Java 注释做括号自检时**必须先替换字符串再删 `//` 行注释**，否则 `"file://"` 里的 `//` 会被当成注释造成假报警。
 - CI 历史坑（已修）：`ubuntu-latest` 切 Ubuntu 26 会让 `setup-android@v3` 必挂 → 用自建 `.github/actions/setup-android-sdk` + `runs-on: ubuntu-24.04`；git 里脚本要 `git update-index --chmod=+x` 且工作流用 `bash x.sh`；加速站用 `gh-proxy.com`/`ghfast.top`（`gh.xxooo.cf` 已死）。
 
