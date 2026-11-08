@@ -17,7 +17,6 @@ import androidx.fragment.app.FragmentManager;
 import com.github.tvbox.osc.callback.EmptyCallback;
 import com.github.tvbox.osc.callback.LoadingCallback;
 import com.kingja.loadsir.callback.Callback;
-import com.kingja.loadsir.callback.SuccessCallback;
 import com.kingja.loadsir.core.LoadService;
 import com.kingja.loadsir.core.LoadSir;
 
@@ -253,8 +252,6 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
                 public void onReload(View v) {
                 }
             });
-            // register 之后内容视图就在显示，状态即「成功」
-            mLoadState = SuccessCallback.class;
         }
     }
 
@@ -264,36 +261,35 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
             public void onReload(View v) {
             }
         });
-        mLoadState = SuccessCallback.class;
     }
 
     /**
-     * 当前已经显示的状态。
+     * 注意：不要在这里加「状态相同就跳过」的缓存。
      *
-     * <p>LoadSir 的 showCallback() 不判断"是不是已经是这个状态"，每次调用都会把目标视图
-     * 从它的根布局里摘下来再挂回去。目标视图只是个普通布局时看不出来，但本项目里
-     * GridFragment 是把 LoadSir 直接注册在 RecyclerView 上的——重复调 showSuccess()
-     * 会让整个列表 detach/attach 一次，表现就是首页"闪一下"、位置跟着变。
-     * 这里记一下状态，重复的设置直接忽略。
+     * <p>LoadSir 1.3.8 的 showCallbackView() 第一行就是
+     * {@code if (preCallback != null && preCallback == callback) return;}，
+     * 自身已经去重。而 register() 里的 setupSuccessLayout() 会把内容视图
+     * setVisibility(INVISIBLE)，只有真正走一次 showSuccess()（SuccessCallback.show()）
+     * 才会变 VISIBLE —— 所以第一次的 showSuccess() 绝对不能拦，否则整页空白。
+     * （v2.32.5 就因为在 setLoadSir 里预置了"已是成功状态"，
+     * 把 UserFragment 首次的 showSuccess() 拦掉，导致首页第一栏完全不显示内容。）
      */
-    private Class<? extends Callback> mLoadState = null;
-
     protected void showLoading() {
-        if (mLoadService == null || mLoadState == LoadingCallback.class) return;
-        mLoadState = LoadingCallback.class;
-        mLoadService.showCallback(LoadingCallback.class);
+        if (mLoadService != null) {
+            mLoadService.showCallback(LoadingCallback.class);
+        }
     }
 
     protected void showEmpty() {
-        if (mLoadService == null || mLoadState == EmptyCallback.class) return;
-        mLoadState = EmptyCallback.class;
-        mLoadService.showCallback(EmptyCallback.class);
+        if (null != mLoadService) {
+            mLoadService.showCallback(EmptyCallback.class);
+        }
     }
 
     protected void showSuccess() {
-        if (mLoadService == null || mLoadState == SuccessCallback.class) return;
-        mLoadState = SuccessCallback.class;
-        mLoadService.showSuccess();
+        if (null != mLoadService) {
+            mLoadService.showSuccess();
+        }
     }
 
     public void jumpActivity(Class<? extends BaseActivity> clazz) {

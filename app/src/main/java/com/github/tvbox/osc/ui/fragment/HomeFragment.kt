@@ -157,14 +157,15 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 mRestoreTabId = oldSortIds.getOrNull(if (closedHome) tabIndex + 1 else tabIndex)
                 initViewPager(absXml)
             } else {
-                // 分栏结构没变不重建：只把最新的站点推荐数据存给主页 UserFragment，
-                // 不主动 refresh —— refresh 会 setNewData 整表替换，用户此刻很可能正在
-                // 主页栏里浏览（它默认就是第一栏），列表会闪一下、位置也会被拽走。
-                // 新推荐会在下次重建分栏 / 重新进入时自然生效。
+                // 分栏结构没变不重建：把最新的站点推荐数据交给主页 UserFragment。
+                // refreshHomeRec() 内部只在列表还是空的时候才真的填充，所以既能把
+                // 首次稍晚到达的推荐补上（不补的话主页栏会一直空白），
+                // 又不会把我们正在浏览的列表整表替换掉。
                 if (Hawk.get(HawkConfig.HOME_REC, 0) == 1 && absXml?.videoList != null && absXml.videoList.isNotEmpty()) {
                     for (f in fragments) {
                         if (f is com.github.tvbox.osc.ui.fragment.UserFragment) {
                             f.setHomeSourceRec(absXml.videoList)
+                            f.refreshHomeRec()
                             break
                         }
                     }
