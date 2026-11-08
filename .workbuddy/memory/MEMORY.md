@@ -56,7 +56,7 @@
 ## 版本 / 功能速查
 - 2.27.x 订阅源缓存自愈 + spider jar 按源分份缓存；2.28.x 大屏滑动流畅度（多轮迭代）；2.28.8 切回分栏后不加载；2.28.9 切回在线订阅后首页数据源被换掉。
 - 2.29.0 软件内「重置软件」；2.29.1 主题取色修复；2.30.0 收藏页两个 Tab 显示条目数量（数量取**列表实际条数**，不是 SQL count —— 历史有上限裁剪和失效源过滤）；2.31.0 设备同步合并收藏/历史。
-- 2.32.0 设备同步订阅源合并+去重；**2.32.2 首页启动后闪/卡片位置跳 + 分栏切回保位置**：缓存先铺 → 网络第一页静默刷新整表替换，用户已上滑时不要替换（只写缓存），`replaceDataKeepingScroll` 的 `firstPos>=0` 才恢复偏移；`HomeFragment.sortResult` 只在分类**集合**变化时重建 ViewPager（顺序变不重建），已有分栏时不再 `showLoading()`（LoadSir 会把 contentLayout 摘出树）；分栏切走时 `onFragmentPause` 记 `findFirstVisibleItemPosition`+`getDecoratedTop`，切回 `onFragmentResume` 同步+post 各还原一次，`initData()` 主动回顶部时清记忆。
+- 2.32.0 设备同步订阅源合并+去重；**2.32.2 分栏切回保位置 / 2.32.3 首页刷新改差量更新**：缓存先铺 → 网络第一页回来时用 `DiffUtil` 差量更新（不再 `setNewData` 整表替换，否则所有可见卡片重新 bind + 海报闪 + 新片插前面导致整片换位），套用后按**影片 id** 把正在看的那条 `scrollToPositionWithOffset` 回原位；列表 `scrollState != IDLE` 时先暂存、停下来再套；点击取数据用 `getChildAdapterPosition(view)`（不用回调里的 position）；`HomeFragment.sortResult` 只在分类**集合**变化时重建 ViewPager（顺序变不重建），已有分栏时不再 `showLoading()`（LoadSir 会把 contentLayout 摘出树）；分栏切走时 `onFragmentPause` 记 `findFirstVisibleItemPosition`+`getDecoratedTop`，切回 `onFragmentResume` 同步+post 各还原一次，`initData()` 主动回顶部时清记忆。
 - 搜索页有卡片/列表两套（`SEARCH_CARD_MODE`），列表缩略图跟随 `LANDSCAPE_CARD`；`FastSearchAdapter` 用 `getDefItemViewType`+`onCreateDefViewHolder`，**不要**覆写 `getItemViewType`；`RoundTransformation` 缓存 key 必须带尺寸。
 
 ## 用户偏好

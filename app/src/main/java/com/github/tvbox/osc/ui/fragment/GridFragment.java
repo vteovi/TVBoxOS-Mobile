@@ -10,7 +10,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.GsonUtils;
@@ -38,6 +39,7 @@ import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
 import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 import android.view.ViewGroup;
@@ -225,6 +227,8 @@ public class GridFragment extends BaseLazyFragment {
         this.createView();
         mGridView.setAdapter(gridAdapter);
         applyGridLayoutManager();
+        // 滑动中途收到的第一页刷新会被暂缓，列表停下来时在这里补上
+        bindPendingApplyListener();
 
         gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
             @Override
@@ -238,7 +242,13 @@ public class GridFragment extends BaseLazyFragment {
             @Override
             public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
+                // 用视图当前的 adapter position 取数据：列表正在做差量更新时，
+                // 回调里带过来的 position 可能还是绑定那一刻的旧值，会点开别的影片
+                int pos = mGridView == null ? position
+                        : mGridView.getChildAdapterPosition(view);
+                if (pos == RecyclerView.NO_POSITION) return;
+                if (pos < 0 || pos >= gridAdapter.getData().size()) return;
+                Movie.Video video = gridAdapter.getData().get(pos);
                 if (video != null) {
                     Bundle bundle = new Bundle();
                     bundle.putString("id", video.id);
@@ -267,7 +277,11 @@ public class GridFragment extends BaseLazyFragment {
             @Override
             public boolean onItemLongClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
+                int pos = mGridView == null ? position
+                        : mGridView.getChildAdapterPosition(view);
+                if (pos == RecyclerView.NO_POSITION) return true;
+                if (pos < 0 || pos >= gridAdapter.getData().size()) return true;
+                Movie.Video video = gridAdapter.getData().get(pos);
                 if (video != null) {
                     Bundle bundle = new Bundle();
                     bundle.putString("id", video.id);
@@ -353,6 +367,13 @@ public class GridFragment extends BaseLazyFragment {
         @Override
         public void run() {
             restoreScrollState();
+            // 切走期间收到的第一页刷新在这里补上：此时列表已经还原到原位置，
+            // 锚点取的是用户原本在看的那一条，套用后视觉上仍然不动
+            if (mPendingFirstPage != null) {
+                List<Movie.Video> pending = mPendingFirstPage;
+                mPendingFirstPage = null;
+                applyFirstPage(pending);
+            }
         }
     };
 
@@ -366,7 +387,11 @@ public class GridFragment extends BaseLazyFragment {
     public void onDestroyView() {
         // 分栏被 FragmentStatePagerAdapter 销毁前也记一次，重建回来时才能还原
         saveScrollState();
-        if (mGridView != null) mGridView.removeCallbacks(mRestoreScrollRunnable);
+        if (mGridView != null) {
+            mGridView.removeCallbacks(mRestoreScrollRunnable);
+            mGridView.removeOnScrollListener(mPendingApplyScrollListener);
+        }
+        mPendingFirstPage = null;
         super.onDestroyView();
     }
 
@@ -374,12 +399,12 @@ public class GridFragment extends BaseLazyFragment {
     private void saveScrollState() {
         if (mGridView == null || mGridView.getChildCount() == 0) return;
         RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-        if (!(lm instanceof GridLayoutManager)) return;
-        int pos = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
+        if (!(lm instanceof LinearLayoutManager)) return;
+        int pos = ((LinearLayoutManager) lm).findFirstVisibleItemPosition();
         View first = lm.findViewByPosition(pos);
         if (pos < 0 || first == null) return;
         mSavedFirstPos = pos;
-        mSavedOffset = ((GridLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
+        mSavedOffset = ((LinearLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
     }
 
     /**
@@ -390,17 +415,17 @@ public class GridFragment extends BaseLazyFragment {
     private void restoreScrollState() {
         if (mGridView == null || mSavedFirstPos < 0) return;
         RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-        if (!(lm instanceof GridLayoutManager)) return;
-        int cur = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
+        if (!(lm instanceof LinearLayoutManager)) return;
+        int cur = ((LinearLayoutManager) lm).findFirstVisibleItemPosition();
         View first = lm.findViewByPosition(cur);
         if (first != null && cur == mSavedFirstPos) {
-            int curOffset = ((GridLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
+            int curOffset = ((LinearLayoutManager) lm).getDecoratedTop(first) - mGridView.getPaddingTop();
             if (curOffset == mSavedOffset) return; // 已经在原位
         }
         // 期间数据被刷新（条数变少）时别越界：位置取到最后一个条目
         int count = gridAdapter == null ? 0 : gridAdapter.getItemCount();
         int target = count > 0 ? Math.min(mSavedFirstPos, count - 1) : mSavedFirstPos;
-        ((GridLayoutManager) lm).scrollToPositionWithOffset(target, mSavedOffset);
+        ((LinearLayoutManager) lm).scrollToPositionWithOffset(target, mSavedOffset);
     }
 
     /** 按当前页码恢复"加载更多"的可用状态（到底了就保持关闭） */
@@ -507,16 +532,9 @@ public class GridFragment extends BaseLazyFragment {
                     Hawk.put(cacheKey(), GsonUtils.toJson(absXml.movie.videoList));
                 } catch (Exception ignore) {}
                 if (shownFromCache) {
-                    // 内容没变就别整表替换：setNewData 会让 RecyclerView 重新布局并
-                    // 丢掉当前浏览位置，表现就是正在滑动的列表“内容突然往下掉一截”。
-                    // 另外用户已经上滑离开顶部时也不替换：这份回来的是第一页的静默刷新，
-                    // 用户正在看缓存里的旧内容，整表替换会让所有可见卡片重新绑定（海报闪一下），
-                    // 而"最近更新"这类分类的新条目通常插在最前面，正在看的卡片还会整片换位置。
-                    // 这种情况只把新数据写进缓存（上面已 Hawk.put），下次进入该分栏时再生效。
-                    if (!sameVideoIds(gridAdapter.getData(), absXml.movie.videoList)
-                            && !userBrowsing()) {
-                        replaceDataKeepingScroll(absXml.movie.videoList);
-                    }
+                    // 静默刷新：按影片 id 做差量更新（只更新真正变化的卡片，
+                    // 并把用户正在看的那一条钉回原来的屏幕位置），不再整表替换
+                    updateFirstPage(absXml.movie.videoList);
                 } else {
                     showSuccess();
                     isLoad = true;
@@ -603,53 +621,168 @@ public class GridFragment extends BaseLazyFragment {
         requestList();
     }
 
-    /** 两个列表的影片 id（顺序也一致）完全相同，用于跳过无意义的整表刷新 */
-    private static boolean sameVideoIds(List<Movie.Video> a, List<Movie.Video> b) {
-        if (a == null || b == null || a.size() != b.size()) return false;
-        for (int i = 0; i < a.size(); i++) {
-            Movie.Video x = a.get(i), y = b.get(i);
-            if (x == null || y == null) return false;
-            if (!TextUtils.equals(x.id, y.id)) return false;
-        }
-        return true;
+    // ==================== 首页第一页静默刷新：差量更新 ====================
+
+    /** 用户正在滑动时暂缓应用的第一页数据（列表停下来后再套用） */
+    private List<Movie.Video> mPendingFirstPage = null;
+
+    private final RecyclerView.OnScrollListener mPendingApplyScrollListener =
+            new RecyclerView.OnScrollListener() {
+                @Override
+                public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                    if (newState != RecyclerView.SCROLL_STATE_IDLE || mPendingFirstPage == null) {
+                        return;
+                    }
+                    final List<Movie.Video> pending = mPendingFirstPage;
+                    mPendingFirstPage = null;
+                    // 空闲状态有可能是在布局过程中回调的，直接 notify* 会抛
+                    // "Cannot call this method while RecyclerView is computing a layout or scrolling"，
+                    // 放到下一帧处理
+                    if (mGridView != null) mGridView.post(() -> applyFirstPage(pending));
+                }
+            };
+
+    /** 注册「滑动停下来再套用暂缓数据」的监听（列表可能被 changeView 换成新实例） */
+    private void bindPendingApplyListener() {
+        if (mGridView == null) return;
+        mGridView.removeOnScrollListener(mPendingApplyScrollListener);
+        mGridView.addOnScrollListener(mPendingApplyScrollListener);
     }
 
     /**
-     * 用户是否已经上滑离开顶部（正在浏览列表中途）。
+     * 应用第一页的刷新结果（本地缓存已经铺过列表时走这里）。
      *
-     * <p>用 {@code canScrollVertically(-1)} 判断而不是只看第一个可见位置：只滑了一点点时
-     * 第一行可能还露着（firstVisiblePosition 仍为 0），但列表其实已经离开顶部了。
+     * <p>为什么不能直接 {@code setNewData}：那是 {@code notifyDataSetChanged}，会让
+     * <b>所有可见卡片</b>重新 bind（海报先回占位图再加载，看起来就是「闪一下」）；
+     * 而且 RecyclerView 只按<b>位置</b>保留锚点——「最近更新」这类分类的新片插在最前面时，
+     * 同一个位置换成了另一部影片，正在看的卡片会整片换位置，
+     * 手指按下去也可能点到别的卡片（用户明确反馈过这个问题）。
+     *
+     * <p>这里做两件事：
+     * <ol>
+     *   <li>用 {@link DiffUtil} 只更新真正变化的条目，没变的卡片不重新 bind，因此不闪；</li>
+     *   <li>更新后按<b>影片 id</b> 把用户正在看的那一条放回原来的屏幕位置，视觉上完全不动。</li>
+     * </ol>
+     *
+     * <p>用户正在拖动 / 惯性滑动时先记下来，等列表停下再套用：滑动中途改数据会打断手感。
      */
-    private boolean userBrowsing() {
-        if (mGridView == null || mGridView.getChildCount() == 0) return false;
-        if (mGridView.canScrollVertically(-1)) return true;
-        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-        if (lm instanceof GridLayoutManager) {
-            return ((GridLayoutManager) lm).findFirstVisibleItemPosition() > 0;
+    private void updateFirstPage(List<Movie.Video> data) {
+        if (data == null || data.isEmpty()) return;
+        if (gridAdapter == null || mGridView == null) return;
+        if (gridAdapter.getData().isEmpty()) {
+            gridAdapter.setNewData(new ArrayList<>(data));
+            return;
         }
-        return false;
+        if (mGridView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+            mPendingFirstPage = data;
+            return;
+        }
+        mPendingFirstPage = null;
+        applyFirstPage(data);
     }
 
-    /**
-     * 整表替换但保持当前浏览位置：后台刷新返回时用户可能已经在滑动，
-     * 直接 setNewData 会让 RecyclerView 重新布局并把列表拽回顶部。
-     */
-    private void replaceDataKeepingScroll(List<Movie.Video> data) {
-        int firstPos = -1, offset = 0;
-        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
-        if (lm instanceof GridLayoutManager && mGridView.getChildCount() > 0) {
-            firstPos = ((GridLayoutManager) lm).findFirstVisibleItemPosition();
-            View first = lm.findViewByPosition(firstPos);
-            // getTop() 不含 item 的 margin/decoration，用 getDecoratedTop 恢复得更准
-            if (first != null) offset = ((GridLayoutManager) lm).getDecoratedTop(first)
-                    - mGridView.getPaddingTop();
+    /** 差量套用数据，并在套用后把锚点影片钉回原来的屏幕位置 */
+    private void applyFirstPage(List<Movie.Video> data) {
+        if (data == null || data.isEmpty()) return;
+        if (gridAdapter == null || mGridView == null) return;
+        List<Movie.Video> old = new ArrayList<>(gridAdapter.getData());
+        if (old.isEmpty()) {
+            gridAdapter.setNewData(new ArrayList<>(data));
+            return;
         }
-        gridAdapter.setNewData(data);
-        // firstPos 为 0 也要恢复：滑了一点点时第一行仍在屏幕上，但不恢复 offset
-        // 就会连那一点点位移都丢掉（内容"往上跳一下"）
-        if (firstPos >= 0 && lm instanceof GridLayoutManager && !data.isEmpty()) {
-            ((GridLayoutManager) lm).scrollToPositionWithOffset(
-                    Math.min(firstPos, data.size() - 1), offset);
+
+        RecyclerView.LayoutManager lm = mGridView.getLayoutManager();
+        // 在顶部时不做锚定：新条目本来就该出现在最前面
+        boolean atTop = !mGridView.canScrollVertically(-1);
+        String anchorId = null;
+        int anchorOffset = 0;
+        if (!atTop && lm instanceof LinearLayoutManager && mGridView.getChildCount() > 0) {
+            int firstPos = ((LinearLayoutManager) lm).findFirstVisibleItemPosition();
+            View first = lm.findViewByPosition(firstPos);
+            if (firstPos >= 0 && firstPos < old.size()) {
+                Movie.Video anchor = old.get(firstPos);
+                if (anchor != null && !TextUtils.isEmpty(anchor.id)) anchorId = anchor.id;
+            }
+            if (first != null) {
+                anchorOffset = ((LinearLayoutManager) lm).getDecoratedTop(first)
+                        - mGridView.getPaddingTop();
+            }
+        }
+
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new VideoDiffCallback(old, data), true);
+        // BaseQuickAdapter 的 getData() 就是它内部的 mData，原地替换后按差量派发，
+        // 这样未变化的条目不会重新 bind（不闪），插入/移动也只是一次布局位移
+        List<Movie.Video> target = gridAdapter.getData();
+        target.clear();
+        target.addAll(data);
+        diff.dispatchUpdatesTo(gridAdapter);
+
+        if (!(lm instanceof LinearLayoutManager)) return;
+        if (anchorId == null) {
+            // 在顶部：停在最新的一条（不主动定位的话，新插到前面的条目会看不见）
+            ((LinearLayoutManager) lm).scrollToPositionWithOffset(0, 0);
+            return;
+        }
+        int index = -1;
+        for (int i = 0; i < data.size(); i++) {
+            Movie.Video v = data.get(i);
+            if (v != null && TextUtils.equals(v.id, anchorId)) {
+                index = i;
+                break;
+            }
+        }
+        if (index >= 0) {
+            ((LinearLayoutManager) lm).scrollToPositionWithOffset(index, anchorOffset);
+        }
+    }
+
+    /** 差量比较：id 相同即同一条影片；内容只比较卡片上真正会变的字段 */
+    private static class VideoDiffCallback extends DiffUtil.Callback {
+        private final List<Movie.Video> oldList;
+        private final List<Movie.Video> newList;
+
+        VideoDiffCallback(List<Movie.Video> oldList, List<Movie.Video> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldPos, int newPos) {
+            Movie.Video a = oldList.get(oldPos);
+            Movie.Video b = newList.get(newPos);
+            if (a == null || b == null) return a == b;
+            if (!TextUtils.isEmpty(a.id) || !TextUtils.isEmpty(b.id)) {
+                return TextUtils.equals(a.id, b.id);
+            }
+            // 极少数源给的条目没有 id，退化成按片名比较，避免整表被判成「全新内容」
+            return TextUtils.equals(a.name, b.name);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldPos, int newPos) {
+            Movie.Video a = oldList.get(oldPos);
+            Movie.Video b = newList.get(newPos);
+            if (a == null || b == null) return a == b;
+            // 只比较卡片上显示的字段（年份/片名/集数备注/海报），
+            // 演员、简介之类不参与，避免无意义的重新 bind 造成闪烁
+            return a.year == b.year
+                    && TextUtils.equals(a.name, b.name)
+                    && TextUtils.equals(a.note, b.note)
+                    && TextUtils.equals(trimPic(a.pic), trimPic(b.pic));
+        }
+
+        private static String trimPic(String pic) {
+            return pic == null ? null : pic.trim();
         }
     }
 
@@ -674,6 +807,8 @@ public class GridFragment extends BaseLazyFragment {
         }
         isLoad = false;
         mAutoFillCount = 0;
+        // 重新加载（换分类/筛选/切源）：丢掉上一轮还没套用的第一页刷新，避免串数据
+        mPendingFirstPage = null;
         // 重新加载分类数据是主动回顶部，清掉旧的滚动位置记忆，否则切分栏回来又被拉回去
         mSavedFirstPos = -1;
         mSavedOffset = 0;
