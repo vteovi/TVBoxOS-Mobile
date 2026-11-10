@@ -39,6 +39,10 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
     companion object {
         const val TYPE_COLLECT = 0
         const val TYPE_HISTORY = 1
+
+        /** 历史记录一次取多少条（收藏页的 Tab 数量也按这个口径算，两边必须一致） */
+        const val HISTORY_LIMIT = 200
+
         fun newInstance(type: Int): RecordListFragment {
             val f = RecordListFragment()
             f.arguments = Bundle().apply { putInt("type", type) }
@@ -128,7 +132,7 @@ class RecordListFragment : BaseVbFragment<FragmentRecordListBinding>() {
                     notifyCount()
                 }
             } else {
-                val records = RoomDataManger.getAllVodRecord(200)
+                val records = RoomDataManger.getAllVodRecord(HISTORY_LIMIT)
                 for (vodInfo in records) {
                     if (!vodInfo.playNote.isNullOrEmpty()) vodInfo.note = vodInfo.playNote
                 }
