@@ -116,7 +116,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             mHandler.removeCallbacks(sortTimeoutTask)
             showSuccess()
             val oldSortIds = mSortDataList.map { it.id }
-            val newSortList =
+            mSortDataList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
                     DefaultConfig.adjustSort(
                         ApiConfig.get().homeSourceBean.key,
@@ -129,38 +129,19 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             // 缓存分栏列表，下次打开立即渲染
             try {
                 val cacheKey = "sort_cache_" + ApiConfig.get().homeSourceBean.key
-                Hawk.put(cacheKey, com.blankj.utilcode.util.GsonUtils.toJson(newSortList))
+                Hawk.put(cacheKey, com.blankj.utilcode.util.GsonUtils.toJson(mSortDataList))
                 if (absXml?.videoList != null) {
                     Hawk.put(cacheKey + "_rec", com.blankj.utilcode.util.GsonUtils.toJson(absXml.videoList))
                 }
             } catch (ignore: Exception) {}
-
-            val newSortIds = newSortList.map { it.id }
+            // 已用缓存渲染过 ViewPager，且分栏 id 序列没变，就不重建（避免跳回顶部/闪烁）
+            val newSortIds = mSortDataList.map { it.id }
             val alreadyRendered = fragments.isNotEmpty()
-            // 分类"集合"一致就认为结构没变：顺序不同也不重建。
-            // 重建会清空全部分栏（Fragment 重建、列表回到顶部并闪一下），而用户此刻
-            // 很可能正在某个分栏里浏览——纯粹的排序差别不值得这个代价。
-            val sameIdSet = oldSortIds.size == newSortIds.size && oldSortIds.toSet() == newSortIds.toSet()
-            val keepFragments = alreadyRendered && sameIdSet
-            if (!keepFragments) {
-                mSortDataList = newSortList
-            } else if (oldSortIds == newSortIds) {
-                // 顺序也一致：安全地换成最新对象（分类名、筛选项等可能有更新）
-                mSortDataList = newSortList
-            }
-            if (!keepFragments) {
-                // 记住用户原来停在哪一栏：分类集合变化会重建整个 ViewPager，
-                // 不还原的话正在浏览的分类会突然跳回第一栏（连带列表重新加载、闪一下）。
-                // 注意 mSortDataList 这时已经被换成新列表了，要用旧的 id 列表去查
-                val tabIndex = mBinding.tabLayout.currentItemIndex
-                val closedHome = Hawk.get(HawkConfig.HOME_REC, 0) == 2
-                mRestoreTabId = oldSortIds.getOrNull(if (closedHome) tabIndex + 1 else tabIndex)
+            val sameStructure = oldSortIds.size == newSortIds.size && oldSortIds.zip(newSortIds).all { it.first == it.second }
+            if (!alreadyRendered || !sameStructure) {
                 initViewPager(absXml)
             } else {
-                // 分栏结构没变不重建：把最新的站点推荐数据交给主页 UserFragment。
-                // refreshHomeRec() 内部只在列表还是空的时候才真的填充，所以既能把
-                // 首次稍晚到达的推荐补上（不补的话主页栏会一直空白），
-                // 又不会把我们正在浏览的列表整表替换掉。
+                // 分栏结构没变不重建，但要把最新的站点推荐数据更新到主页 UserFragment
                 if (Hawk.get(HawkConfig.HOME_REC, 0) == 1 && absXml?.videoList != null && absXml.videoList.isNotEmpty()) {
                     for (f in fragments) {
                         if (f is com.github.tvbox.osc.ui.fragment.UserFragment) {
@@ -184,9 +165,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             mBinding.tvName.postDelayed({ mBinding.tvName.isSelected = true }, 2000)
         }
 
-        // 已经渲染过分栏时不要再切到 loading 页：LoadSir 会把整块 contentLayout
-        // （连同 ViewPager 里所有列表）从布局树上摘下来，正在看的列表会闪一下并回顶部
-        if (fragments.isEmpty()) showLoading()
+        showLoading()
         when{
             dataInitOk && jarInitOk -> {
                 //正常初始化会先加载,最终到这,此时数据有以下几种情况
@@ -343,12 +322,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         return textView
     }
 
-    /** 重建分栏后要还原到哪一栏（按分类 id 记，分类增删也找得到） */
-    private var mRestoreTabId: String? = null
-
     private fun initViewPager(absXml: AbsSortXml?) {
-        val restoreTabId = mRestoreTabId
-        mRestoreTabId = null
         if (mSortDataList.isNotEmpty()) {
             mBinding.tabLayout.removeAllViews()
             fragments.clear()
@@ -386,16 +360,6 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 }
             //tab和vp绑定
             install(mBinding.mViewPager, mBinding.tabLayout, true)
-
-            // 分栏被重建时回到用户原来那一栏（id 还在的话）
-            if (!restoreTabId.isNullOrEmpty()) {
-                var index = mSortDataList.indexOfFirst { it.id == restoreTabId }
-                // 「关闭主页」时第一栏已被移除，索引整体前移一位
-                if (index > 0 && Hawk.get(HawkConfig.HOME_REC, 0) == 2) index -= 1
-                if (index in fragments.indices) {
-                    mBinding.mViewPager.setCurrentItem(index, false)
-                }
-            }
         }
     }
 

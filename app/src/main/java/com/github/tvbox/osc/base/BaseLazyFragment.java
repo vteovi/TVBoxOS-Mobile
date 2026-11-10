@@ -263,17 +263,6 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
         });
     }
 
-    /**
-     * 注意：不要在这里加「状态相同就跳过」的缓存。
-     *
-     * <p>LoadSir 1.3.8 的 showCallbackView() 第一行就是
-     * {@code if (preCallback != null && preCallback == callback) return;}，
-     * 自身已经去重。而 register() 里的 setupSuccessLayout() 会把内容视图
-     * setVisibility(INVISIBLE)，只有真正走一次 showSuccess()（SuccessCallback.show()）
-     * 才会变 VISIBLE —— 所以第一次的 showSuccess() 绝对不能拦，否则整页空白。
-     * （v2.32.5 就因为在 setLoadSir 里预置了"已是成功状态"，
-     * 把 UserFragment 首次的 showSuccess() 拦掉，导致首页第一栏完全不显示内容。）
-     */
     protected void showLoading() {
         if (mLoadService != null) {
             mLoadService.showCallback(LoadingCallback.class);

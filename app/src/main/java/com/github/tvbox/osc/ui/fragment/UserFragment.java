@@ -83,9 +83,6 @@ public class UserFragment extends BaseLazyFragment {
         // 设置里切换了主页内容模式时，重新加载
         int curHomeRec = Hawk.get(HawkConfig.HOME_REC, 0);
         if (lastHomeRec != -1 && lastHomeRec != curHomeRec && homeHotVodAdapter != null) {
-            // 模式换了，内容必须整表换掉；先清空，让 initHomeHotVod 里的"空列表才填充"
-            // 判断能通过（否则会留着上一个模式的旧内容）
-            homeHotVodAdapter.setNewData(new ArrayList<>());
             initHomeHotVod(homeHotVodAdapter);
         }
         lastHomeRec = curHomeRec;
@@ -151,11 +148,7 @@ public class UserFragment extends BaseLazyFragment {
     }
 
     public void refreshHomeRec() {
-        if (homeHotVodAdapter == null) return;
-        // 只在列表还空着的时候补数据：分类接口通常比第一栏的创建晚回来，
-        // 站点推荐数据要到那时候才第一次可用，不补的话主页栏会一直空白。
-        // 已经有内容时不重建列表 —— 用户可能正在浏览，setNewData 会闪一下并拽走位置。
-        if (homeHotVodAdapter.getData().isEmpty()) {
+        if (homeHotVodAdapter != null) {
             initHomeHotVod(homeHotVodAdapter);
         }
     }
@@ -163,12 +156,9 @@ public class UserFragment extends BaseLazyFragment {
     private void initHomeHotVod(GridAdapter adapter) {
         if (Hawk.get(HawkConfig.HOME_REC, 0) == 1) {
             if (homeSourceRec != null && homeSourceRec.size() > 0) {
-                // 空列表才填充；已有内容就保持原样（避免闪烁/跳位）
-                if (adapter.getData().isEmpty()) {
-                    adapter.setNewData(homeSourceRec);
-                }
                 showSuccess();
-            } else if (adapter.getData().isEmpty()) {
+                adapter.setNewData(homeSourceRec);
+            }else {
                 showEmpty();
             }
             return;
@@ -185,10 +175,8 @@ public class UserFragment extends BaseLazyFragment {
                 if (!json.isEmpty()) {
                     ArrayList<Movie.Video> hotMovies = loadHots(json);
                     if (hotMovies != null && hotMovies.size() > 0) {
-                        if (adapter.getData().isEmpty()) {
-                            adapter.setNewData(hotMovies);
-                        }
                         showSuccess();
+                        adapter.setNewData(hotMovies);
                         return;
                     }
                 }
@@ -207,12 +195,9 @@ public class UserFragment extends BaseLazyFragment {
                                 public void run() {
                                     ArrayList<Movie.Video> videos = loadHots(netJson);
                                     if (videos.size()>0){
-                                        // 空列表才填充；已有内容就保持原样（避免闪烁/跳位）
-                                        if (adapter.getData().isEmpty()) {
-                                            adapter.setNewData(videos);
-                                        }
                                         showSuccess();
-                                    }else if (adapter.getData().isEmpty()){
+                                        adapter.setNewData(videos);
+                                    }else {
                                         showEmpty();
                                     }
                                 }
