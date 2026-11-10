@@ -14,7 +14,12 @@
 - 仓库 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）；`applicationId=com.github.tvbox.osc.mobile`；`local.properties` 的 `sdk.dir=C:\\Android\\Sdk`。
 - 构建：`./gradlew assembleDebug|assembleRelease --console=plain > build_out.log 2>&1`（用户自己构建），产物 `app/build/outputs/apk/<type>/TVBox-Mobile-v<versionName>.apk`。gradle.properties 防卡：`-Xmx1536m -Xms384m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC`、`org.gradle.workers.max=2`；**勿设小写 `kotlin.compiler.execution.strategy=in_process`**（只认 `IN_PROCESS`）。
 - 签名：根 `TVBoxOSC.jks`（alias/key/store 均 `TVBoxOSC`），debug/release 共用，`minifyEnabled false`；`.gitignore` 忽略 `*.jks` 与根 `*.apk`，**别 `git add -A` 误提交 APK**。交付前校验 zip 完好 + `apksigner verify --print-certs` + sha256。
-- ⚠️ **2026-11-07 起本机编译链不可见**：`C:\Java\jdk-17`、`C:\Android\Sdk`、`~/.gradle` 全都不存在，全盘找不到 `java.exe`（沙箱内外都一样）→ 目前**跑不了 gradle 编译检查**，只能做静态校验（括号平衡、符号引用、XML 结构）。下次开工先确认 JDK/SDK 新路径。
+- **2026-11-08 已重装本地编译链（assembleDebug / assembleRelease 均验证通过）**：
+  - JDK：`C:\Java\jdk-17`（Temurin 17.0.21，清华 Adoptium 镜像下 zip 解压的免安装版，**编译必须要 `JAVA_HOME`**）。
+  - SDK：`C:\Android\Sdk`（`cmdline-tools/latest` = 官方 `commandlinetools-win-11076708_latest.zip`；已装 `platform-tools`、`platforms;android-34`、`build-tools;34.0.0`，licenses 已接受）。`local.properties` 的 `sdk.dir=C:\\Android\\Sdk` 未变。
+  - 用户级环境变量已写：`JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`，PATH 追加 `jdk-17\bin`、`platform-tools`、`cmdline-tools\latest\bin`（新开的终端直接可用）。
+  - ⚠️ **助手 shell 不继承后写的用户环境变量**，命令里要自带：`export JAVA_HOME=/c/Java/jdk-17 && export PATH="/c/Java/jdk-17/bin:$PATH" && export ANDROID_HOME=/c/Android/Sdk`。
+  - 首次构建 17m45s（拉 Gradle 8.7 + AGP 8.5.2 + 全部依赖，`~/.gradle` 约 350M+），之后增量几十秒；产物 `app/build/outputs/apk/<flavor>/<type>/TVBox-Mobile-v<versionName>-<flavor>.apk`（约 44MB），`build-tools/34.0.0/apksigner.bat verify --print-certs` 通过（CN=TVBoxOSC）。
 - 静态校验注意：剥离 Java 注释做括号自检时**必须先替换字符串再删 `//` 行注释**，否则 `"file://"` 里的 `//` 会被当成注释造成假报警。
 - CI 历史坑（已修）：`ubuntu-latest` 切 Ubuntu 26 会让 `setup-android@v3` 必挂 → 用自建 `.github/actions/setup-android-sdk` + `runs-on: ubuntu-24.04`；git 里脚本要 `git update-index --chmod=+x` 且工作流用 `bash x.sh`；加速站用 `gh-proxy.com`/`ghfast.top`（`gh.xxooo.cf` 已死）。
 
@@ -55,10 +60,11 @@
 
 ## 版本 / 功能速查
 - 2.27.x 订阅源缓存自愈 + spider jar 按源分份缓存；2.28.x 大屏滑动流畅度（多轮迭代）；2.28.8 切回分栏后不加载；2.28.9 切回在线订阅后首页数据源被换掉。
-- 2.29.0 软件内「重置软件」；2.29.1 主题取色修复；2.30.0 收藏页两个 Tab 显示条目数量（数量取**列表实际条数**，不是 SQL count —— 历史有上限裁剪和失效源过滤）；2.31.0 设备同步合并收藏/历史。
+- 2.29.0 软件内「重置软件」；2.29.1 主题取色修复；2.30.0 收藏页两个 Tab 显示条目数量（数量取**列表实际条数**，不是 SQL count —— 历史有上限裁剪和失效源过滤）；2.31.0 设备同步合并收藏/历史。**另：数量靠 `RecordListFragment.setOnCountChangedListener` 回传，而 `ViewPager2` 分栏懒创建 → 没滑到的分栏不 `init()`、拿不到数字（2.32.7 用 `CollectActivity.preloadCounts()` 预查补齐，口径必须与列表一致：历史用 `getAllVodRecord(HISTORY_LIMIT).size`，不是 DAO count）**
+- **2.32.1~2.32.6 的首页改动已于 2026-11-10 全部回退**：源码与 `更新记录.md` 内容 = 2.32.0，`versionCode 362` / `versionName 2.32.0`（细节留在 `2026-11-08.md`）。值得留下的通用结论：① `HomeFragment.sortResult` 只在分类**集合**变化时重建 ViewPager（顺序变不重建）；② 分栏切回要记 `findFirstVisibleItemPosition`+`getDecoratedTop` 还原；③ 点击取数据用 `getChildAdapterPosition(view)`，别用回调里的 position；④ 首页后台刷新整表替换会「闪+跳位」，用户要的是「切分类/换源/改筛选/重启才更新」；⑤ **LoadSir 1.3.8 不要猜行为**：`showCallbackView()` 首行就按 `preCallback` 去重，且 `setupSuccessLayout()` 会把内容视图设 `INVISIBLE`、**必须真走一次 `showSuccess()` 才显示**——外层再包状态缓存会拦掉首次调用，`UserFragment` 就因此整栏空白（v2.32.5 的坑）。jar 在 `~/.gradle/caches/transforms-4/*/jetified-loadsir-1.3.8-api.jar`，`javap -p -c` 一看就清。⚠️ **versionCode 已退回 362（低于 368），下次发版必须设 >368，否则无法覆盖安装**。
 - 搜索页有卡片/列表两套（`SEARCH_CARD_MODE`），列表缩略图跟随 `LANDSCAPE_CARD`；`FastSearchAdapter` 用 `getDefItemViewType`+`onCreateDefViewHolder`，**不要**覆写 `getItemViewType`；`RoundTransformation` 缓存 key 必须带尺寸。
 
 ## 用户偏好
 - 中文沟通；改完自动 `git add + commit` 到 **dev**（本地快照，不自动 push），汇报 commit id；发布时才按流程推 main + 打 tag。
-- **助手不负责出 APK**（用户本机构建），只写代码 + 静态校验并给出构建命令；当前环境连编译检查也跑不了，需如实说明。
+- **助手可自行构建**（2026-11-08 已装 JDK17+SDK34，见上）：改完可跑 `assembleArm64v8Debug/Release` 真实校验，产物在 `app/build/outputs/apk/arm64v8/<type>/`，`apksigner verify` 可查签名；用户仍习惯自己装包验证。
 - 介意「存储权限/能读所有文件」类权限，能删就删；系统导航栏白条搁置勿主动改；外部播放无需二级列表。

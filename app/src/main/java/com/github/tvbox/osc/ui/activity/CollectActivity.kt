@@ -41,6 +41,10 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
             tab.text = tabText(position)
         }.attach()
 
+        // ViewPager2 是懒创建：没滑到的那个分栏 Fragment 还没 init()，它的条数回调也就不会来，
+        // 所以「历史记录」在滑过去之前一直光秃秃没有数字。这里进页面就先各查一次。
+        preloadCounts()
+
         mBinding.titleBar.rightView.setOnClickListener {
             val pos = mBinding.viewPager!!.currentItem
             val title = if (pos == 0) "收藏" else "历史记录"
@@ -71,6 +75,28 @@ class CollectActivity : BaseVbActivity<ActivityCollectBinding>() {
             fragment.setOnCountChangedListener { count ->
                 counts[index] = count
                 mBinding.tabLayout?.getTabAt(index)?.text = tabText(index)
+            }
+        }
+    }
+
+    /**
+     * 预先查一次两个列表的条数，让「还没滑过去」的分栏也能立刻显示数字。
+     *
+     * 口径必须和列表一致：收藏 = `getAllVodCollect().size`，
+     * 历史 = `getAllVodRecord(HISTORY_LIMIT).size`（该方法会先按 `HISTORY_NUM` 裁剪再取条数，
+     * 不能图省事用 DAO 的 count，否则会和列表实际条数对不上）。
+     * 已经由列表回传过真实条数的，不要用预查值覆盖。
+     */
+    private fun preloadCounts() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val collectCount = RoomDataManger.getAllVodCollect().size
+            val historyCount = RoomDataManger.getAllVodRecord(RecordListFragment.HISTORY_LIMIT).size
+            withContext(Dispatchers.Main) {
+                if (counts[0] < 0) counts[0] = collectCount
+                if (counts[1] < 0) counts[1] = historyCount
+                for (i in tabs.indices) {
+                    mBinding.tabLayout?.getTabAt(i)?.text = tabText(i)
+                }
             }
         }
     }
