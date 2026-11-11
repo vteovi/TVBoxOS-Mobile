@@ -1099,12 +1099,26 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
 
     @Override
     protected void onDestroy() {
-        registerActionReceiver(false);
+        // 销毁阶段任何异常都会被包装成 RuntimeException 直接崩溃，这里的注销一律容错：
+        // 接收器可能因页面异常提前结束而从未注册成功，重复注销会抛 IllegalArgumentException
+        try {
+            registerActionReceiver(false);
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
         super.onDestroy();
-        unregisterReceiver(mBatteryReceiver);
+        try {
+            unregisterReceiver(mBatteryReceiver);
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
         // 注销广播接收器
         if (mHomeKeyReceiver != null) {
-            unregisterReceiver(mHomeKeyReceiver);
+            try {
+                unregisterReceiver(mHomeKeyReceiver);
+            } catch (Throwable th) {
+                th.printStackTrace();
+            }
             mHomeKeyReceiver = null;
         }
 
@@ -1273,6 +1287,11 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
      */
     public void enterPip() {
         if (Utils.supportsPiPMode()) {
+            // 预览播放器可能还没创建好或已经销毁，这里直接挡住，避免后面一连串 getPlayer() 抛 NPE
+            if (playFragment == null || playFragment.getPlayer() == null || playFragment.getController() == null) {
+                ToastUtils.showShort("播放器尚未就绪");
+                return;
+            }
             // 创建一个Intent对象，模拟按下Home键
             Intent intent = new Intent(Intent.ACTION_MAIN);
             intent.addCategory(Intent.CATEGORY_HOME);
@@ -1312,7 +1331,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             playFragment.getController().hideBottom();
 
             playFragment.getPlayer().postDelayed(() -> {
-                if (!playFragment.getPlayer().isPlaying()) {
+                // 延时期间页面可能已经销毁（playFragment 的视图被回收，getPlayer() 为 null）
+                if (playFragment != null && playFragment.getPlayer() != null
+                        && playFragment.getController() != null
+                        && !playFragment.getPlayer().isPlaying()) {
                     playFragment.getController().togglePlay();
                 }
             }, 400);
@@ -1342,7 +1364,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
 
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    if (intent == null || !intent.getAction().equals(IntentKey.BROADCAST_ACTION) || playFragment.getController() == null) {
+                    if (intent == null || !intent.getAction().equals(IntentKey.BROADCAST_ACTION)
+                            || playFragment == null || playFragment.getController() == null) {
                         return;
                     }
 
@@ -1363,10 +1386,23 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             ContextCompat.registerReceiver(this, mRemoteActionReceiver, new IntentFilter(IntentKey.BROADCAST_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
         } else {
             if (mRemoteActionReceiver != null) {
-                unregisterReceiver(mRemoteActionReceiver);
+                try {
+                    unregisterReceiver(mRemoteActionReceiver);
+                } catch (Throwable th) {
+                    // 已经被系统注销过(如页面销毁过程重复调用)时这里会抛 IllegalArgumentException
+                    th.printStackTrace();
+                }
                 mRemoteActionReceiver = null;
             }
-            if (playFragment.getPlayer().isPlaying()) {// 退出画中画时,暂停播放(画中画的全屏也会触发,但全屏后会自动播放)
+            // 退出画中画时暂停播放(画中画的全屏也会触发,但全屏后会自动播放)。
+            // 这里必须全部判空：onDestroy / onResume / 旋转都会走到这条分支，
+            // 此时 PlayFragment 的视图可能已经销毁(mVideoView 被 release 并置空)，
+            // 或 add 的 fragment 事务还没执行(视图从未创建)，getPlayer() 会返回 null。
+            // 之前直接 playFragment.getPlayer().isPlaying() 会在 Activity 销毁过程中抛 NPE，
+            // 表现为「退出详情页/播放页偶尔闪退」。
+            if (playFragment != null && playFragment.getPlayer() != null
+                    && playFragment.getController() != null
+                    && playFragment.getPlayer().isPlaying()) {
                 playFragment.getController().togglePlay();
             }
         }
