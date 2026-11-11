@@ -1,6 +1,6 @@
 {
-  "version": "2.32.7",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.7/TVBox-Mobile-v2.32.7-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.7/TVBox-Mobile-v2.32.7-armv7a.apk",
-  "changelog": "**修复收藏页「历史记录」Tab 在没滑过去之前不显示数量**：ViewPager2 的分栏是懒创建的，没被滑到的那个 Fragment 不会执行 `init()`、列表也不会加载，而数量是靠列表加载完成后回传的，所以「历史记录」在滑过去之前一直只有标题。现在进入收藏页时直接用与列表相同的查询口径各查一次条数（历史按 `HISTORY_NUM` 裁剪后再取条数，与列表完全一致），两个 Tab 一进来就都有数字\n本版基于 2.32.0 源码（2.32.1~2.32.6 为内部测试版、未发布，相关改动已整体回退）；`versionCode` 继续递增到 369，保证能覆盖安装测试版"
+  "version": "2.32.8",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.8/TVBox-Mobile-v2.32.8-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.8/TVBox-Mobile-v2.32.8-armv7a.apk",
+  "changelog": "**修复退出详情页偶发闪退**：`DetailActivity.onDestroy()` 里会调用 `registerActionReceiver(false)` 注销后台播放广播，该方法末尾为了「退出画中画时暂停播放」直接执行 `playFragment.getPlayer().isPlaying()`。但页面销毁（或快速返回、`PlayFragment` 的视图已被 `release` 并置空、分栏 fragment 事务还没执行）时 `getPlayer()` 返回 null，异常在 `performDestroyActivity` 中抛出，变成 `RuntimeException: Unable to destroy activity`。现在获取播放器前全部判空\n销毁阶段的广播注销全部加容错：`mBatteryReceiver`/`mHomeKeyReceiver`/`mRemoteActionReceiver` 若因页面异常提前结束而没注册成功，重复注销会抛 `IllegalArgumentException`，同样会在销毁时崩溃\n后台播放广播的 `onReceive` 与画中画 `enterPip()` 补齐判空（播放器未就绪时提示而不再 NPE；延时任务执行前再确认一次播放器还在）\n版本号 2.32.7/369 → 2.32.8/370"
 }
