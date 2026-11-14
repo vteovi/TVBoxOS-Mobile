@@ -52,7 +52,15 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
      * 提供给主页返回操作
      */
     val tabIndex: Int
-        get() = mBinding.tabLayout.currentItemIndex
+        get() {
+            val index = mBinding.tabLayout.currentItemIndex
+            if (index in fragments.indices) return index
+            // DslTabLayout.currentItemIndex 取自 dslSelectIndex，默认 -1：
+            // 分类刷新时 initViewPager 会 removeAllViews 再重新 install，中间这段时间没有选中项，
+            // 直接把它当列表下标用就是 -1 → IndexOutOfBounds。此时以 ViewPager 的实际页为准。
+            if (fragments.isEmpty()) return -1
+            return mBinding.mViewPager.currentItem.coerceIn(0, fragments.size - 1)
+        }
 
     /**
      * 提供给主页返回操作
