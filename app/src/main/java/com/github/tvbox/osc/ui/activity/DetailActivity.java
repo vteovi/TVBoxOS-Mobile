@@ -36,6 +36,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.AppUtils;
+import com.blankj.utilcode.util.ClipboardUtils;
 import com.blankj.utilcode.util.LogUtils;
 import com.blankj.utilcode.util.NotificationUtils;
 import com.blankj.utilcode.util.ScreenUtils;
@@ -245,6 +246,14 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             FastClickCheckUtil.check(v);
             if (playFragment != null) playFragment.openCast();
         });
+        // 外部按钮：复制视频链接（只在 sw600dp 布局里有这个控件）
+        View copyLinkBtn = findViewById(R.id.ext_copy_link);
+        if (copyLinkBtn != null) {
+            copyLinkBtn.setOnClickListener(v -> {
+                FastClickCheckUtil.check(v);
+                copyCurrentVodUrl();
+            });
+        }
         // 外部按钮：画中画
         mBinding.extPip.setOnClickListener(v -> {
             FastClickCheckUtil.check(v);
@@ -1432,6 +1441,20 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
 
     public String getCurrentVodUrl() {
         return playFragment == null ? "" : playFragment.getFinalUrl();
+    }
+
+    /**
+     * 复制当前播放地址。手机端「点标题弹详情窗」和大屏右侧信息栏的复制按钮都走这里。
+     * 解析源在播放器拿到真实地址前 getFinalUrl() 是空串，此时给出提示而不是复制空内容。
+     */
+    public void copyCurrentVodUrl() {
+        String url = getCurrentVodUrl();
+        if (TextUtils.isEmpty(url)) {
+            ToastUtils.showLong("播放地址还没准备好，稍后再试");
+            return;
+        }
+        ClipboardUtils.copyText(url);
+        ToastUtils.showLong("已复制");
     }
 
     public void quickLineChange() {
