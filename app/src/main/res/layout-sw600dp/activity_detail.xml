@@ -217,6 +217,16 @@
                         android:src="@drawable/ic_download_18"
                         app:tint="@color/text_foreground" />
 
+                    <!-- 复制视频链接：大屏不弹详情窗，所以这个图标是主要入口（手机上两个入口都有） -->
+                    <ImageView
+                        android:id="@+id/ext_copy_link"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="复制视频链接"
+                        android:padding="5dp"
+                        android:src="@drawable/ic_link_18"
+                        app:tint="@color/text_foreground" />
+
                     <ImageView
                         android:id="@+id/ext_pip"
                         android:layout_width="36dp"

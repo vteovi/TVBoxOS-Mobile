@@ -36,6 +36,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.blankj.utilcode.util.AppUtils;
+import com.blankj.utilcode.util.ClipboardUtils;
 import com.blankj.utilcode.util.LogUtils;
 import com.blankj.utilcode.util.NotificationUtils;
 import com.blankj.utilcode.util.ScreenUtils;
@@ -127,6 +128,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
      * 选集列表是否已经做过一次强制重排（防止兜底校验反复重排）
      */
     private boolean seriesRelayoutTried = false;
+    /**
+     * 本次「退出全屏」周期里是否已经重新挂载过选集适配器（保证强制重排只做一次）
+     */
+    private boolean seriesRebuildForcedThisCycle = false;
     public String vodId;
     public String sourceKey;
     private View seriesFlagFocus = null;
@@ -174,6 +179,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         openBackgroundPlay = false;
         playServerSwitch(false);
         mBinding.ivPrivateBrowsing.postDelayed(NotificationUtils::cancelAll, 800);
+        // 回到前台时兜一次：非全屏下「线路/选集」不该是隐藏状态
+        restoreSeriesAreaIfHidden();
     }
 
     private void initView() {
@@ -244,6 +251,11 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.tvCast.setOnClickListener(v -> {
             FastClickCheckUtil.check(v);
             if (playFragment != null) playFragment.openCast();
+        });
+        // 外部按钮：复制视频链接（手机与 sw600dp 布局都放了这个图标，逻辑同详情弹窗里的「复制」）
+        mBinding.extCopyLink.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            copyCurrentVodUrl();
         });
         // 外部按钮：画中画
         mBinding.extPip.setOnClickListener(v -> {
@@ -561,6 +573,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.mGridView.post(() -> {
             updateSeriesGridSpan();
             ensureSeriesListFullyLaid();
+            // 方向切换也可能把列表量成 0 宽/0 高，这里顺带校验一次（全屏时会自动跳过）
+            verifySeriesAreaLaidOut(0);
         });
     }
 
@@ -1151,7 +1165,13 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         if (fullWindows) {
             toggleFullPreview();
-            mBinding.mGridView.requestFocus();
+            // 焦点还给选集：等到下一帧、且列表真的可见时再要，
+            // 否则 ScrollView 会把一个还没测出尺寸的列表当成焦点目标，把页面滚到空白处
+            mBinding.mGridView.post(() -> {
+                if (mBinding != null && mBinding.mGridView.getVisibility() == View.VISIBLE) {
+                    mBinding.mGridView.requestFocus();
+                }
+            });
             return;
         }
         super.onBackPressed();
@@ -1192,6 +1212,14 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         fullWindows = !fullWindows;
 
+        // 先恢复/隐藏页面主体的「线路」「选集」，而且这里只能用 INVISIBLE，不能用 GONE：
+        // 全屏时播放器是 MATCH_PARENT 的浮层，页面主体本来就被完全盖住，隐藏只是"保险"。
+        // 用 GONE 会让这两个 RecyclerView 退出布局流程，退出全屏再从 GONE 恢复时，
+        // 它们经常被量成 0 宽/0 高（条目一个都画不出来，看起来就是「选集标题下面一片空白」），
+        // 光 requestLayout 还修不回来。INVISIBLE 保留布局，全屏进出不会造成重新测量，从根上避开这个问题。
+        mBinding.mGridView.setVisibility(fullWindows ? View.INVISIBLE : View.VISIBLE);
+        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.INVISIBLE : View.VISIBLE);
+
         //交由fragment处理播放器全屏逻辑
         playFragment.changedLandscape(fullWindows);
         //activity处理预览尺寸(全屏/非全屏预览)
@@ -1204,15 +1232,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         } else {
             mBinding.previewPlayer.setLayoutParams(windowsPreview);
         }
-        mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
-        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
         if (!fullWindows) {
-            // 从 GONE 恢复显示后重新测量一次，否则可能只排出一部分集数
-            seriesRelayoutTried = false;
-            mBinding.mGridView.post(() -> {
-                updateSeriesGridSpan();
-                ensureSeriesListFullyLaid();
-            });
+            relayoutSeriesAreaAfterFullscreen();
         }
 
         //全屏下禁用详情页几个按键的焦点 防止上键跑过来
@@ -1220,6 +1241,172 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.tvCollect.setFocusable(!fullWindows);
         mBinding.tvExternalPlay.setFocusable(!fullWindows);
         toggleSubtitleTextSize();
+    }
+
+    /**
+     * 退出全屏后把「线路 + 选集」区域重新排一遍。
+     *
+     * <p>全屏进出会伴随屏幕方向切换（切回来时宽度、密度都变了）和沉浸栏切换，
+     * 这个过程中 RecyclerView 很容易被量成 0 宽/0 高 —— 表现出来就是「选集标题下面一片空白，页面到底了」。
+     * 只 post 一帧去算列数是不可靠的（那一刻方向可能还没切完），所以分三拍：
+     * 下一帧算列数、150ms 后校验、600ms 再校验；校验发现条目没排出来就重新挂一次适配器强排。
+     */
+    private void relayoutSeriesAreaAfterFullscreen() {
+        if (mBinding == null) {
+            return;
+        }
+        final RecyclerView rv = mBinding.mGridView;
+        seriesRelayoutTried = false;
+        seriesRebuildForcedThisCycle = false;
+        rv.post(() -> {
+            if (!canRelayoutSeriesArea()) {
+                return;
+            }
+            updateSeriesGridSpan();
+            verifySeriesAreaLaidOut(0);
+        });
+        rv.postDelayed(() -> {
+            if (!canRelayoutSeriesArea()) {
+                return;
+            }
+            updateSeriesGridSpan();
+            ensureSeriesListFullyLaid();
+            verifySeriesAreaLaidOut(1);
+        }, 150);
+        rv.postDelayed(() -> {
+            if (!canRelayoutSeriesArea()) {
+                return;
+            }
+            updateSeriesGridSpan();
+            verifySeriesAreaLaidOut(2);
+            if (seriesRebuildForcedThisCycle || seriesAdapter == null || seriesAdapter.getItemCount() == 0) {
+                return;
+            }
+            // 检测看不出问题也要强制重排一次：RecyclerView 有可能"内部尺寸看着正常、实际一个条目都没画出来"，
+            // 这种情况只能靠重新挂一次适配器保证排出正确结果。整个退出全屏只做一次，不会反复闪。
+            rebuildSeriesLists();
+            rv.postDelayed(() -> verifySeriesAreaLaidOut(0), 250);
+        }, 600);
+    }
+
+    /**
+     * 只有页面在前台、且不在全屏时才允许动这两个列表（全屏下它们本就是隐藏的）
+     */
+    private boolean canRelayoutSeriesArea() {
+        return mBinding != null && !isFinishing() && !isDestroyed() && !fullWindows;
+    }
+
+    /**
+     * 校验「选集」是不是真的排出来了：有数据却一个条目都没有、或者条目被量成 0 高/推到可视区外，
+     * 都算坏状态，重新挂一次适配器从零排。最多自愈 2 轮，避免死循环。
+     */
+    private void verifySeriesAreaLaidOut(int attempt) {
+        if (!canRelayoutSeriesArea() || seriesAdapter == null) {
+            return;
+        }
+        final RecyclerView rv = mBinding.mGridView;
+        int itemCount = seriesAdapter.getItemCount();
+        if (itemCount == 0) {
+            // 有集数数据、列表却是空的：把数据重新灌一遍
+            if (vodInfo != null && vodInfo.seriesMap != null && vodInfo.playFlag != null) {
+                List<VodInfo.VodSeries> series = vodInfo.seriesMap.get(vodInfo.playFlag);
+                if (series != null && !series.isEmpty()) {
+                    seriesAdapter.setNewData(series);
+                    seriesAdapter.notifyDataSetChanged();
+                    rv.requestLayout();
+                }
+            }
+            return;
+        }
+        // 显隐被别的路径改坏了（比如空态回调），顺手纠正
+        if (rv.getVisibility() != View.VISIBLE || mBinding.mGridViewFlag.getVisibility() != View.VISIBLE) {
+            mBinding.mGridViewFlag.setVisibility(View.VISIBLE);
+            rv.setVisibility(View.VISIBLE);
+            mBinding.mEmptyPlaylist.setVisibility(View.GONE);
+        }
+        boolean broken = rv.getChildCount() == 0
+                || rv.getWidth() <= 0
+                || rv.getHeight() <= 0
+                || isSeriesChildCollapsed(rv);
+        if (!broken || attempt > 2) {
+            return;
+        }
+        rebuildSeriesLists();
+        rv.postDelayed(() -> verifySeriesAreaLaidOut(attempt + 1), 200);
+    }
+
+    /**
+     * 第一个有宽度的条目是不是「画不出来」：高度为 0（被量扁）或被推到列表可视区右侧之外
+     */
+    private boolean isSeriesChildCollapsed(RecyclerView rv) {
+        for (int i = 0; i < rv.getChildCount(); i++) {
+            View child = rv.getChildAt(i);
+            if (child != null && child.getWidth() > 0) {
+                return child.getHeight() <= 0 || child.getLeft() >= rv.getWidth();
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 把「线路」「选集」两个列表整个重新挂载一遍。
+     *
+     * <p>RecyclerView 从 GONE 恢复/方向切换被打断之后，内部可能留着「条目位置都对、尺寸全是 0」的布局状态，
+     * 这种状态 requestLayout 修不回来（它会认为布局已经是最新的），只能断一次适配器强制从零排。
+     */
+    private void rebuildSeriesLists() {
+        if (mBinding == null) {
+            return;
+        }
+        seriesRebuildForcedThisCycle = true;
+        RecyclerView rv = mBinding.mGridView;
+        int width = rv.getWidth();
+        if (width <= 0) {
+            width = mBinding.llLayout.getWidth();
+        }
+        List<VodInfo.VodSeries> data = seriesAdapter == null ? null : seriesAdapter.getData();
+        int span = Utils.getSeriesGridSpanCount(this, width, data);
+        rv.setAdapter(null);
+        rv.setLayoutManager(new GridLayoutManager(this, span));
+        // 间距装饰是按列数算边距的，重建列表要一起换掉
+        if (mSeriesSpacing != null) {
+            rv.removeItemDecoration(mSeriesSpacing);
+        }
+        mSeriesSpacing = new GridSpacingItemDecoration(span, seriesGridSpacing(), true);
+        rv.addItemDecoration(mSeriesSpacing);
+        if (seriesAdapter != null) {
+            rv.setAdapter(seriesAdapter);
+            seriesAdapter.notifyDataSetChanged();
+        }
+        RecyclerView flagRv = mBinding.mGridViewFlag;
+        if (seriesFlagAdapter != null) {
+            flagRv.setAdapter(null);
+            flagRv.setAdapter(seriesFlagAdapter);
+            seriesFlagAdapter.notifyDataSetChanged();
+        }
+        // 高度是 wrap_content 的列表重排了，外层也要重新量一次
+        if (rv.getParent() instanceof View) {
+            ((View) rv.getParent()).requestLayout();
+        }
+        mBinding.llLayout.requestLayout();
+    }
+
+    /**
+     * 保底：非全屏状态下「线路」「选集」不该是 GONE。
+     * 万一哪条路径（退出全屏、空态回调、方向切换）把显隐状态留在了错误的一侧，回到页面前台时纠正回来。
+     */
+    private void restoreSeriesAreaIfHidden() {
+        if (mBinding == null || fullWindows || vodInfo == null
+                || vodInfo.seriesMap == null || vodInfo.seriesMap.isEmpty()) {
+            return;
+        }
+        if (mBinding.mGridView.getVisibility() != View.VISIBLE
+                || mBinding.mGridViewFlag.getVisibility() != View.VISIBLE) {
+            mBinding.mGridViewFlag.setVisibility(View.VISIBLE);
+            mBinding.mGridView.setVisibility(View.VISIBLE);
+            mBinding.mEmptyPlaylist.setVisibility(View.GONE);
+            relayoutSeriesAreaAfterFullscreen();
+        }
     }
 
     void toggleSubtitleTextSize() {
@@ -1432,6 +1619,20 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
 
     public String getCurrentVodUrl() {
         return playFragment == null ? "" : playFragment.getFinalUrl();
+    }
+
+    /**
+     * 复制当前播放地址。手机端「点标题弹详情窗」和大屏右侧信息栏的复制按钮都走这里。
+     * 解析源在播放器拿到真实地址前 getFinalUrl() 是空串，此时给出提示而不是复制空内容。
+     */
+    public void copyCurrentVodUrl() {
+        String url = getCurrentVodUrl();
+        if (TextUtils.isEmpty(url)) {
+            ToastUtils.showLong("播放地址还没准备好，稍后再试");
+            return;
+        }
+        ClipboardUtils.copyText(url);
+        ToastUtils.showLong("已复制");
     }
 
     public void quickLineChange() {

@@ -6,9 +6,7 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.blankj.utilcode.util.ClipboardUtils;
 import com.blankj.utilcode.util.ScreenUtils;
-import com.blankj.utilcode.util.ToastUtils;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.bean.VodInfo;
 import com.github.tvbox.osc.databinding.DialogVideoDetailBinding;
@@ -60,10 +58,7 @@ public class VideoDetailDialog extends BottomPopupView {
         binding.tvDirector.setText("导演："+getText(mVideo.director));
         binding.tvDes.setContent("简介："+removeHtmlTag(mVideo.des));
         binding.url.setText(mActivity.getCurrentVodUrl());
-        binding.tvLinkCopy.setOnClickListener(view -> {
-            ClipboardUtils.copyText(mActivity.getCurrentVodUrl());
-            ToastUtils.showLong("已复制");
-        });
+        binding.tvLinkCopy.setOnClickListener(view -> mActivity.copyCurrentVodUrl());
         String picUrl = DefaultConfig.checkReplaceProxy(mVideo.pic);
         if (!TextUtils.isEmpty(picUrl)){
             Picasso.get()
