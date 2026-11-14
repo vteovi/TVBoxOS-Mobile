@@ -217,7 +217,7 @@
                         android:src="@drawable/ic_download_18"
                         app:tint="@color/text_foreground" />
 
-                    <!-- 手机端在「点标题弹详情窗」里复制视频链接；大屏不弹窗，这里单独给一个入口 -->
+                    <!-- 复制视频链接：大屏不弹详情窗，所以这个图标是主要入口（手机上两个入口都有） -->
                     <ImageView
                         android:id="@+id/ext_copy_link"
                         android:layout_width="36dp"

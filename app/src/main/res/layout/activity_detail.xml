@@ -152,6 +152,16 @@
                             app:tint="@color/text_foreground"
                             android:contentDescription="下载"/>
 
+                        <!-- 复制视频链接：与「点标题弹详情窗」里的复制按钮同一个入口，大屏也共用这个 id -->
+                        <ImageView
+                            android:id="@+id/ext_copy_link"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:padding="6dp"
+                            android:src="@drawable/ic_link_18"
+                            app:tint="@color/text_foreground"
+                            android:contentDescription="复制视频链接"/>
+
                         <ImageView
                             android:id="@+id/ext_pip"
                             android:layout_width="40dp"

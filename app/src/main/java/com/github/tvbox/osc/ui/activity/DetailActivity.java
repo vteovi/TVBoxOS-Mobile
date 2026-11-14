@@ -246,14 +246,11 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             FastClickCheckUtil.check(v);
             if (playFragment != null) playFragment.openCast();
         });
-        // 外部按钮：复制视频链接（只在 sw600dp 布局里有这个控件）
-        View copyLinkBtn = findViewById(R.id.ext_copy_link);
-        if (copyLinkBtn != null) {
-            copyLinkBtn.setOnClickListener(v -> {
-                FastClickCheckUtil.check(v);
-                copyCurrentVodUrl();
-            });
-        }
+        // 外部按钮：复制视频链接（手机与 sw600dp 布局都放了这个图标，逻辑同详情弹窗里的「复制」）
+        mBinding.extCopyLink.setOnClickListener(v -> {
+            FastClickCheckUtil.check(v);
+            copyCurrentVodUrl();
+        });
         // 外部按钮：画中画
         mBinding.extPip.setOnClickListener(v -> {
             FastClickCheckUtil.check(v);
