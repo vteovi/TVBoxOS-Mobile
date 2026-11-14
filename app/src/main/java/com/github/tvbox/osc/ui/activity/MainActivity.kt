@@ -163,7 +163,11 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
             confirmExit()
             return
         }
-        val fragment: Fragment = childFragments[homeFragment.tabIndex]
+        // 这里不能再直接下标取：tab 数量会随数据源刷新变化，而 DslTabLayout 在
+        // removeAllViews + 重新 install 之后 currentItemIndex 会短暂变成 -1，
+        // 以前用 childFragments[-1] 直接 IndexOutOfBoundsException 闪退。
+        // 取不到就对应当前页在重建中，按“回主页 tab”处理。
+        val fragment = childFragments.getOrNull(homeFragment.tabIndex)
         if (fragment is GridFragment) { // 首页数据源动态加载的tab
             if (!fragment.restoreView()) { // 有回退的view,先回退(AList等文件夹列表),没有可回退的,返到主页tab
                 if (!homeFragment.scrollToFirstTab()) {
