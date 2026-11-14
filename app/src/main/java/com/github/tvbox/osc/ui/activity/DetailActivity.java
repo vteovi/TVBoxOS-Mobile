@@ -175,6 +175,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         openBackgroundPlay = false;
         playServerSwitch(false);
         mBinding.ivPrivateBrowsing.postDelayed(NotificationUtils::cancelAll, 800);
+        // 回到前台时兜一次：非全屏下「线路/选集」不该是隐藏状态
+        restoreSeriesAreaIfHidden();
     }
 
     private void initView() {
@@ -1157,7 +1159,13 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         if (fullWindows) {
             toggleFullPreview();
-            mBinding.mGridView.requestFocus();
+            // 焦点还给选集：等到下一帧、且列表真的可见时再要，
+            // 否则 ScrollView 会把一个还没测出尺寸的列表当成焦点目标，把页面滚到空白处
+            mBinding.mGridView.post(() -> {
+                if (mBinding != null && mBinding.mGridView.getVisibility() == View.VISIBLE) {
+                    mBinding.mGridView.requestFocus();
+                }
+            });
             return;
         }
         super.onBackPressed();
@@ -1198,6 +1206,12 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         fullWindows = !fullWindows;
 
+        // 先恢复/隐藏页面主体的「线路」「选集」：
+        // 这两步以前放在播放器和方向切换之后，中途任何一步出问题（方向请求、沉浸栏、布局参数）
+        // 都会让它们留在 GONE，表现出来就是「选集标题下面一片空白、页面到底了」。
+        mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
+        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
+
         //交由fragment处理播放器全屏逻辑
         playFragment.changedLandscape(fullWindows);
         //activity处理预览尺寸(全屏/非全屏预览)
@@ -1210,15 +1224,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         } else {
             mBinding.previewPlayer.setLayoutParams(windowsPreview);
         }
-        mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
-        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
         if (!fullWindows) {
-            // 从 GONE 恢复显示后重新测量一次，否则可能只排出一部分集数
-            seriesRelayoutTried = false;
-            mBinding.mGridView.post(() -> {
-                updateSeriesGridSpan();
-                ensureSeriesListFullyLaid();
-            });
+            relayoutSeriesAreaAfterFullscreen();
         }
 
         //全屏下禁用详情页几个按键的焦点 防止上键跑过来
@@ -1226,6 +1233,66 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.tvCollect.setFocusable(!fullWindows);
         mBinding.tvExternalPlay.setFocusable(!fullWindows);
         toggleSubtitleTextSize();
+    }
+
+    /**
+     * 退出全屏后把「线路 + 选集」区域重新排一遍。
+     *
+     * <p>全屏时这两个列表是 GONE，退出后同一帧里刚恢复 VISIBLE 的 RecyclerView 往往还没量出宽度
+     * （屏幕方向刚切回来、布局还是旋转前的），只 post 一帧去算列数，容易算成错的值，
+     * 更糟的情况是量成 0 高 —— 表现出来就是「选集标题下面一片空白，页面到底了」。
+     * 所以这里分两拍：下一帧算一次列数，120ms 后再校验一次，仍没量出高度就重建 LayoutManager 强排。
+     */
+    private void relayoutSeriesAreaAfterFullscreen() {
+        if (mBinding == null) {
+            return;
+        }
+        final RecyclerView rv = mBinding.mGridView;
+        seriesRelayoutTried = false;
+        rv.post(() -> {
+            if (mBinding == null || isFinishing()) {
+                return;
+            }
+            updateSeriesGridSpan();
+        });
+        rv.postDelayed(() -> {
+            if (mBinding == null || isFinishing() || isDestroyed()) {
+                return;
+            }
+            updateSeriesGridSpan();
+            ensureSeriesListFullyLaid();
+            int itemCount = seriesAdapter == null ? 0 : seriesAdapter.getItemCount();
+            if (itemCount > 0 && rv.getVisibility() == View.VISIBLE && rv.getHeight() <= 0) {
+                // 有数据却量成 0 高：换一个新的 LayoutManager 强制完整重排一次
+                RecyclerView.LayoutManager lm = rv.getLayoutManager();
+                int span = lm instanceof GridLayoutManager ? Math.max(2, ((GridLayoutManager) lm).getSpanCount()) : 4;
+                rv.setLayoutManager(new GridLayoutManager(this, span));
+                rv.requestLayout();
+            }
+            // 高度是 wrap_content 的列表变了，外层也要重新量一次，否则 ScrollView 里留着旧的内容高度
+            if (rv.getParent() instanceof View) {
+                ((View) rv.getParent()).requestLayout();
+            }
+            mBinding.llLayout.requestLayout();
+        }, 120);
+    }
+
+    /**
+     * 保底：非全屏状态下「线路」「选集」不该是 GONE。
+     * 万一哪条路径（退出全屏、空态回调、方向切换）把显隐状态留在了错误的一侧，回到页面前台时纠正回来。
+     */
+    private void restoreSeriesAreaIfHidden() {
+        if (mBinding == null || fullWindows || vodInfo == null
+                || vodInfo.seriesMap == null || vodInfo.seriesMap.isEmpty()) {
+            return;
+        }
+        if (mBinding.mGridView.getVisibility() != View.VISIBLE
+                || mBinding.mGridViewFlag.getVisibility() != View.VISIBLE) {
+            mBinding.mGridViewFlag.setVisibility(View.VISIBLE);
+            mBinding.mGridView.setVisibility(View.VISIBLE);
+            mBinding.mEmptyPlaylist.setVisibility(View.GONE);
+            relayoutSeriesAreaAfterFullscreen();
+        }
     }
 
     void toggleSubtitleTextSize() {
