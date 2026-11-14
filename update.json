@@ -1,6 +1,6 @@
 {
-  "version": "2.32.8",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.8/TVBox-Mobile-v2.32.8-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.8/TVBox-Mobile-v2.32.8-armv7a.apk",
-  "changelog": "**修复退出详情页偶发闪退**：`DetailActivity.onDestroy()` 里会调用 `registerActionReceiver(false)` 注销后台播放广播，该方法末尾为了「退出画中画时暂停播放」直接执行 `playFragment.getPlayer().isPlaying()`。但页面销毁（或快速返回、`PlayFragment` 的视图已被 `release` 并置空、分栏 fragment 事务还没执行）时 `getPlayer()` 返回 null，异常在 `performDestroyActivity` 中抛出，变成 `RuntimeException: Unable to destroy activity`。现在获取播放器前全部判空\n销毁阶段的广播注销全部加容错：`mBatteryReceiver`/`mHomeKeyReceiver`/`mRemoteActionReceiver` 若因页面异常提前结束而没注册成功，重复注销会抛 `IllegalArgumentException`，同样会在销毁时崩溃\n后台播放广播的 `onReceive` 与画中画 `enterPip()` 补齐判空（播放器未就绪时提示而不再 NPE；延时任务执行前再确认一次播放器还在）\n版本号 2.32.7/369 → 2.32.8/370"
+  "version": "2.32.9",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.9/TVBox-Mobile-v2.32.9-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.32.9/TVBox-Mobile-v2.32.9-armv7a.apk",
+  "changelog": "**修复按返回键偶发闪退（IndexOutOfBoundsException: Index -1 out of bounds）**：`MainActivity.onBackPressed()` 用 `childFragments[homeFragment.tabIndex]` 取当前分栏，而 `tabIndex` 直接取自 `DslTabLayout.currentItemIndex`；该值来自 `dslSelectIndex`，默认是 **-1**。分类数据刷新时 `HomeFragment.initViewPager()` 会先 `removeAllViews()` 再重新 `install()`，这中间没有选中项，此时按返回键就会用 -1 当下标 → 崩溃\n`HomeFragment.tabIndex` 改为兜底取值：`tabLayout.currentItemIndex` 落在分栏范围内才用，否则以 `ViewPager.currentItem` 的实际页为准（并限制在有效区间），不再返回 -1\n`MainActivity.onBackPressed()` 改用 `getOrNull()` 取分栏，取不到时按「回主页 tab」处理；两处一起，分栏重建期间按返回键也不会再崩\n版本号 2.32.8/370 → 2.32.9/371"
 }
