@@ -12,6 +12,7 @@
 - ⚠️ 全局 gitconfig 有 `url."https://gh-proxy.com/https://github.com/".insteadOf`（为加速 fetch）：**push 会报 `No anonymous write access`**。推前 `--unset-all`、推后 `--add` 恢复；别让带 unset 的命令被 timeout 杀掉。fetch 走代理正常。
 - `github.com:443` 被 TLS 阻断时（api 正常）用 `scripts/push_via_api.py`（Git Data API 重放 blob→tree→commit→移 ref）；代价是时间归一化成 UTC、**commit sha 必变**，推完 `git fetch` + `reset --hard origin/<br>` + `fetch --tags --force` 对齐。
 - 读远端文件别用 raw.githubusercontent.com（代理 502），用 `GET /repos/.../contents/<file>?ref=main` + `Accept: application/vnd.github.raw`。
+- 若目标提交**已在远端存在**（比如从 main 快进 dev），不用重放 blob/tree，直接 `PATCH /repos/.../git/refs/heads/<branch> {"sha": <已存在的 sha>, "force": false}` + `git credential fill` 取 token 即可，sha 不变、无需本地对齐。
 
 ## 环境 / 构建 / 签名
 - 仓库 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）；`applicationId=com.github.tvbox.osc.mobile`；`local.properties` 的 `sdk.dir=C:\Android\Sdk`。
@@ -70,7 +71,7 @@
 
 ## 版本速查
 - 2.29.0 内置重置；2.30.0 收藏页数量；2.31.0 设备同步合并收藏/历史；**2.32.0 = 订阅源也合并的内容基线**；2.32.7 收藏页数量补齐；2.32.8 详情页销毁 NPE；2.32.9 返回键 -1 越界；**2.33.0/2.33.1 播放页补「复制视频链接」（大屏图标 + 手机图标，同一 id/同一逻辑）；2.33.2/2.33.3 修退出全屏后选集区空白（根因: 列表 GONE→VISIBLE 后被量成 0 尺寸, 改 INVISIBLE + 强制重排）**。
-- **versionCode 已到 375，必须一直递增，绝不能再退回 362 区间。**
+- **2.33.3 已发布（2026-11-14，tag v2.33.3，dev/main 同点 9352586）；versionCode 已到 375，必须一直递增，绝不能再退回 362 区间。**
 
 ## 用户偏好
 - 中文沟通；改完自动 `git add + commit` 到 **dev**（本地快照，不自动 push），汇报 commit id；「发布」时才推 main + 打 tag。
