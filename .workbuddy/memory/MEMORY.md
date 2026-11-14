@@ -8,7 +8,8 @@
 - 推 main/dev **不触发 CI**（workflow 只监听 `push: tags:["v*"]` + `workflow_dispatch`）。`publish-github-release` 自带构建、apksigner 校验、发 Release、回写 `update.json`/README，密钥来自 secret `TVBOX_KEYSTORE_BASE64`。
 - **发版前必须先写好 `更新记录.md` 的 `### <版本> — 日期` 段落**：CI 的 `scripts/sync_release_metadata.sh` 从中抽 changelog，漏写会让 update.json 没有 changelog（2.28.8 返工过）。
 - 版本号在 dev 上就改好：feat→MINOR、fix→PATCH，versionCode 每次 +1，绝不复用。
-- **推 GitHub 网络三连**：① 先 `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`（否则 502）；② `git -c http.version=HTTP/1.1 push`，失败间隔 8s 重试（github.com:443 常抖，`api.github.com` 正常）；③ 查 CI 用匿名 `curl api.github.com/repos/vteovi/TVBoxOS-Mobile/actions/runs`，无需登录。  
+- **推 GitHub 网络三连**：① 先 `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`（否则 502）；② `git -c http.version=HTTP/1.1 push`，失败间隔 8s 重试（github.com:443 常抖，`api.github.com` 正常）；③ 查 CI 用匿名 `curl api.github.com/repos/vteovi/TVBoxOS-Mobile/actions/runs`，无需登录。
+   ⚠️ **用户全局 gitconfig 里有 `url."https://gh-proxy.com/https://github.com/".insteadOf = "https://github.com/"`**（2026-11-12 为加速 fetch 加的）：**push 会报 `remote: No anonymous write access`**——gh-proxy 只读。推送前必须 `git config --global --unset-all` 该键、推完 `--add` 回去；**别让带 unset 的命令被 timeout 杀掉**（本次就因此把全局配置留在删除状态）。fetch 走代理没问题。  
    **极端情况：`github.com:443` 被 TLS 阻断**（TCP 可通、换 IP 无效、代理也没用，但 `api.github.com` 正常）→ 用 `scripts/push_via_api.py` 经 Git Data API 重放提交（blob→tree→commit，校验 tree sha，最后移 ref）；代价是 GitHub 把时间归一化成 UTC，**commit sha 必变**，推完要 `git fetch` 后 `reset --hard origin/<br>` + `git fetch --tags --force` 对齐。
 
 ## 环境 / 构建 / 签名
