@@ -128,6 +128,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
      * 选集列表是否已经做过一次强制重排（防止兜底校验反复重排）
      */
     private boolean seriesRelayoutTried = false;
+    /**
+     * 本次「退出全屏」周期里是否已经重新挂载过选集适配器（保证强制重排只做一次）
+     */
+    private boolean seriesRebuildForcedThisCycle = false;
     public String vodId;
     public String sourceKey;
     private View seriesFlagFocus = null;
@@ -569,6 +573,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         mBinding.mGridView.post(() -> {
             updateSeriesGridSpan();
             ensureSeriesListFullyLaid();
+            // 方向切换也可能把列表量成 0 宽/0 高，这里顺带校验一次（全屏时会自动跳过）
+            verifySeriesAreaLaidOut(0);
         });
     }
 
@@ -1206,11 +1212,13 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         fullWindows = !fullWindows;
 
-        // 先恢复/隐藏页面主体的「线路」「选集」：
-        // 这两步以前放在播放器和方向切换之后，中途任何一步出问题（方向请求、沉浸栏、布局参数）
-        // 都会让它们留在 GONE，表现出来就是「选集标题下面一片空白、页面到底了」。
-        mBinding.mGridView.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
-        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.GONE : View.VISIBLE);
+        // 先恢复/隐藏页面主体的「线路」「选集」，而且这里只能用 INVISIBLE，不能用 GONE：
+        // 全屏时播放器是 MATCH_PARENT 的浮层，页面主体本来就被完全盖住，隐藏只是"保险"。
+        // 用 GONE 会让这两个 RecyclerView 退出布局流程，退出全屏再从 GONE 恢复时，
+        // 它们经常被量成 0 宽/0 高（条目一个都画不出来，看起来就是「选集标题下面一片空白」），
+        // 光 requestLayout 还修不回来。INVISIBLE 保留布局，全屏进出不会造成重新测量，从根上避开这个问题。
+        mBinding.mGridView.setVisibility(fullWindows ? View.INVISIBLE : View.VISIBLE);
+        mBinding.mGridViewFlag.setVisibility(fullWindows ? View.INVISIBLE : View.VISIBLE);
 
         //交由fragment处理播放器全屏逻辑
         playFragment.changedLandscape(fullWindows);
@@ -1238,10 +1246,10 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     /**
      * 退出全屏后把「线路 + 选集」区域重新排一遍。
      *
-     * <p>全屏时这两个列表是 GONE，退出后同一帧里刚恢复 VISIBLE 的 RecyclerView 往往还没量出宽度
-     * （屏幕方向刚切回来、布局还是旋转前的），只 post 一帧去算列数，容易算成错的值，
-     * 更糟的情况是量成 0 高 —— 表现出来就是「选集标题下面一片空白，页面到底了」。
-     * 所以这里分两拍：下一帧算一次列数，120ms 后再校验一次，仍没量出高度就重建 LayoutManager 强排。
+     * <p>全屏进出会伴随屏幕方向切换（切回来时宽度、密度都变了）和沉浸栏切换，
+     * 这个过程中 RecyclerView 很容易被量成 0 宽/0 高 —— 表现出来就是「选集标题下面一片空白，页面到底了」。
+     * 只 post 一帧去算列数是不可靠的（那一刻方向可能还没切完），所以分三拍：
+     * 下一帧算列数、150ms 后校验、600ms 再校验；校验发现条目没排出来就重新挂一次适配器强排。
      */
     private void relayoutSeriesAreaAfterFullscreen() {
         if (mBinding == null) {
@@ -1249,32 +1257,138 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         }
         final RecyclerView rv = mBinding.mGridView;
         seriesRelayoutTried = false;
+        seriesRebuildForcedThisCycle = false;
         rv.post(() -> {
-            if (mBinding == null || isFinishing()) {
+            if (!canRelayoutSeriesArea()) {
                 return;
             }
             updateSeriesGridSpan();
+            verifySeriesAreaLaidOut(0);
         });
         rv.postDelayed(() -> {
-            if (mBinding == null || isFinishing() || isDestroyed()) {
+            if (!canRelayoutSeriesArea()) {
                 return;
             }
             updateSeriesGridSpan();
             ensureSeriesListFullyLaid();
-            int itemCount = seriesAdapter == null ? 0 : seriesAdapter.getItemCount();
-            if (itemCount > 0 && rv.getVisibility() == View.VISIBLE && rv.getHeight() <= 0) {
-                // 有数据却量成 0 高：换一个新的 LayoutManager 强制完整重排一次
-                RecyclerView.LayoutManager lm = rv.getLayoutManager();
-                int span = lm instanceof GridLayoutManager ? Math.max(2, ((GridLayoutManager) lm).getSpanCount()) : 4;
-                rv.setLayoutManager(new GridLayoutManager(this, span));
-                rv.requestLayout();
+            verifySeriesAreaLaidOut(1);
+        }, 150);
+        rv.postDelayed(() -> {
+            if (!canRelayoutSeriesArea()) {
+                return;
             }
-            // 高度是 wrap_content 的列表变了，外层也要重新量一次，否则 ScrollView 里留着旧的内容高度
-            if (rv.getParent() instanceof View) {
-                ((View) rv.getParent()).requestLayout();
+            updateSeriesGridSpan();
+            verifySeriesAreaLaidOut(2);
+            if (seriesRebuildForcedThisCycle || seriesAdapter == null || seriesAdapter.getItemCount() == 0) {
+                return;
             }
-            mBinding.llLayout.requestLayout();
-        }, 120);
+            // 检测看不出问题也要强制重排一次：RecyclerView 有可能"内部尺寸看着正常、实际一个条目都没画出来"，
+            // 这种情况只能靠重新挂一次适配器保证排出正确结果。整个退出全屏只做一次，不会反复闪。
+            rebuildSeriesLists();
+            rv.postDelayed(() -> verifySeriesAreaLaidOut(0), 250);
+        }, 600);
+    }
+
+    /**
+     * 只有页面在前台、且不在全屏时才允许动这两个列表（全屏下它们本就是隐藏的）
+     */
+    private boolean canRelayoutSeriesArea() {
+        return mBinding != null && !isFinishing() && !isDestroyed() && !fullWindows;
+    }
+
+    /**
+     * 校验「选集」是不是真的排出来了：有数据却一个条目都没有、或者条目被量成 0 高/推到可视区外，
+     * 都算坏状态，重新挂一次适配器从零排。最多自愈 2 轮，避免死循环。
+     */
+    private void verifySeriesAreaLaidOut(int attempt) {
+        if (!canRelayoutSeriesArea() || seriesAdapter == null) {
+            return;
+        }
+        final RecyclerView rv = mBinding.mGridView;
+        int itemCount = seriesAdapter.getItemCount();
+        if (itemCount == 0) {
+            // 有集数数据、列表却是空的：把数据重新灌一遍
+            if (vodInfo != null && vodInfo.seriesMap != null && vodInfo.playFlag != null) {
+                List<VodInfo.VodSeries> series = vodInfo.seriesMap.get(vodInfo.playFlag);
+                if (series != null && !series.isEmpty()) {
+                    seriesAdapter.setNewData(series);
+                    seriesAdapter.notifyDataSetChanged();
+                    rv.requestLayout();
+                }
+            }
+            return;
+        }
+        // 显隐被别的路径改坏了（比如空态回调），顺手纠正
+        if (rv.getVisibility() != View.VISIBLE || mBinding.mGridViewFlag.getVisibility() != View.VISIBLE) {
+            mBinding.mGridViewFlag.setVisibility(View.VISIBLE);
+            rv.setVisibility(View.VISIBLE);
+            mBinding.mEmptyPlaylist.setVisibility(View.GONE);
+        }
+        boolean broken = rv.getChildCount() == 0
+                || rv.getWidth() <= 0
+                || rv.getHeight() <= 0
+                || isSeriesChildCollapsed(rv);
+        if (!broken || attempt > 2) {
+            return;
+        }
+        rebuildSeriesLists();
+        rv.postDelayed(() -> verifySeriesAreaLaidOut(attempt + 1), 200);
+    }
+
+    /**
+     * 第一个有宽度的条目是不是「画不出来」：高度为 0（被量扁）或被推到列表可视区右侧之外
+     */
+    private boolean isSeriesChildCollapsed(RecyclerView rv) {
+        for (int i = 0; i < rv.getChildCount(); i++) {
+            View child = rv.getChildAt(i);
+            if (child != null && child.getWidth() > 0) {
+                return child.getHeight() <= 0 || child.getLeft() >= rv.getWidth();
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 把「线路」「选集」两个列表整个重新挂载一遍。
+     *
+     * <p>RecyclerView 从 GONE 恢复/方向切换被打断之后，内部可能留着「条目位置都对、尺寸全是 0」的布局状态，
+     * 这种状态 requestLayout 修不回来（它会认为布局已经是最新的），只能断一次适配器强制从零排。
+     */
+    private void rebuildSeriesLists() {
+        if (mBinding == null) {
+            return;
+        }
+        seriesRebuildForcedThisCycle = true;
+        RecyclerView rv = mBinding.mGridView;
+        int width = rv.getWidth();
+        if (width <= 0) {
+            width = mBinding.llLayout.getWidth();
+        }
+        List<VodInfo.VodSeries> data = seriesAdapter == null ? null : seriesAdapter.getData();
+        int span = Utils.getSeriesGridSpanCount(this, width, data);
+        rv.setAdapter(null);
+        rv.setLayoutManager(new GridLayoutManager(this, span));
+        // 间距装饰是按列数算边距的，重建列表要一起换掉
+        if (mSeriesSpacing != null) {
+            rv.removeItemDecoration(mSeriesSpacing);
+        }
+        mSeriesSpacing = new GridSpacingItemDecoration(span, seriesGridSpacing(), true);
+        rv.addItemDecoration(mSeriesSpacing);
+        if (seriesAdapter != null) {
+            rv.setAdapter(seriesAdapter);
+            seriesAdapter.notifyDataSetChanged();
+        }
+        RecyclerView flagRv = mBinding.mGridViewFlag;
+        if (seriesFlagAdapter != null) {
+            flagRv.setAdapter(null);
+            flagRv.setAdapter(seriesFlagAdapter);
+            seriesFlagAdapter.notifyDataSetChanged();
+        }
+        // 高度是 wrap_content 的列表重排了，外层也要重新量一次
+        if (rv.getParent() instanceof View) {
+            ((View) rv.getParent()).requestLayout();
+        }
+        mBinding.llLayout.requestLayout();
     }
 
     /**
