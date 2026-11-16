@@ -1,6 +1,6 @@
 {
-  "version": "2.33.3",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.33.3/TVBox-Mobile-v2.33.3-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.33.3/TVBox-Mobile-v2.33.3-armv7a.apk",
-  "changelog": "**彻底修复手机播放页「进全屏再返回」后选集区空白**（2.33.2 没修掉）：集数数据其实还在（点「全部」能照常列出所有集），只是那个列表控件被量成了 0 宽/0 高，一个条目都画不出来\n根因是退出全屏时把「线路」「选集」用 `GONE` 隐藏：`GONE` 的控件不参与布局，退出全屏再从 `GONE` 恢复，RecyclerView 很容易被量成 0 尺寸，而且它自己认为\"布局已经是最新的\"，普通 `requestLayout()` 修不回来\n全屏时的隐藏改为 `INVISIBLE`（全屏下播放器本来就盖住整页，隐藏只是保险）：控件始终参与布局，进出全屏不再触发这类重新测量\n退出全屏后做三段校验（下一帧 / 150ms / 600ms），发现「有数据但条目没排出来」就重新挂一次适配器从零排；600ms 那次即使检测不出问题也强制重排一次，兜住\"内部尺寸看着正常、实际什么都没画\"的情况\n方向切换回调和回到前台时同样校验一次，别的路径把列表弄坏了也能自愈\n版本号 2.33.2/374 → 2.33.3/375"
+  "version": "2.35.2",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.35.2/TVBox-Mobile-v2.35.2-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.35.2/TVBox-Mobile-v2.35.2-armv7a.apk",
+  "changelog": "**修复手机竖屏首页搜索框消失、顶栏下方出现大片空白**：2.35.1 把搜索框插到了 `topLayout` 外面，成了外层竖向容器的子项\n在竖向 `LinearLayout` 里，`layout_width=0dp` 会让宽度直接算成 0（搜索框整个看不见），`layout_weight=1` 分配的又是**高度**，会额外吃掉剩余高度的一半（顶栏到分类栏之间那一大片黑）\n改为把搜索框放回横向 `topLayout` 内、紧跟数据源胶囊按钮，宽度 0dp + weight=1 正确占据右侧剩余宽度\n大屏（sw600dp）布局本来就是正确层级，未受影响\n版本号 2.35.1/388 → 2.35.2/389"
 }
