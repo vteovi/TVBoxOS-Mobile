@@ -3,15 +3,17 @@
 > 2026-11-14 精简整理。细节按日期存 `.workbuddy/memory/YYYY-MM-DD.md`，这里只留跨会话仍会用到的规则与坑。
 
 ## 分支与发布
-- **`dev` = 日常开发，所有改动都在这里；`main` = 稳定版，只接受从 dev 合并**（外加 CI 发版后 bot 的元数据提交）。别直接在 main 写代码。
-- 发布（用户说「发布」才做）：推 dev → `git switch main && git pull --rebase origin main` → `merge --no-ff dev` → 推 main → `git tag -a vX.Y.Z && git push origin vX.Y.Z` → 等 CI → 校验 Release/update.json/README → pull bot 提交 → 回 dev `merge origin/main` → 推 dev。
-- 推 main/dev **不触发 CI**（workflow 只听 `push: tags:["v*"]` + `workflow_dispatch`）；`publish-github-release` 负责构建、apksigner 校验、发 Release、回写 update.json/README，密钥 secret `TVBOX_KEYSTORE_BASE64`。
+- **分支模型（2026-11-16 重构）**：`dev` = 日常开发（从 master 拉出，所有改动走这里）；`master` = 稳定版，**同时是 GitHub 默认分支**（旧的 `main` 已删除，App 更新检测地址也已改成 `/master/update.json`）；`2.34.2` = 版本存档分支（旧 dev 线的快照，2.34.0~2.34.2 的导航栏搜索/复制链接/全屏修复/搜索页分栏只在这里）。
+- ⚠️ **新 dev 起于 2.33.3 / versionCode 375**，不含 2.34.x。要那批功能先从 dev 上 `git merge 2.34.2`；且发版前 **versionCode 必须提到 379 以上**（手机上已是 378），否则装不上。
+- 发布（用户说「发布」才做）：推 dev → `git switch master && git pull --rebase origin master` → `merge --no-ff dev` → 推 master → `git tag -a vX.Y.Z && git push origin vX.Y.Z` → 等 CI → 校验 Release/update.json/README → pull bot 提交 → 回 dev `merge origin/master` → 推 dev。
+- 推 master/dev **不触发 CI**（workflow 只听 `push: tags:["v*"]` + `workflow_dispatch`）；`publish-github-release` 负责构建、apksigner 校验、发 Release、回写 update.json/README（目标分支 master），密钥 secret `TVBOX_KEYSTORE_BASE64`。
+- ⚠️ 装了 2.34.2 及更早版本的设备仍在请求旧的 `.../main/update.json`，那个分支已删 → 应用内更新检测会失败，需手动装一次新版。
 - **发版前必须先写 `更新记录.md` 的 `### <版本> — 日期` 段落**（`scripts/sync_release_metadata.sh` 靠它抽 changelog，条目以 `- ` 开头）。
 - 版本号在 dev 就改：feat→MINOR、fix→PATCH，versionCode 每次 +1 绝不复用。
 - 推 GitHub：① `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`（否则 502）；② `git -c http.version=HTTP/1.1 push`，失败隔 8s 重试；③ 查 CI 用匿名 `curl api.github.com/repos/vteovi/TVBoxOS-Mobile/actions/runs`。
 - ⚠️ 全局 gitconfig 有 `url."https://gh-proxy.com/https://github.com/".insteadOf`（为加速 fetch）：**push 会报 `No anonymous write access`**。推前 `--unset-all`、推后 `--add` 恢复；别让带 unset 的命令被 timeout 杀掉。fetch 走代理正常。
-- `github.com:443` 被 TLS 阻断时（api 正常）用 `scripts/push_via_api.py`（Git Data API 重放 blob→tree→commit→移 ref）；代价是时间归一化成 UTC、**commit sha 必变**，推完 `git fetch` + `reset --hard origin/<br>` + `fetch --tags --force` 对齐。
-- 读远端文件别用 raw.githubusercontent.com（代理 502），用 `GET /repos/.../contents/<file>?ref=main` + `Accept: application/vnd.github.raw`。
+- `github.com:443` 被 TLS 阻断时（api 正常）用 **`scripts/api_push_branches.py <远端公共父sha> <分支>=<本地tip> ...`**（本轮新写的通用版：用 base_tree 只上传变化文件、自动建/更新 ref，能一次推多个分支）；保留的 `push_via_api.py` 是硬编码某次提交的一次性旧脚本。本仓库重放后 **sha 与本地完全一致**（author/committer 时间被原样保留），无需 reset 对齐；换别的仓库若 sha 变了再 `fetch` + `reset --hard origin/<br>`。
+- 读远端文件别用 raw.githubusercontent.com（代理 502），用 `GET /repos/.../contents/<file>?ref=master` + `Accept: application/vnd.github.raw`。
 
 ## 环境 / 构建 / 签名
 - 仓库 `D:/WorkBuddy/TVBoxOS-Mobile`（另有 `D:/GitHub/...`，别改错）；`applicationId=com.github.tvbox.osc.mobile`；`local.properties` 的 `sdk.dir=C:\Android\Sdk`。
