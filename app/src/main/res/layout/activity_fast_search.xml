@@ -18,11 +18,6 @@
         android:layout_marginBottom="10dp"
         >
 
-        <ImageView
-            android:id="@+id/iv_back"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/bar_arrows_left_black"/>
         <com.github.tvbox.osc.ui.widget.ClearEditText
             android:id="@+id/et_search"
             android:layout_width="0dp"
@@ -140,7 +135,8 @@
     <RelativeLayout
         android:id="@+id/llSearchResult"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="horizontal"
         android:visibility="gone"
         tools:visibility="visible">
@@ -200,4 +196,9 @@
 
         </LinearLayout>
     </RelativeLayout>
+
+    <!-- 搜索页现在是导航栏的一个分栏，底部保留导航栏，随时可以切到首页/收藏/订阅/我的 -->
+    <include
+        android:id="@+id/bottom_nav"
+        layout="@layout/include_bottom_navigation" />
 </LinearLayout>

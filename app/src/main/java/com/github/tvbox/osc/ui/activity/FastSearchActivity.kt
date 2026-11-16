@@ -1,7 +1,9 @@
 package com.github.tvbox.osc.ui.activity
 
 import android.content.DialogInterface
+import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextUtils
@@ -47,6 +49,8 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.android.material.navigation.NavigationBarView
+import com.google.android.material.navigationrail.NavigationRailView
 import com.lxj.xpopup.XPopup
 import com.lxj.xpopup.core.BasePopupView
 import com.lxj.xpopup.interfaces.OnSelectListener
@@ -85,7 +89,8 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     private var resultVods = HashMap<String, MutableList<Movie.Video>>()
     private var pauseRunnable: MutableList<Runnable>? = null
     private var mSearchSuggestionsDialog: SearchSuggestionsDialog? = null
-    private var entryKeyboardShown = false
+    /** 在导航栏点了「首页/我的」后要落到哪个分栏，finish() 时交回 MainActivity */
+    private var destinationAfterFinish: Int? = null
     override fun init() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         initView()
@@ -94,12 +99,11 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         initHistorySearch()
         // 热门搜索
         hotWords
-        // 从首页搜索框进入(无 title)时, 自动聚焦输入框; 键盘弹出交由 onWindowFocusChanged + windowSoftInputMode=stateVisible 处理
-        if (intent == null || !intent.hasExtra("title")) {
-            mBinding.etSearch.post {
-                mBinding.etSearch.requestFocus()
-            }
-        }
+        // 搜索页现在是导航栏的分栏之一：底部（大屏左侧）导航栏选中「搜索」
+        initBottomNavigation()
+        bindKeyboardHidesNav()
+        // 进入本页不再自动弹软键盘（windowSoftInputMode 改成 stateHidden）：
+        // 一进来就要能看到底部导航栏和热门/历史搜索，点输入框时键盘再弹出，此时导航栏自动收起。
     }
 
     override fun onResume() {
@@ -115,16 +119,6 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         }
     }
 
-    // 窗口真正获得焦点后再弹键盘(此时 InputMethodManager 才会受理 showSoftInput, MIUI 上也可靠);
-    // 仅首次进入无 title 时弹一次, 避免从详情返回时再次强制弹出。
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !entryKeyboardShown && (intent == null || !intent.hasExtra("title"))) {
-            entryKeyboardShown = true
-            KeyboardUtils.showSoftInput(mBinding.etSearch)
-        }
-    }
-
     private fun initView() {
         mBinding.etSearch.setOnEditorActionListener { _: TextView?, actionId: Int, _: KeyEvent? ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -137,7 +131,6 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         mBinding.ivFilter.setOnClickListener { filterSearchSource() }
         mBinding.ivViewMode.setOnClickListener { toggleViewMode() }
         updateViewModeIcon()
-        mBinding.ivBack.setOnClickListener { finish() }
         mBinding.ivSearch.setOnClickListener {
             search(mBinding.etSearch.text.toString())
         }
@@ -191,6 +184,91 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         }
 
         setLoadSir(mBinding.llLayout)
+    }
+
+    /**
+     * 搜索页并入导航栏：选中「搜索」，并接上与收藏/订阅页一致的跳转逻辑。
+     *
+     * <p>不能用 ViewBinding 的 bottomNav 字段：大屏（layout-sw600dp）里 include 的是
+     * NavigationRailView，而 ViewBinding 以默认布局（BottomNavigationView）定类型，直接取会类型转换崩溃，
+     * 所以统一用 findViewById + 公共基类 NavigationBarView。
+     */
+    private fun initBottomNavigation() {
+        val bottomNavigation = findViewById<NavigationBarView>(R.id.bottom_nav) ?: return
+        bottomNavigation.selectedItemId = R.id.navigation_search
+        bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                // 当前就在搜索页，不重复跳
+                R.id.navigation_search -> true
+                // 首页/我的在 MainActivity 里，记下目标分栏后关掉本页，由 MainActivity 切过去
+                R.id.navigation_home,
+                R.id.navigation_dashboard -> {
+                    destinationAfterFinish = item.itemId
+                    finish()
+                    false
+                }
+                R.id.navigation_collect -> {
+                    startActivity(Intent(this, CollectActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
+                R.id.navigation_subscription -> {
+                    startActivity(Intent(this, SubscriptionActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
+                R.id.navigation_live -> {
+                    startActivity(Intent(this, LiveActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
+                R.id.navigation_setting -> {
+                    startActivity(Intent(this, SettingActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    false
+                }
+                else -> false
+            }
+        }
+    }
+
+    /**
+     * 软键盘弹出时把底部导航收起来，避免它被顶到键盘正上方、挡住实时搜索建议；
+     * 键盘收起后恢复。大屏的导航是左侧竖栏，不参与这个动作。
+     */
+    private fun bindKeyboardHidesNav() {
+        val bottomNavigation = findViewById<NavigationBarView>(R.id.bottom_nav) ?: return
+        if (bottomNavigation is NavigationRailView) return
+        val root = mBinding.root
+        root.viewTreeObserver.addOnGlobalLayoutListener {
+            if (isFinishing || isDestroyed) return@addOnGlobalLayoutListener
+            val screenHeight = root.rootView.height
+            if (screenHeight <= 0) return@addOnGlobalLayoutListener
+            val visibleFrame = Rect()
+            root.getWindowVisibleDisplayFrame(visibleFrame)
+            // 键盘占掉超过 15% 屏高才算"弹出了键盘"，避开状态栏等小波动
+            val keyboardShown = (screenHeight - visibleFrame.bottom) > screenHeight * 0.15f
+            val target = if (keyboardShown) View.GONE else View.VISIBLE
+            if (bottomNavigation.visibility != target) {
+                bottomNavigation.visibility = target
+            }
+        }
+    }
+
+    override fun finish() {
+        val destination = destinationAfterFinish
+        if (destination != null) {
+            val intent = Intent(this, MainActivity::class.java)
+            intent.putExtra(MainActivity.EXTRA_START_DESTINATION, destination)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            startActivity(intent)
+            overridePendingTransition(0, 0)
+        }
+        super.finish()
     }
 
     /**
