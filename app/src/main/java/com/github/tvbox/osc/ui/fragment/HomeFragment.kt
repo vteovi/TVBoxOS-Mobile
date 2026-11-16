@@ -38,6 +38,7 @@ import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.ui.dialog.TipDialog
 import com.github.tvbox.osc.util.DefaultConfig
 import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.Utils
 import com.github.tvbox.osc.viewmodel.SourceViewModel
 import com.lxj.xpopup.XPopup
 import com.orhanobut.hawk.Hawk
@@ -398,8 +399,10 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         val sites = ApiConfig.get().sourceBeanList
         if (sites.size > 0) {
             val dialog = SelectDialog<SourceBean>(requireActivity())
+            // 平板/大屏：加宽对话框并按宽度自动增加列数；手机竖屏保持 330dp / 2 列
+            dialog.setWide(Utils.isTablet(requireContext()))
             val tvRecyclerView = dialog.findViewById<TvRecyclerView>(R.id.list)
-            tvRecyclerView.setLayoutManager(V7GridLayoutManager(dialog.context, 2))
+            tvRecyclerView.setLayoutManager(V7GridLayoutManager(dialog.context, dialog.spanCount))
             dialog.setTip("请选择首页数据源")
             dialog.setAdapter(object : SelectDialogInterface<SourceBean?> {
                 override fun click(value: SourceBean?, pos: Int) {
