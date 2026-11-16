@@ -67,6 +67,11 @@ import java.util.concurrent.atomic.AtomicInteger
 class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatcher {
 
     companion object {
+        /** 热词展示条数 */
+        private const val HOT_WORD_MAX = 18
+        /** 豆瓣接口需要浏览器 UA，OkGo 默认 UA 会被拒 */
+        private const val HOT_WORD_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private var mCheckSources: HashMap<String, String>? = null
         fun setCheckedSourcesForSearch(checkedSources: HashMap<String, String>?) {
             mCheckSources = checkedSources
@@ -86,6 +91,16 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     private var pauseRunnable: MutableList<Runnable>? = null
     private var mSearchSuggestionsDialog: SearchSuggestionsDialog? = null
     private var entryKeyboardShown = false
+
+    /**
+     * 直接 inflate 绑定，不走 BaseVbActivity 的泛型反射。
+     * 反射版失败时异常被吞掉，最终只会得到 "mBinding has not been initialized" 这种没有信息量的崩溃。
+     */
+    override fun initVb() {
+        mBinding = ActivityFastSearchBinding.inflate(layoutInflater)
+        setContentView(mBinding.root)
+    }
+
     override fun init() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         initView()
@@ -93,7 +108,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         //历史搜索
         initHistorySearch()
         // 热门搜索
-        hotWords
+        loadHotWords()
         // 从首页搜索框进入(无 title)时, 自动聚焦输入框; 键盘弹出交由 onWindowFocusChanged + windowSoftInputMode=stateVisible 处理
         if (intent == null || !intent.hasExtra("title")) {
             mBinding.etSearch.post {
@@ -323,45 +338,66 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
 
     /**
      * 热门搜索
+     *
+     * 原实现只依赖腾讯视频 hot_search 接口，该接口已下线(返回 Not Found)，所以这里一直是空白。
+     * 现在先用内置词库随机填充，保证任何网络情况下都不空；再异步拉取豆瓣热门影视名做增强，
+     * 成功则覆盖成实时热词，失败静默保留内置词。
      */
-    private val hotWords: Unit
-        get() {
-            // 加载热词
-            OkGo.get<String>("https://node.video.qq.com/x/api/hot_search")
-                .params("channdlId", "0")
-                .params("_", System.currentTimeMillis())
+    private fun loadHotWords() {
+        renderHotWords(buildDefaultHotWords())
+        fetchOnlineHotWords()
+    }
+
+    /** 内置词库随机取 [HOT_WORD_MAX] 条，避免每次进入顺序都一样 */
+    private fun buildDefaultHotWords(): List<String> {
+        val all = resources.getStringArray(R.array.default_hot_search_words)
+            .filter { it.isNotBlank() }
+            .toMutableList()
+        all.shuffle()
+        return if (all.size > HOT_WORD_MAX) all.subList(0, HOT_WORD_MAX) else all
+    }
+
+    private fun renderHotWords(words: List<String>) {
+        if (words.isEmpty() || isFinishing || isDestroyed) return
+        mBinding.flHot.adapter = object : TagAdapter<String?>(ArrayList<String?>(words)) {
+            override fun getView(parent: FlowLayout, position: Int, s: String?): View {
+                val tv: TextView = LayoutInflater.from(this@FastSearchActivity)
+                    .inflate(R.layout.item_search_word_hot, mBinding.flHot, false) as TextView
+                tv.text = s
+                return tv
+            }
+        }
+        mBinding.flHot.setOnTagClickListener { _: View?, position: Int, _: FlowLayout? ->
+            search(words[position])
+            true
+        }
+    }
+
+    /** 在线热词：豆瓣热门电影 + 热门剧集，谁先回来先顶上，全部失败则保留内置词 */
+    private fun fetchOnlineHotWords() {
+        val found = ArrayList<String>()
+        for (type in arrayOf("movie", "tv")) {
+            OkGo.get<String>("https://movie.douban.com/j/search_subjects")
+                .params("type", type)
+                .params("tag", "热门")
+                .params("page_limit", 12)
+                .params("page_start", 0)
+                .headers("User-Agent", HOT_WORD_UA)
                 .execute(object : AbsCallback<String?>() {
                     override fun onSuccess(response: com.lzy.okgo.model.Response<String?>) {
                         try {
-                            val hots = ArrayList<String>()
-                            val itemList =
-                                JsonParser.parseString(response.body()).asJsonObject["data"].asJsonObject["mapResult"].asJsonObject["0"].asJsonObject["listInfo"].asJsonArray
-                            //                            JsonArray itemList = JsonParser.parseString(response.body()).getAsJsonObject().get("data").getAsJsonArray();
-                            for (ele: JsonElement in itemList) {
-                                val obj = ele as JsonObject
-                                hots.add(obj["title"].asString.trim { it <= ' ' }
-                                    .replace("<|>|《|》|-".toRegex(), "").split(" ".toRegex())
-                                    .dropLastWhile { it.isEmpty() }
-                                    .toTypedArray()[0])
-                            }
-                            mBinding.flHot.adapter = object : TagAdapter<String?>(hots as List<String?>?) {
-                                override fun getView(
-                                    parent: FlowLayout,
-                                    position: Int,
-                                    s: String?
-                                ): View {
-                                    val tv: TextView =
-                                        LayoutInflater.from(this@FastSearchActivity).inflate(
-                                            R.layout.item_search_word_hot,
-                                            mBinding.flHot, false
-                                        ) as TextView
-                                    tv.text = s
-                                    return tv
+                            val subjects = JsonParser.parseString(response.body())
+                                .asJsonObject["subjects"].asJsonArray
+                            val merged = ArrayList<String>()
+                            synchronized(found) {
+                                for (ele: JsonElement in subjects) {
+                                    val word = cleanHotWord(ele.asJsonObject["title"].asString)
+                                    if (word.length in 2..14 && !found.contains(word)) found.add(word)
                                 }
+                                merged.addAll(found)
                             }
-                            mBinding.flHot.setOnTagClickListener { _: View?, position: Int, _: FlowLayout? ->
-                                search(hots.get(position))
-                                true
+                            if (merged.size >= 6) {
+                                runOnUiThread { renderHotWords(merged) }
                             }
                         } catch (th: Throwable) {
                             th.printStackTrace()
@@ -374,6 +410,15 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
                     }
                 })
         }
+    }
+
+    /** 去掉片名里的括号备注(如「某某(预告片)」)和修饰符号 */
+    private fun cleanHotWord(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        return raw.replace(Regex("""[（(\[【].*?[)）\]】]"""), "")
+            .replace(Regex("""[|《》<>"“”]"""), "")
+            .trim()
+    }
 
     /**
      * 联想搜索

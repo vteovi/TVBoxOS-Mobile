@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        内置热门搜索词(兜底)。
+        原先热词只依赖腾讯视频 hot_search 接口，该接口已下线，导致搜索页「热门搜索」一直空白。
+        这里放一批长期存在、各影视源基本都能搜到的高热度作品名，进入搜索页时随机取若干展示，
+        在线热词(豆瓣热门影视)拉取成功后再覆盖成实时数据。
+    -->
+    <string-array name="default_hot_search_words">
+        <item>庆余年</item>
+        <item>狂飙</item>
+        <item>三体</item>
+        <item>繁花</item>
+        <item>漫长的季节</item>
+        <item>甄嬛传</item>
+        <item>琅琊榜</item>
+        <item>亮剑</item>
+        <item>人民的名义</item>
+        <item>隐秘的角落</item>
+        <item>白夜追凶</item>
+        <item>长安十二时辰</item>
+        <item>流浪地球</item>
+        <item>满江红</item>
+        <item>孤注一掷</item>
+        <item>封神</item>
+        <item>热辣滚烫</item>
+        <item>飞驰人生</item>
+        <item>长安三万里</item>
+        <item>哪吒</item>
+        <item>蜘蛛侠</item>
+        <item>复仇者联盟</item>
+        <item>奥本海默</item>
+        <item>沙丘</item>
+        <item>疾速追杀</item>
+        <item>绝命毒师</item>
+        <item>权力的游戏</item>
+        <item>老友记</item>
+        <item>海贼王</item>
+        <item>火影忍者</item>
+        <item>进击的巨人</item>
+        <item>鬼灭之刃</item>
+        <item>名侦探柯南</item>
+        <item>灌篮高手</item>
+    </string-array>
+</resources>

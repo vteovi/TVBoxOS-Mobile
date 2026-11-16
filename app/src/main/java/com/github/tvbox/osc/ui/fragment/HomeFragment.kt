@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.view.Gravity
+import android.view.View
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentStatePagerAdapter
@@ -110,7 +111,12 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             refreshHomeSources()
             true
         }
-        mBinding.search.setOnClickListener {
+        // 手机布局：右下角浮动搜索按钮；平板/大屏布局（layout-sw600dp）：顶部右上角长条搜索框。
+        // 两个入口互斥存在，用安全调用 + findViewById 判空，避免另一套布局上 NPE。
+        mBinding.btnSearch?.setOnClickListener {
+            jumpActivity(FastSearchActivity::class.java)
+        }
+        mBinding.root.findViewById<View>(R.id.search)?.setOnClickListener {
             jumpActivity(FastSearchActivity::class.java)
         }
         setLoadSir(mBinding.contentLayout)
