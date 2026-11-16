@@ -85,17 +85,36 @@
     </LinearLayout>
 
     <!-- 搜索入口：右下角圆形浮动按钮，样式与「我的」页的直播圆形按钮一致 -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btn_search"
+    <!-- 右下角两个浮动入口：上面是搜索，下面是直播（与「我的」页直播按钮同款） -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_margin="20dp"
-        android:backgroundTint="@color/colorPrimary"
-        android:contentDescription="搜索"
-        android:src="@drawable/ic_search_24"
-        app:borderWidth="0dp"
-        app:tint="@android:color/white" />
+        android:orientation="vertical">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_search"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:backgroundTint="@color/colorPrimary"
+            android:contentDescription="搜索"
+            android:src="@drawable/ic_search_24"
+            app:borderWidth="0dp"
+            app:tint="@android:color/white" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_live"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="@color/colorPrimary"
+            android:contentDescription="直播"
+            android:src="@drawable/ic_live_tv_48"
+            app:borderWidth="0dp"
+            app:tint="@android:color/white" />
+
+    </LinearLayout>
 
 </RelativeLayout>
