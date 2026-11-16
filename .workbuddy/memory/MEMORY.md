@@ -29,8 +29,6 @@
 - **LoadSir 1.3.8**：`setupSuccessLayout()` 设 INVISIBLE，必须真走 `showSuccess()`；外层别再包状态缓存。
 - `GONE`→`VISIBLE` 的 RecyclerView 常被量成 0 尺寸且 `requestLayout()` 无效 → 用 `INVISIBLE` + 强制重排（v2.33.3 选集空白）。
 - `DslTabLayout.currentItemIndex` 重建期是 -1 → 取当前 tab 兜底读 `ViewPager.currentItem`，`onBackPressed` 用 `getOrNull()`。
-- `FragmentStatePagerAdapter` 回来复用实例、`init()` 不重跑 → 观察者要在 `onCreate` 重挂。
-- 首页后台刷新只写缓存不碰 adapter；大屏一屏 >20 条 LoadMore 不触发（`autoFillViewport()` 补页）。
 - 异步回调判 `isFinishing()||isDestroyed()`；Android14+ 动态广播需 EXPORTED，PendingIntent 需 IMMUTABLE。
 - 搜索热词：腾讯 hot_search **已下线** → 内置 `arrays.xml` 兜底 + 豆瓣 `j/search_subjects` 增强。
 
