@@ -496,6 +496,12 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
                     finish()
                     false
                 }
+                // 搜索是导航栏里的纯按钮: 不切页、不结束当前页, 返回时还回到订阅
+                R.id.navigation_search -> {
+                    startActivity(Intent(this, FastSearchActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    false
+                }
                 R.id.navigation_live -> {
                     startActivity(Intent(this, LiveActivity::class.java))
                     overridePendingTransition(0, 0)

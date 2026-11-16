@@ -306,6 +306,11 @@ public class LiveActivity extends BaseActivity {
                 finish();
                 return false;
             }
+            // 搜索是导航栏里的纯按钮: 不切页、不结束当前页, 返回时还回到直播
+            if (itemId == R.id.navigation_search) {
+                startActivity(new Intent(this, FastSearchActivity.class));
+                return false;
+            }
             return itemId == R.id.navigation_dashboard;
         });
     }
