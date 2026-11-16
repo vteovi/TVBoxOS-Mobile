@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     平板/大屏（sw600dp）专用首页布局：
-    屏幕够宽，顶部保留右上角的长条搜索框，右下角不再放浮动搜索按钮。
-    注意：ViewBinding 以默认布局（layout/fragment_home.xml）决定字段类型，
-    所以这里的 search 只能通过 findViewById 访问，不能写 mBinding.search。
+    顶部是「数据源胶囊按钮 + 搜索框」，搜索框宽度用 weight 跟着屏幕伸缩（与手机布局一致），
+    右下角不再放浮动搜索按钮。
+    注意：两套布局现在都有 search，HomeFragment 里统一用 findViewById 访问（保留判空）；
+    浮动按钮 btn_search 只存在于默认布局，所以那边用 mBinding.btnSearch? 判空调用。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -55,17 +56,14 @@
 
         </LinearLayout>
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
-        <!-- 大屏保留右上角搜索框 -->
+        <!-- 大屏搜索框：与手机一致，宽度用 weight 跟着屏幕伸缩 -->
         <TextView
             android:id="@+id/search"
-            android:layout_width="280dp"
+            android:layout_width="0dp"
             android:layout_height="36dp"
-            android:layout_marginLeft="16dp"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="6dp"
             android:background="@drawable/bg_search_box"
             android:gravity="center_vertical"
             android:paddingHorizontal="12dp"
