@@ -17,9 +17,9 @@
 
 ## 布局/架构
 - 首页两套：`layout/fragment_home.xml`（手机：顶栏数据源胶囊按钮 + 右下浮动搜索 FAB `btn_search`）、`layout-sw600dp/fragment_home.xml`（平板：顶栏 + 右上 280dp 搜索框 `search`，无 FAB）→ `mBinding.btnSearch?.` / `mBinding.root.findViewById<View>(R.id.search)?`（Fragment 无 findViewById）。
-- ViewBinding 以默认布局定类型：sw600dp 独有控件用 `findViewById`+判空；两套布局同名 id 必须同类型。
+- ViewBinding 按默认布局定类型：变体独有控件用 `findViewById`+判空。**「mBinding 未初始化」= 构建残留了别的分支的 layout 变体**（`aapt2 dump resources` 查、clean 重建）。
 - 底部导航 58dp / 图标 24dp / **纯白背景勿动**；sw600dp 用 `NavigationRailView`，代码统一 `NavigationBarView`；菜单 `menu/` 与 `menu-sw600dp/` 是两份文件，改菜单要同步。
-- `MainActivity`=ViewPager2(Home/My)；首页分栏 `HomeFragment`（旧 ViewPager + `DslTabLayout`）；直播/订阅独立 Activity；搜索页 `FastSearchActivity`（已并入底部导航，`EXTRA_START_DESTINATION` 回跳）。
+- `MainActivity`=ViewPager2(Home/My)；首页分栏 `HomeFragment`（旧 ViewPager + `DslTabLayout`）；直播/订阅独立 Activity；搜索页 `FastSearchActivity` 已并入底部导航。
 - `DetailActivity`：手机点标题弹 `VideoDetailDialog`，`Utils.isTablet()` 时不弹、信息在右栏 → 大屏要单独入口（`ext_copy_link` 共用 `copyCurrentVodUrl()`）。
 
 ## 高频坑
@@ -29,11 +29,11 @@
 - `GONE`→`VISIBLE` 的 RecyclerView 常被量成 0 尺寸且 `requestLayout()` 无效 → 用 `INVISIBLE` + 强制重排（v2.33.3 选集空白）。
 - `DslTabLayout.currentItemIndex` 重建期是 -1 → 取当前 tab 兜底读 `ViewPager.currentItem`，`onBackPressed` 用 `getOrNull()`（v2.32.9）。
 - `FragmentStatePagerAdapter` 回来复用实例、`init()` 不重跑 → 观察者要在 `onCreate` 重挂。
-- 首页后台刷新只写缓存不碰 adapter（整表替换会闪+跳位）；大屏多列一屏 >20 条时 LoadMore 不触发，靠 `GridFragment.autoFillViewport()` 补页。
+- 首页后台刷新只写缓存不碰 adapter；大屏一屏 >20 条 LoadMore 不触发（`autoFillViewport()` 补页）。
 - 异步回调判 `isFinishing()||isDestroyed()`；Android14+ 动态广播需 EXPORTED，PendingIntent 需 IMMUTABLE。
-- 搜索热词：腾讯 `node.video.qq.com/x/api/hot_search` **已下线** → 内置 `arrays.xml` 兜底 + 豆瓣 `j/search_subjects` 增强。
+- 搜索热词：腾讯 hot_search **已下线** → 内置 `arrays.xml` 兜底 + 豆瓣 `j/search_subjects` 增强。
 
 ## 用户偏好
-- 中文沟通；改完自动本地 `git add + commit` 到 dev（不自动 push），汇报 commit id。
+- 中文沟通；改完本地 commit 到 dev（不 push），报 commit id。
 - 「发布」才推 master + tag；构建自行完成，产物 `cp` 到项目根目录供其装机验证。
 - 介意「读取所有文件」类权限；导航栏白条搁置。
