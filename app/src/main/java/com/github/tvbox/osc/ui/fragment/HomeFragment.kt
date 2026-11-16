@@ -110,7 +110,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             refreshHomeSources()
             true
         }
-        mBinding.search.setOnClickListener {
+        mBinding.btnSearch.setOnClickListener {
             jumpActivity(FastSearchActivity::class.java)
         }
         setLoadSir(mBinding.contentLayout)
