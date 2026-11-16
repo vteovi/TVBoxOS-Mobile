@@ -78,3 +78,5 @@
 - 中文沟通；改完自动 `git add + commit` 到 **dev**（本地快照，不自动 push），汇报 commit id；「发布」时才推 main + 打 tag。
 - 介意「存储权限/能读所有文件」类权限，能删就删；系统导航栏白条搁置勿主动改；外部播放无需二级列表。
 - 助手可自行构建校验（产物 `app/build/outputs/apk/arm64v8/<type>/`），用户仍习惯自己装包验证。
+- **每次构建出 APK 后，顺手 `cp` 一份到项目根目录** `/d/WorkBuddy/TVBoxOS-Mobile/`（文件名原样，带版本号），方便他直接拿去装；根目录 `*.apk` 已被 `.gitignore` 忽略，不会误提交。
+- 「发布」时推的是 **master**（旧的 main 已删），不再说「推 main」。
