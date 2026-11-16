@@ -92,7 +92,7 @@
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="44dp"
+        android:layout_marginBottom="88dp"
         android:backgroundTint="@color/colorPrimary"
         android:contentDescription="搜索"
         android:src="@drawable/ic_search_24"
