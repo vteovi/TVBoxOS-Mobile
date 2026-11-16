@@ -50,7 +50,7 @@
 
 ## 主题 / 颜色
 - ⚠️ 取主题色别用 `ColorUtils.getColor()`（走 Application 的 Resources，AppCompat 深浅覆盖只写在 Activity 上 → 「系统深色+软件浅色」白底白字，2.29.1）。统一 `Utils.getThemeColor(context, resId)`；`Utils.isDarkTheme()` 先看 `AppCompatDelegate.getDefaultNightMode()`，仅「跟随系统」时读 uiMode。
-- 深色覆盖在 `values-night/colors.xml`（无 drawable-night），背景纯黑 #000000；`text_foreground` 浅 #050505/深 #FFFFFF，`text_sub_foreground` 浅 #787878/深 #AFAFAF。底部导航白色勿动。
+- 深色覆盖在 `values-night/colors.xml`（无 drawable-night），背景纯黑 #000000；新增颜色若只在 `values/` 定义、深色下会沿用浅色值（如 `search_box_bg`/`source_button_*` 已补 night 覆盖）；`text_foreground` 浅 #050505/深 #FFFFFF，`text_sub_foreground` 浅 #787878/深 #AFAFAF。底部导航白色勿动。
 - 弹窗状态栏图标色：根因 `CustomDialogStyle` 的 `windowFullscreen=true` + `FLAG_DIM_BEHIND`，运行时改 flag 无效。解法 = 样式删 `windowFullscreen` + `BaseDialog.dimAmountBehind=0f` + show 后把宿主 Activity 同值双通道写一遍；改窗口参数要在 `super.show()` 前。
 
 ## LoadSir / 首页 / 数量统计

@@ -22,6 +22,9 @@
     <color name="text_sub_foreground">#787878</color>
     <color name="search_box_bg">#F2F3F5</color>
     <color name="search_box_stroke">#C8C8C8</color>
+    <!-- 首页顶部数据源切换按钮 -->
+    <color name="source_button_bg">#F2F3F5</color>
+    <color name="source_button_stroke">#C8C8C8</color>
     <color name="light_gray_color">#e6e6e6</color>
     <!--    警示黄色-->
     <color name="warn">#ffcb6b</color>
