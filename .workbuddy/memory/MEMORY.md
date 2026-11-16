@@ -27,6 +27,7 @@
 
 ## 架构速查
 - `MainActivity`(Kt) 是 ViewPager2 两页 Home/My；`HomeFragment` 内旧 ViewPager+DslTabLayout = 首页分栏（`FragmentStatePagerAdapter`，offscreen 1）。直播/订阅是独立 Activity。
+- 首页 `layout/fragment_home.xml`（手机：顶栏数据源胶囊按钮 + 右下角浮动搜索 FAB）与 `layout-sw600dp/fragment_home.xml`（平板：顶栏数据源胶囊按钮 + 右上角 280dp 搜索框、无 FAB）是两套；`btn_search` 只存在于默认布局，`search` 只存在于 sw600dp → 代码里一个用 `mBinding.btnSearch?.`、另一个用 `mBinding.root.findViewById<View>(R.id.search)?`（**Fragment 本身没有 findViewById**，必须经 root/view）。
 - 底部导航 `include_bottom_navigation.xml`：高 58dp、图标 24dp、**背景纯白 #FFFFFF 勿动**；item 高度 <~56dp 图标文字必重叠。sw600dp 用 `NavigationRailView`(88dp)，代码里 `bottom_nav` 统一强转公共基类 `NavigationBarView`。sw600dp 触发 = 较短边 ≥600dp。
 - 动态 dex(csp.jar/js.jar)：SDK≥34 用 `InMemoryDexClassLoader`（需 `JarResourceClassLoader` 作 parent 才能读资源），SDK<34 用 `DexClassLoader+setReadOnly()`。dex 失败 = 订阅不可用。
 - `spThreadPool` 是单线程池，任务里别再提交它自己（自锁）。`SourceViewModel.getSort(key)` 经 `ApiConfig.getSource(key)` 取 `SourceBean` **必须判空**。

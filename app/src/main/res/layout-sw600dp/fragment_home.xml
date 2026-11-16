@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    平板/大屏（sw600dp）专用首页布局：
+    屏幕够宽，顶部保留右上角的长条搜索框，右下角不再放浮动搜索按钮。
+    注意：ViewBinding 以默认布局（layout/fragment_home.xml）决定字段类型，
+    所以这里的 search 只能通过 findViewById 访问，不能写 mBinding.search。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/topLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="44dp"
+        android:paddingHorizontal="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- 数据源切换：做成胶囊按钮，文字居中 -->
+        <LinearLayout
+            android:id="@+id/nameContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_source_button"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
+
+            <TextView
+                android:id="@+id/tvName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxWidth="200dp"
+                android:text="@string/app_name"
+                android:textAlignment="gravity"
+                android:textColor="@color/text_foreground"
+                android:textSize="16dp"
+                android:drawablePadding="4dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:drawableRight="@drawable/ic_arrow_down"
+                android:ellipsize="marquee"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                />
+
+        </LinearLayout>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- 大屏保留右上角搜索框 -->
+        <TextView
+            android:id="@+id/search"
+            android:layout_width="280dp"
+            android:layout_height="36dp"
+            android:layout_marginLeft="16dp"
+            android:background="@drawable/bg_search_box"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:hint="搜索"
+            android:textColorHint="@color/text_sub_foreground"
+            android:drawableTint="@color/text_sub_foreground"
+            android:drawableRight="@drawable/ic_search_18" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/contentLayout"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <com.angcyo.tablayout.DslTabLayout
+            android:id="@+id/tab_layout"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            app:tab_indicator_drawable="@drawable/indicator_flash"
+            app:tab_indicator_enable_flash="true"
+            app:tab_indicator_enable_flash_clip="true"
+            app:tab_indicator_height="5dp"
+            app:tab_indicator_width="16dp"
+            app:tab_select_color="@color/colorPrimary"
+            app:tab_text_min_size="14dp"
+            app:tab_text_max_size="16dp"
+            app:tab_enable_gradient_text_size="false"
+            android:layout_marginTop="6dp"
+            >
+
+        </com.angcyo.tablayout.DslTabLayout>
+
+        <androidx.viewpager.widget.ViewPager
+            android:id="@+id/mViewPager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp"
+            />
+    </LinearLayout>
+
+</LinearLayout>
