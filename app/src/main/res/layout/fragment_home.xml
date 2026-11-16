@@ -44,21 +44,6 @@
 
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/search"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_search_box"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="12sp"
-            android:hint="搜索"
-            android:textColorHint="@color/text_sub_foreground"
-            android:drawableTint="@color/text_sub_foreground"
-            android:layout_marginLeft="10dp"
-            android:layout_marginRight="6dp"
-            android:drawableRight="@drawable/ic_search_18"/>
-
     </LinearLayout>
 
     <LinearLayout

@@ -20,9 +20,15 @@
         android:title="订阅"/>
 
     <item
+        android:id="@+id/navigation_search"
+        android:icon="@drawable/ic_nav_search"
+        android:orderInCategory="3"
+        android:title="搜索"/>
+
+    <item
         android:id="@+id/navigation_dashboard"
         android:icon="@drawable/ic_nav_my"
-        android:orderInCategory="3"
+        android:orderInCategory="4"
         android:title="我的"/>
 
 </menu>

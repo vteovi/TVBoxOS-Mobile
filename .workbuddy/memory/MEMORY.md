@@ -26,7 +26,7 @@
 
 ## 架构速查
 - `MainActivity`(Kt) 是 ViewPager2 两页 Home/My；`HomeFragment` 内旧 ViewPager+DslTabLayout = 首页分栏（`FragmentStatePagerAdapter`，offscreen 1）。直播/订阅是独立 Activity。
-- 底部导航 `include_bottom_navigation.xml`：高 58dp、图标 24dp、**背景纯白 #FFFFFF 勿动**；item 高度 <~56dp 图标文字必重叠。sw600dp 用 `NavigationRailView`(88dp)，代码里 `bottom_nav` 统一强转公共基类 `NavigationBarView`。sw600dp 触发 = 较短边 ≥600dp。
+- 底部导航 `include_bottom_navigation.xml`：高 58dp、图标 24dp、**背景纯白 #FFFFFF 勿动**，菜单现在 5 项（首页/收藏/订阅/搜索/我的，搜索项 `navigation_search` 只是按钮、返回 false 不改选中）；item 高度 <~56dp 图标文字必重叠。sw600dp 用 `NavigationRailView`(88dp)，代码里 `bottom_nav` 统一强转公共基类 `NavigationBarView`。sw600dp 触发 = 较短边 ≥600dp。
 - 动态 dex(csp.jar/js.jar)：SDK≥34 用 `InMemoryDexClassLoader`（需 `JarResourceClassLoader` 作 parent 才能读资源），SDK<34 用 `DexClassLoader+setReadOnly()`。dex 失败 = 订阅不可用。
 - `spThreadPool` 是单线程池，任务里别再提交它自己（自锁）。`SourceViewModel.getSort(key)` 经 `ApiConfig.getSource(key)` 取 `SourceBean` **必须判空**。
 - 异步回调晚于 Activity 销毁 → NPE：子线程回主线程改 View/播放器前判 `isFinishing()||isDestroyed()`，onDestroy 取消请求。Android14+ 动态广播需 `RECEIVER_EXPORTED/NOT_EXPORTED`，PendingIntent 需 `FLAG_IMMUTABLE`。
@@ -71,7 +71,7 @@
 
 ## 版本速查
 - 2.29.0 内置重置；2.30.0 收藏页数量；2.31.0 设备同步合并收藏/历史；**2.32.0 = 订阅源也合并的内容基线**；2.32.7 收藏页数量补齐；2.32.8 详情页销毁 NPE；2.32.9 返回键 -1 越界；**2.33.0/2.33.1 播放页补「复制视频链接」（大屏图标 + 手机图标，同一 id/同一逻辑）；2.33.2/2.33.3 修退出全屏后选集区空白（根因: 列表 GONE→VISIBLE 后被量成 0 尺寸, 改 INVISIBLE + 强制重排）**。
-- **2.33.3 已发布（2026-11-14，tag v2.33.3，dev/main 同点 9352586）；versionCode 已到 375，必须一直递增，绝不能再退回 362 区间。**
+- **2.33.3 已发布（2026-11-14，tag v2.33.3）；2.34.0 起首页顶部搜索框挪到导航栏「搜索」项；versionCode 已到 376，必须一直递增，绝不能再退回 362 区间。**
 
 ## 用户偏好
 - 中文沟通；改完自动 `git add + commit` 到 **dev**（本地快照，不自动 push），汇报 commit id；「发布」时才推 main + 打 tag。

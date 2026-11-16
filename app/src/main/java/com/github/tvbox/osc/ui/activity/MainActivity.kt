@@ -86,6 +86,12 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
                     overridePendingTransition(0, 0)
                     false
                 }
+                // 搜索做成导航栏里的按钮：点了直接开搜索页，不改变当前选中项（返回 false）
+                R.id.navigation_search -> {
+                    jumpActivity(FastSearchActivity::class.java)
+                    overridePendingTransition(0, 0)
+                    false
+                }
                 R.id.navigation_live -> {
                     jumpActivity(LiveActivity::class.java)
                     overridePendingTransition(0, 0)
@@ -134,6 +140,10 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
             }
             R.id.navigation_subscription -> {
                 jumpActivity(SubscriptionActivity::class.java)
+                overridePendingTransition(0, 0)
+            }
+            R.id.navigation_search -> {
+                jumpActivity(FastSearchActivity::class.java)
                 overridePendingTransition(0, 0)
             }
             R.id.navigation_live -> {
