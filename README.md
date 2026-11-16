@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://github.com/vteovi/TVBoxOS-Mobile/blob/main/website/tvbox/images/logo.png?raw=true" width="140px" />
+<img src="https://github.com/vteovi/TVBoxOS-Mobile/blob/master/website/tvbox/images/logo.png?raw=true" width="140px" />
 
 <h1>TVBoxOS-Mobile</h1>
 
@@ -110,7 +110,7 @@ TVBoxOS-Mobile/
 
 ### 方式一：GitHub Actions（推荐，无需本地环境）
 
-1. Fork 本仓库，`Actions` → `Build APK` → `Run workflow`；或直接 push 到 `main`。
+1. Fork 本仓库，`Actions` → `Build APK` → `Run workflow`；或直接 push 到 `master`。
 2. 运行结束后在该次运行的 `Artifacts` 里下载，一次产出两个架构：
    `TVBox-Mobile-v<版本>-arm64v8.apk`、`TVBox-Mobile-v<版本>-armv7a.apk`。
 3. 发布正式版：改好 `app/build.gradle` 里的 `versionName` / `versionCode` 并提交，然后打同名标签推送：

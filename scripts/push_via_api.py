@@ -180,7 +180,7 @@ def main():
 
     api("PATCH", "/git/refs/heads/dev", {"sha": dev_new, "force": False})
     print("dev ref updated", flush=True)
-    api("PATCH", "/git/refs/heads/main", {"sha": main_new, "force": False})
+    api("PATCH", "/git/refs/heads/master", {"sha": main_new, "force": False})
     print("main ref updated", flush=True)
 
     tagger_date = git("for-each-ref", "--format=%(taggerdate:iso-strict)", "refs/tags/v2.32.7").strip()

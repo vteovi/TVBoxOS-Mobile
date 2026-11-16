@@ -43,7 +43,7 @@ public class AboutDialog extends BottomPopupView {
     private static final String PROJECT_URL = "https://github.com/vteovi/TVBoxOS-Mobile";
     /** 更新清单：与 PROJECT_URL 同一仓库的 main 分支 */
     private static final String RAW_UPDATE_JSON =
-            "https://raw.githubusercontent.com/vteovi/TVBoxOS-Mobile/main/update.json";
+            "https://raw.githubusercontent.com/vteovi/TVBoxOS-Mobile/master/update.json";
 
     /** GitHub 访问加速前缀；加速站会失效，换线路时只改这里即可 */
     private static final String[] ACCEL_PREFIXES = {

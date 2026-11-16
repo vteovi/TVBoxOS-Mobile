@@ -3,7 +3,7 @@ name: Build APK
 # 在线打包（当前只用于发版，日常不再自动构建）
 #   打 v* 标签  -> 产出正式包并自动发布 Release + 更新 update.json
 #   手动运行    -> 需要时在 Actions 页面点 "Run workflow"
-# 说明：推送 main 不再触发构建；日常开发在本地构建，只有发版时才走这里。
+# 说明：推送 master 不再触发构建；日常开发在本地构建，只有发版时才走这里。
 on:
   push:
     tags: ["v*"]
@@ -154,7 +154,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
-          # 发布任务最后要把 update.json / README.md 提交回 main，需要完整历史才能切分支与 rebase
+          # 发布任务最后要把 update.json / README.md 提交回 master，需要完整历史才能切分支与 rebase
           fetch-depth: 0
 
       - name: Set up JDK 17
@@ -242,29 +242,29 @@ jobs:
         run: |
           set -uo pipefail
           # 上一步已在 tag 的树上生成好 update.json / README.md（含本次版本的 changelog），
-          # 这里只负责把它们带到 main；不再在 main 的树上重新生成，避免 tag 提交不在 main 上时抽不到 changelog。
+          # 这里只负责把它们带到 master；不再在 master 的树上重新生成，避免 tag 提交不在 master 上时抽不到 changelog。
           mkdir -p /tmp/relmeta
           cp update.json README.md /tmp/relmeta/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -- update.json README.md
-          git fetch origin main
-          git checkout -B main origin/main
+          git fetch origin master
+          git checkout -B master origin/master
           cp /tmp/relmeta/update.json /tmp/relmeta/README.md .
           if git diff --quiet -- update.json README.md; then
-            echo "update.json / README.md 已经与 main 一致，无需提交"
+            echo "update.json / README.md 已经与 master 一致，无需提交"
             exit 0
           fi
           git add update.json README.md
           git commit -m "chore: sync release metadata for ${TAG_NAME} [skip ci]"
           for attempt in 1 2 3; do
-            if git push origin HEAD:main 2>&1; then
-              echo "已把 update.json / README.md 回写到 main"
+            if git push origin HEAD:master 2>&1; then
+              echo "已把 update.json / README.md 回写到 master"
               exit 0
             fi
-            echo "::warning::第 ${attempt} 次推送到 main 失败，稍后重试"
+            echo "::warning::第 ${attempt} 次推送到 master 失败，稍后重试"
             sleep 1
-            git pull --rebase origin main 2>&1 || true
+            git pull --rebase origin master 2>&1 || true
           done
-          echo "::error::连续 3 次推送失败，update.json 没能回写到 main（Release 本身已发布，可手动提交这两个文件）"
+          echo "::error::连续 3 次推送失败，update.json 没能回写到 master（Release 本身已发布，可手动提交这两个文件）"
           exit 1
