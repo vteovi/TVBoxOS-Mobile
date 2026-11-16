@@ -53,23 +53,22 @@
 
             </LinearLayout>
 
-        </LinearLayout>
+            <!-- 搜索入口：紧跟在数据源按钮后面，宽度用 weight 占满剩余空间，随屏幕宽窄自动拉伸 -->
+            <TextView
+                android:id="@+id/search"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/bg_search_box"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:hint="搜索"
+                android:textColorHint="@color/text_sub_foreground"
+                android:drawableTint="@color/text_sub_foreground"
+                android:drawableRight="@drawable/ic_search_18" />
 
-        <!-- 搜索入口：右上角搜索框，宽度用 weight 自适应（随屏幕宽窄自动拉长/缩短）；右下角浮动按钮同时保留 -->
-        <TextView
-            android:id="@+id/search"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="6dp"
-            android:background="@drawable/bg_search_box"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="12dp"
-            android:hint="搜索"
-            android:textColorHint="@color/text_sub_foreground"
-            android:drawableTint="@color/text_sub_foreground"
-            android:drawableRight="@drawable/ic_search_18" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/contentLayout"
