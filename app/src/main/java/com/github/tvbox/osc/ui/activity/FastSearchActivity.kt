@@ -91,6 +91,16 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     private var pauseRunnable: MutableList<Runnable>? = null
     private var mSearchSuggestionsDialog: SearchSuggestionsDialog? = null
     private var entryKeyboardShown = false
+
+    /**
+     * 直接 inflate 绑定，不走 BaseVbActivity 的泛型反射。
+     * 反射版失败时异常被吞掉，最终只会得到 "mBinding has not been initialized" 这种没有信息量的崩溃。
+     */
+    override fun initVb() {
+        mBinding = ActivityFastSearchBinding.inflate(layoutInflater)
+        setContentView(mBinding.root)
+    }
+
     override fun init() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         initView()

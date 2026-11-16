@@ -24,7 +24,8 @@ abstract class BaseVbActivity<T : ViewBinding> : BaseActivity() {
             mBinding = inflate.invoke(null, layoutInflater) as T
             setContentView(mBinding.root)
         } catch (e: Exception) {
-            e.printStackTrace()
+            // 不能吞掉：否则 mBinding 保持未初始化，崩溃点会误导成 "lateinit property mBinding has not been initialized"
+            throw RuntimeException("ViewBinding inflate failed: $cls", e)
         }
     }
 }
