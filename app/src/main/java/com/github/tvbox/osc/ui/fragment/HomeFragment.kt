@@ -78,8 +78,9 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
      * 顶部tabs分类集合,用于渲染tab页,每个tab对应fragment内的数据
      */
     private var mSortDataList: List<SortData> = ArrayList()
-    private var dataInitOk = false
-    private var jarInitOk = false
+    // jar 加载的回调在子线程，主线程要立刻看到结果，加 @Volatile
+    @Volatile private var dataInitOk = false
+    @Volatile private var jarInitOk = false
 
     /** 分栏数据是否已经真的拿到过（占位/缓存渲染不算），用于判断是否还需要兜底重试 */
     private var sortDataReady = false
@@ -147,6 +148,18 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         initData()
     }
 
+    /**
+     * 当前内存里的站点列表是不是「当前订阅地址」解析出来的。
+     *
+     * <p>切换订阅后新配置要下载+解析，这几秒里 {@code ApiConfig} 里还是旧订阅的数据。
+     * 用它来判断要不要先等配置，避免把旧订阅的内容当成新订阅展示出来。
+     */
+    private fun configMatchesCurrentSubscription(): Boolean {
+        val want = Hawk.get(HawkConfig.API_URL, "")
+        if (want.isNullOrEmpty()) return true
+        return want == ApiConfig.get().loadedApiUrl
+    }
+
     private fun initViewModel() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
@@ -203,6 +216,17 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
     private fun initData() {
         val mainActivity = mActivity as MainActivity
         onlyConfigChanged = mainActivity.useCacheConfig
+
+        // 内存里的站点列表不是当前订阅解析出来的（刚切过订阅、新配置还没解析完）：
+        // 这时如果照常往下走，首页标签、站点推荐、聚合搜索用的都还是上一个订阅的源，
+        // 用户看到的就是「切了订阅还是旧内容」。等新配置解析完再渲染。
+        if (!configMatchesCurrentSubscription()) {
+            dataInitOk = false
+            jarInitOk = false
+            sortDataReady = false
+            loadConfig()
+            return
+        }
 
         val home = ApiConfig.get().homeSourceBean
         if (home != null && !home.name.isNullOrEmpty()) {

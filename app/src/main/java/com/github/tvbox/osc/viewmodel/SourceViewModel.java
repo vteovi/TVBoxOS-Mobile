@@ -126,12 +126,17 @@ public class SourceViewModel extends ViewModel {
                         @Override
                         public String call() throws Exception {
                             Spider sp = ApiConfig.get().getCSP(sourceBean);
+                            // jar 没加载起来时这里拿到的是 SpiderNull，homeContent 必然是空 ——
+                            // 打出来方便定位"只有主页一个标签"到底是蜘蛛没起来还是源站返回空
+                            LOG.i("getSort spider=" + (sp == null ? "null" : sp.getClass().getSimpleName())
+                                    + " source=" + sourceBean.getKey());
                             return sp.homeContent(true);
                         }
                     });
                     String sortJson = null;
                     try {
-                        sortJson = future.get(15, TimeUnit.SECONDS);
+                        // 首次要等 jar 加载/dex 优化（老机型上几秒到十几秒），给宽一点
+                        sortJson = future.get(25, TimeUnit.SECONDS);
                     } catch (TimeoutException e) {
                         e.printStackTrace();
                         future.cancel(true);
