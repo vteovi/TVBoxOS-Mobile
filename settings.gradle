@@ -1,7 +1,7 @@
 import org.gradle.api.initialization.resolve.RepositoriesMode
 
-// CI（GitHub Actions，CI=true）上阿里云镜像会返回 502 并把整个依赖解析带崩，
-// 所以镜像只在本地环境追加，CI 一律走官方源。
+// CI（GitHub Actions，CI=true）上阿里云公共镜像偶发 502，会拖垮整体依赖解析，
+// 所以公共镜像只在本地环境追加；但少量 jcenter 遗留库只有阿里云有，见下方 exclusiveContent。
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -23,17 +23,32 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        if (System.getenv("CI") == null) {
-            maven { url "https://maven.aliyun.com/repository/public" }
-            maven { url "https://maven.aliyun.com/repository/central" }
-            maven { url "https://maven.aliyun.com/repository/google" }
-        }
         // dlna-cast 里 cling 用的仓库
         maven {
             url 'http://4thline.org/m2'
             allowInsecureProtocol = true
         }
         maven { url "https://jitpack.io" }
+        if (System.getenv("CI") == null) {
+            maven { url "https://maven.aliyun.com/repository/public" }
+            maven { url "https://maven.aliyun.com/repository/central" }
+            maven { url "https://maven.aliyun.com/repository/google" }
+        }
+        // 这 4 个库是已关停 jcenter 的遗留坐标，jitpack / mavenCentral 均 404，
+        // 只有阿里云仓库还有；用 exclusiveContent 单独路由到阿里云 jcenter，
+        // 其余依赖不受影响（避免阿里云 502 拖垮整体解析）。
+        exclusiveContent {
+            forRepository {
+                maven { url "https://maven.aliyun.com/repository/jcenter" }
+                maven { url "https://maven.aliyun.com/repository/public" }
+            }
+            filter {
+                includeGroup "com.kingja.loadsir"
+                includeGroup "com.lzy.net"
+                includeGroup "com.owen"
+                includeGroup "com.hyman"
+            }
+        }
     }
 }
 
