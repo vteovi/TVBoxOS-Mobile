@@ -134,6 +134,15 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     private boolean seriesRebuildForcedThisCycle = false;
     public String vodId;
     public String sourceKey;
+    /**
+     * 列表页点海报时带过来的影片名。详情为空时用它直接去聚合搜索，
+     * 避免停在一片“暂无数据”的白页上（源站拿不到详情的情况，比如只认特定 UA 的接口）。
+     */
+    private String pendingTitle = "";
+    /**
+     * 空态自动跳搜索只做一次，防止详情回调重复触发时反复跳转
+     */
+    private boolean autoSearchedOnEmpty = false;
     private View seriesFlagFocus = null;
     private boolean isReverse;
     private String preFlag = "";
@@ -910,6 +919,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                 } else {
                     showEmpty();
                     mBinding.previewPlayer.setVisibility(View.GONE);
+                    autoSearchOnEmpty();
                 }
             }
         });
@@ -926,6 +936,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         Intent intent = getIntent();
         if (intent != null && intent.getExtras() != null) {
             Bundle bundle = intent.getExtras();
+            // 列表页点海报时带过来的片名，详情取不到时用它兜底去聚合搜索
+            pendingTitle = bundle.getString("title", "");
             loadDetail(bundle.getString("id", null), bundle.getString("sourceKey", ""));
         }
     }
@@ -940,6 +952,20 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
             isCollected = isVodCollect;
             updateCollectIcon();
         }
+    }
+
+    /**
+     * 详情为空时的兜底：当前数据源取不到详情（源站鉴权 / 接口变动），直接把片名交给聚合搜索，
+     * 去其它源里找同名影片，而不是停在一片“暂无数据”的白页上。
+     */
+    private void autoSearchOnEmpty() {
+        if (autoSearchedOnEmpty || TextUtils.isEmpty(pendingTitle)) return;
+        autoSearchedOnEmpty = true;
+        ToastUtils.showShort("当前数据源暂无详情，已为你聚合搜索");
+        Bundle bundle = new Bundle();
+        bundle.putString("title", pendingTitle);
+        jumpActivity(FastSearchActivity.class, bundle);
+        finish();
     }
 
     private void updateCollectIcon() {
