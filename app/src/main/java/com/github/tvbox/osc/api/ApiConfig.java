@@ -35,6 +35,7 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.io.FileInputStream;
@@ -318,28 +319,144 @@ public class ApiConfig {
     }
 
 
-    /** jar 下载与 dex 加载专用线程：这两步在老机型上要好几秒，绝不能占用主线程 */
-    private static final ExecutorService jarLoadExecutor = Executors.newSingleThreadExecutor();
+    /**
+     * jar 下载与 dex 加载专用线程池。
+     *
+     * <p>原来是 newSingleThreadExecutor：首页 initData 每次都会走一遍 loadJar
+     * （切源、重试、从后台回前台都会触发），而一次加载在老机型上要等十秒量级的 dex 优化，
+     * 后来的调用只能排在同一条队列里干等，表现出来就是「一直卡在加载中不动」。
+     *
+     * <p>改成 3 个线程后，不同 jar 的下载互不排队，某一次卡住也只占一个线程。
+     * dex 加载本身仍然串行（见 JarLoader.load 的锁），因为类加载器是整表替换，
+     * 但这一步不涉及网络，不会拖慢下载。
+     */
+    private static final ExecutorService jarLoadExecutor = Executors.newFixedThreadPool(3,
+            new java.util.concurrent.ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "jar-loader");
+                    t.setDaemon(true);
+                    t.setPriority(Thread.NORM_PRIORITY - 1);
+                    return t;
+                }
+            });
+
+    /**
+     * 正在进行的 jar 加载任务，按 spider 配置去重。
+     *
+     * <p>同一份配置同时只跑一次：重复的调用挂在同一个任务上等结果，
+     * 不会再排一条新的下载/加载任务，避免慢速设备上任务越堆越多、越堆越慢。
+     */
+    private final ConcurrentHashMap<String, JarLoadTask> jarLoadTasks = new ConcurrentHashMap<>();
+
+    /** 一次 jar 加载任务的等待者集合，结果只派发一次 */
+    private static final class JarLoadTask {
+        final ArrayList<LoadConfigCallback> waiters = new ArrayList<>();
+        boolean done = false;
+
+        synchronized boolean add(LoadConfigCallback cb) {
+            if (done) return false;
+            waiters.add(cb);
+            return true;
+        }
+
+        synchronized ArrayList<LoadConfigCallback> finish() {
+            done = true;
+            ArrayList<LoadConfigCallback> copy = new ArrayList<>(waiters);
+            waiters.clear();
+            return copy;
+        }
+    }
 
     public void loadJar(boolean useCache, String spider, LoadConfigCallback callback) {
         // 必须离开主线程：DexClassLoader 首次加载几 MB 的 jar 要等 dex 优化，
         // 放在主线程会直接卡住首页甚至 ANR，而之前为了防 ANR 把等待窗口压到 1 秒，
         // 反而让慢速机型被误判成"订阅不可用"（首页只剩「主页」一个标签）。
+        final String taskKey = spider == null ? "" : spider;
+        JarLoadTask task;
+        while (true) {
+            JarLoadTask cur = jarLoadTasks.get(taskKey);
+            if (cur == null) {
+                JarLoadTask fresh = new JarLoadTask();
+                fresh.waiters.add(callback);
+                JarLoadTask prev = jarLoadTasks.putIfAbsent(taskKey, fresh);
+                if (prev == null) {
+                    task = fresh;
+                    break;
+                }
+                cur = prev;
+            }
+            if (cur.add(callback)) {
+                // 同一份配置已经在下载/加载了，直接等它的结果，不再重复排队
+                return;
+            }
+            // 上一个任务刚结束、还没来得及从表里摘掉，清掉后重来一次
+            jarLoadTasks.remove(taskKey, cur);
+        }
+        submitJarLoad(taskKey, task, useCache, spider);
+    }
+
+    private void submitJarLoad(final String taskKey, final JarLoadTask task,
+                               final boolean useCache, final String spider) {
+        // 取一个递增序号：切源很快时可能有两份 jar 同时在加载，
+        // 只有后发起的那次允许落地，先发起但晚完成的旧结果会被 JarLoader 丢弃，
+        // 不会把用户刚切过去的源又顶掉
+        final long loadSeq = jarLoader.issueLoadSeq();
         jarLoadExecutor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    doLoadJar(useCache, spider, callback);
+                    doLoadJar(useCache, spider, loadSeq, new LoadConfigCallback() {
+                        @Override
+                        public void success() {
+                            dispatchJarResult(taskKey, task, 1, "");
+                        }
+
+                        @Override
+                        public void retry() {
+                            dispatchJarResult(taskKey, task, 2, "");
+                        }
+
+                        @Override
+                        public void error(String msg) {
+                            dispatchJarResult(taskKey, task, 3, msg);
+                        }
+                    });
                 } catch (Throwable th) {
                     th.printStackTrace();
                     // 兜一个结果：否则首页会永远停在加载中，看起来就是一片空白
-                    callback.error("");
+                    dispatchJarResult(taskKey, task, 3, "");
                 }
             }
         });
     }
 
-    private void doLoadJar(boolean useCache, String spider, LoadConfigCallback callback) {
+    /**
+     * 把加载结果派发给所有等待者。
+     *
+     * <p>jdk 的 jar 缓存命中（useCache）时，多个等待者可能同时挂上来，
+     * 这里统一派发一次，避免各自起一份加载任务。
+     */
+    private void dispatchJarResult(String taskKey, JarLoadTask task, int type, String msg) {
+        ArrayList<LoadConfigCallback> waiters = task.finish();
+        jarLoadTasks.remove(taskKey, task);
+        for (LoadConfigCallback cb : waiters) {
+            try {
+                if (type == 1) {
+                    cb.success();
+                } else if (type == 2) {
+                    cb.retry();
+                } else {
+                    cb.error(msg);
+                }
+            } catch (Throwable th) {
+                th.printStackTrace();
+            }
+        }
+    }
+
+    private void doLoadJar(boolean useCache, String spider, final long loadSeq,
+                           LoadConfigCallback callback) {
         String[] urls = spider.split(";md5;");
         String jarUrl = urls[0];
         String md5 = urls.length > 1 ? urls[1].trim() : "";
@@ -360,7 +477,7 @@ public class ApiConfig {
 
         if (!md5.isEmpty() || useCache) {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
-                if (jarLoader.load(cache.getAbsolutePath(), jarKey)) {
+                if (jarLoader.load(cache.getAbsolutePath(), jarKey, loadSeq)) {
                     callback.success();
                     return;
                 }
@@ -379,6 +496,7 @@ public class ApiConfig {
         boolean isJarInImg = jarUrl.startsWith("img+");
         jarUrl = jarUrl.replace("img+", "");
         final String jarUrlLog = jarUrl;
+        final boolean jarInImg = isJarInImg;
         OkGo.<File>get(jarUrl)
                 .headers("User-Agent", userAgent)
                 .headers("Accept", requestAccept)
@@ -389,35 +507,62 @@ public class ApiConfig {
                 File cacheDir = cache.getParentFile();
                 if (!cacheDir.exists())
                     cacheDir.mkdirs();
-                if (cache.exists())
-                    cache.delete();
-                FileOutputStream fos = new FileOutputStream(cache);
-                if(isJarInImg) {
-                    String respData = response.body().string();
-                    byte[] imgJar = getImgJar(respData);
-                    fos.write(imgJar);
-                } else {
-                    fos.write(response.body().bytes());
+                // 先写临时文件，下载完整后再替换正式缓存。
+                // 之前是直接覆盖 csp_xxx.jar：下载到一半断网、被超时打断或进程被杀，
+                // 就会把上一份能用的 jar 换成一个残缺文件，下次启动校验不过再重下，
+                // 于是永远卡在"下载中"这一步。写临时文件后，旧 jar 在下载期间始终完好。
+                File tmp = new File(cache.getAbsolutePath() + ".tmp");
+                if (tmp.exists())
+                    tmp.delete();
+                FileOutputStream fos = new FileOutputStream(tmp);
+                try {
+                    if (jarInImg) {
+                        String respData = response.body().string();
+                        byte[] imgJar = getImgJar(respData);
+                        fos.write(imgJar);
+                    } else {
+                        fos.write(response.body().bytes());
+                    }
+                    fos.flush();
+                } finally {
+                    try {
+                        fos.close();
+                    } catch (Throwable ignore) {
+                    }
                 }
-                fos.flush();
-                fos.close();
-                return cache;
+                return tmp;
             }
 
             @Override
             public void onSuccess(Response<File> response) {
-                if (response.body().exists()) {
-                    if (jarLoader.load(response.body().getAbsolutePath(), jarKey)) {
-                        callback.success();
-                    } else {
-                        // 便于定位: 若是错误页而非 jar, 这里的大小/文件头会很明显
-                        System.out.println("csp.jar 加载失败: " + response.body().getAbsolutePath()
-                                + " 大小=" + response.body().length() + " 来源=" + jarUrlLog);
-                        callback.error("");
-                    }
-                } else {
-                    callback.error("");
+                final File tmp = response.body();
+                // 校验一下内容：错误页、半截文件在这一步挡掉，不让它污染缓存
+                if (tmp == null || !tmp.exists() || !looksLikeJar(tmp)) {
+                    if (tmp != null && tmp.exists())
+                        tmp.delete();
+                    System.out.println("csp.jar 下载内容异常, 保留旧缓存: " + jarUrlLog);
+                    loadJarFileAsync(cache, jarKey, loadSeq, callback);
+                    return;
                 }
+                if (cache.exists() && !cache.delete()) {
+                    System.out.println("csp.jar 旧缓存删除失败: " + cache.getAbsolutePath());
+                }
+                final File target = tmp.renameTo(cache) ? cache : tmp;
+                // dex 加载（老机型首次优化要好几秒）不能占着 OkGo 的下载回调线程：
+                // 下载线程要尽快空出来接后面的请求，加载交给 jar 线程池排队
+                jarLoadExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (jarLoader.load(target.getAbsolutePath(), jarKey, loadSeq)) {
+                            callback.success();
+                        } else {
+                            // 便于定位: 若是错误页而非 jar, 这里的大小/文件头会很明显
+                            System.out.println("csp.jar 加载失败: " + target.getAbsolutePath()
+                                    + " 大小=" + target.length() + " 来源=" + jarUrlLog);
+                            callback.error("");
+                        }
+                    }
+                });
             }
 
             @Override
@@ -427,13 +572,52 @@ public class ApiConfig {
                         + (response.getException() != null ? response.getException().getMessage() : ""));
                 // 下载失败时若本地还留着上次可用的 jar(比如网络抖动), 先加载旧缓存兜底,
                 // 不让首页空转; 后续重新进首页/冷启动时会再校验更新。
-                if (cache.exists() && jarLoader.load(cache.getAbsolutePath(), jarKey)) {
-                    callback.success();
-                    return;
-                }
-                callback.error("");
+                loadJarFileAsync(cache, jarKey, loadSeq, callback);
             }
         });
+    }
+
+    /** 在 jar 线程池里加载一个已经落盘的 jar，失败就回调 error，绝不在回调线程里做阻塞加载 */
+    private void loadJarFileAsync(final File file, final String jarKey, final long loadSeq,
+                                  final LoadConfigCallback callback) {
+        jarLoadExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (file.exists() && jarLoader.load(file.getAbsolutePath(), jarKey, loadSeq)) {
+                    callback.success();
+                } else {
+                    callback.error("");
+                }
+            }
+        });
+    }
+
+    /**
+     * 大致判断下载到的内容是 jar/dex 而不是错误页。
+     *
+     * <p>源站抽风时经常返回一段 HTML 或空内容，长度也有几 KB，md5 校验又没配置，
+     * 直接拿去加载就会失败并把缓存弄坏。这里只看文件头：zip(PK) 或裸 dex(dex\n)。
+     */
+    private static boolean looksLikeJar(File f) {
+        if (f.length() < 256L) return false;
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(f);
+            byte[] head = new byte[4];
+            if (in.read(head) < 4) return false;
+            boolean zip = head[0] == 'P' && head[1] == 'K';
+            boolean dex = head[0] == 'd' && head[1] == 'e' && head[2] == 'x';
+            return zip || dex;
+        } catch (Throwable th) {
+            return false;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignore) {
+                }
+            }
+        }
     }
 
     private void parseJson(String apiUrl, File f) throws Throwable {

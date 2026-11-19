@@ -37,6 +37,13 @@ public class JarLoader {
     private ConcurrentHashMap<String, Method> proxyMethods = new ConcurrentHashMap<>();
     private ConcurrentHashMap<String, Spider> spiders = new ConcurrentHashMap<>();
     private volatile String recentJarKey = "";
+    /** 类加载器整表替换的锁：加载可以并发触发，但真正替换必须串行 */
+    private final Object loadLock = new Object();
+
+    /** 加载序号：并发加载时只有"最新发起"的那一次允许落地，避免旧任务晚到覆盖新配置 */
+    private final java.util.concurrent.atomic.AtomicLong issuedSeq =
+            new java.util.concurrent.atomic.AtomicLong();
+    private long committedSeq = 0;
 
     /**
      * 不要在主线程调用我
@@ -60,23 +67,60 @@ public class JarLoader {
      *
      * <p>用 jarKey 注册后，getSpider 直接命中内存里已经加载好的类加载器，不再重复下载。
      */
+    /**
+     * 加载（替换）当前生效的 jar。
+     *
+     * <p>这里是「整表替换」：spiders / proxyMethods / classLoaders 会全部清空再重建。
+     * 现在 jar 下载和加载可能并发（切源快、上一份还没加载完就切下一份），
+     * 两个加载交错执行会把对方刚注册好的类加载器清掉，
+     * 表现就是「刚加载成功，取数据又变成空」。所以这一段必须串行。
+     *
+     * <p>只锁 dex 加载，不锁网络下载：下载仍在各自线程里并行，只是排队等这一步。
+     */
     public boolean load(String cache, String key) {
-        spiders.clear();
-        recentJarKey = key;
-        proxyMethods.clear();
-        classLoaders.clear();
-        boolean ok = loadClassLoader(cache, key);
-        if (ok && !"main".equals(key)) {
-            // 源的 jar 字段为空时 getSpider 会走 "main" 分支，这里一并注册，两边都能命中
-            BaseDexClassLoader loader = classLoaders.get(key);
-            if (loader != null) {
-                classLoaders.put("main", loader);
+        return load(cache, key, 0L);
+    }
+
+    /** 由调用方在"发起一次订阅加载"时取一个递增序号，用来识别过期的加载结果 */
+    public long issueLoadSeq() {
+        return issuedSeq.incrementAndGet();
+    }
+
+    /**
+     * @param seq 加载序号，0 表示无条件落地；非 0 时，若已经有更新的加载落地过，
+     *            本次结果直接忽略（不清表、不注册），避免切源时旧任务把新配置顶掉。
+     */
+    public boolean load(String cache, String key, long seq) {
+        synchronized (loadLock) {
+            if (seq > 0 && seq < committedSeq) {
+                System.out.println("自定义爬虫代码加载已过期，忽略: " + seq + " < " + committedSeq);
+                return true;
             }
+            if (seq > 0) committedSeq = seq;
+            spiders.clear();
+            recentJarKey = key;
+            proxyMethods.clear();
+            classLoaders.clear();
+            boolean ok = loadClassLoader(cache, key);
+            if (ok && !"main".equals(key)) {
+                // 源的 jar 字段为空时 getSpider 会走 "main" 分支，这里一并注册，两边都能命中
+                BaseDexClassLoader loader = classLoaders.get(key);
+                if (loader != null) {
+                    classLoaders.put("main", loader);
+                }
+            }
+            return ok;
         }
-        return ok;
     }
 
     private boolean loadClassLoader(String jar, String key) {
+        // 与 load() 共用同一把锁（可重入），保证类加载器表的读写不会交错
+        synchronized (loadLock) {
+            return doLoadClassLoader(jar, key);
+        }
+    }
+
+    private boolean doLoadClassLoader(String jar, String key) {
         boolean success = false;
         try {
             File cacheDir = new File(App.getInstance().getCacheDir().getAbsolutePath() + "/catvod_csp");
@@ -264,7 +308,11 @@ public class JarLoader {
         try {
             Response response = OkGo.<File>get(jar).execute();
             InputStream is = response.body().byteStream();
-            OutputStream os = new FileOutputStream(cache);
+            // 同样先写临时文件再替换：这条路径是同步下载（源自带 jar 时才走），
+            // 中途失败不能把上一份能用的 jar 弄坏
+            File tmp = new File(cache.getAbsolutePath() + ".tmp");
+            if (tmp.exists()) tmp.delete();
+            OutputStream os = new FileOutputStream(tmp);
             try {
                 byte[] buffer = new byte[2048];
                 int length;
@@ -278,6 +326,12 @@ public class JarLoader {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            }
+            if (cache.exists()) cache.delete();
+            if (!tmp.renameTo(cache)) {
+                // 极少数情况下 rename 失败，退化成直接用临时文件加载
+                loadClassLoader(tmp.getAbsolutePath(), key);
+                return classLoaders.get(key);
             }
             loadClassLoader(cache.getAbsolutePath(), key);
             return classLoaders.get(key);
