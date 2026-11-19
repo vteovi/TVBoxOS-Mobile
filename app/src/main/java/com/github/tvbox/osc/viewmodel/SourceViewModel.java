@@ -36,6 +36,7 @@ import com.thoughtworks.xstream.XStream;
 import com.thoughtworks.xstream.io.xml.DomDriver;
 
 import org.greenrobot.eventbus.EventBus;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.UnsupportedEncodingException;
@@ -472,7 +473,14 @@ public class SourceViewModel extends ViewModel {
                         Spider sp = ApiConfig.get().getCSP(sourceBean);
                         List<String> ids = new ArrayList<>();
                         ids.add(id);
-                        json(detailResult, sp.detailContent(ids), sourceBean.getKey());
+                        String detailJson = sp.detailContent(ids);
+                        LOG.i("spider detail: " + detailJson);
+                        // 部分源（如龙门影视）详情接口按 App UA 放行，蜘蛛拿不到数据时这里直连兜底一次
+                        if (isDetailEmpty(detailJson)) {
+                            String fallback = fallbackDetail(sourceBean, id);
+                            if (!TextUtils.isEmpty(fallback)) detailJson = fallback;
+                        }
+                        json(detailResult, detailJson, sourceBean.getKey());
                     } catch (Throwable th) {
                         th.printStackTrace();
                         // 必须回一个结果：否则详情页会一直停在加载中（看起来就是"空白页"）
@@ -518,6 +526,75 @@ public class SourceViewModel extends ViewModel {
             detailResult.postValue(null);
         }
     }
+    // ===== 蜘蛛详情兜底 =====
+    /**
+     * 订阅里的蜘蛛 jаr 请求详情失败时（返回空 / 没有播放地址），按同一套 App 接口直连一次。
+     * 这类接口（api.php/v1.vod、api.php/app 等）会用 User-Agent 做放行，UA 与蜘蛛内部保持一致。
+     */
+    private static final String SPIDER_DETAIL_UA = "Dart/2.14 (dart:io);LoamenWebKit/524";
+
+    private boolean isDetailEmpty(String json) {
+        if (TextUtils.isEmpty(json)) return true;
+        return !json.contains("vod_play_url") && !json.contains("vod_play_from");
+    }
+
+    private String fallbackDetail(SourceBean sourceBean, String id) {
+        String ext = sourceBean.getExt();
+        if (TextUtils.isEmpty(ext)) return null;
+        ext = ext.split("###")[0].trim();
+        if (!ext.startsWith("http")) return null;
+        List<String> urls = new ArrayList<>();
+        if (ext.contains("api.php/app") || ext.contains("xgapp")) {
+            urls.add(ext + (ext.endsWith("/") ? "" : "/") + "video_detail?id=" + id);
+        } else if (ext.contains(".vod")) {
+            urls.add(ext + "/detail?vod_id=" + id);
+        }
+        urls.add(ext + (ext.contains("?") ? "&" : "?") + "ac=detail&ids=" + id);
+        for (String url : urls) {
+            try {
+                okhttp3.Response resp = OkGo.<String>get(url).headers("User-Agent", SPIDER_DETAIL_UA).execute();
+                String body = resp.body() == null ? null : resp.body().string();
+                String normalized = normalizeDetailJson(body);
+                if (!TextUtils.isEmpty(normalized)) {
+                    LOG.i("detail fallback ok: " + url);
+                    return normalized;
+                }
+            } catch (Throwable th) {
+                th.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 把各种详情返回统一成标准 {"list":[...]}：
+     * data 直接是影片对象 / data.list[0] / 根 list[0]，只认带播放地址的那种。
+     */
+    private String normalizeDetailJson(String body) {
+        if (TextUtils.isEmpty(body)) return null;
+        try {
+            JSONObject root = new JSONObject(body);
+            JSONObject item = null;
+            JSONObject data = root.optJSONObject("data");
+            if (data != null) {
+                JSONArray list = data.optJSONArray("list");
+                if (list != null && list.length() > 0) item = list.optJSONObject(0);
+                else if (data.has("vod_play_url") || data.has("vod_play_from")) item = data;
+            }
+            if (item == null) {
+                JSONArray list = root.optJSONArray("list");
+                if (list != null && list.length() > 0) item = list.optJSONObject(0);
+            }
+            if (item == null) return null;
+            if (!item.has("vod_play_url") && !item.has("vod_play_from")) return null;
+            JSONObject out = new JSONObject();
+            out.put("list", new JSONArray().put(item));
+            return out.toString();
+        } catch (Throwable th) {
+            return null;
+        }
+    }
+
     // searchContent
     public void getSearch(String sourceKey, String wd) {
         SourceBean sourceBean = ApiConfig.get().getSource(sourceKey);
