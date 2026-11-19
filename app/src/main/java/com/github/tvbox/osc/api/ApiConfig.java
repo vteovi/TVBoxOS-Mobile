@@ -136,6 +136,211 @@ public class ApiConfig {
         return "".getBytes();
     }
 
+    /**
+     * 把订阅地址拆成「实际请求地址」和「解密 key」。
+     *
+     * <p>支持 {@code ;pk;密钥}、{@code clan...} 短链，以及不带协议的地址。
+     * 顺带修掉一个旧问题：不带协议的地址原来拼成 {@code "http://"} + 空串，
+     * 请求必然失败（{@code http://example.com/api.json} 这类地址用不了）。
+     *
+     * @return [configUrl, configKey]，configKey 可能为 null
+     */
+    private String[] resolveConfigUrl(String apiUrl) {
+        String tempKey = null, configUrl = "";
+        String pk = ";pk;";
+        if (apiUrl.contains(pk)) {
+            String[] a = apiUrl.split(pk);
+            tempKey = a[1];
+            if (apiUrl.startsWith("clan")) {
+                configUrl = clanToAddress(a[0]);
+            } else if (apiUrl.startsWith("http")) {
+                configUrl = a[0];
+            } else {
+                configUrl = "http://" + a[0];
+            }
+        } else if (apiUrl.startsWith("clan")) {
+            configUrl = clanToAddress(apiUrl);
+        } else if (!apiUrl.startsWith("http")) {
+            configUrl = "http://" + apiUrl;
+        } else {
+            configUrl = apiUrl;
+        }
+        return new String[]{configUrl, tempKey};
+    }
+
+    /**
+     * 预取某个订阅的配置和它依赖的爬虫 jar，只写本地缓存，不解析、不动当前界面用的站点列表。
+     *
+     * <p>用户在订阅页选中另一个订阅时调用：等他从订阅页回到首页，配置和 jar 都已经在本地，
+     * 首页只需要解析缓存 + 加载 dex，不用再等一次几 MB 的下载。这是「切了订阅还要慢几秒」的主因。
+     */
+    public void prefetchConfig(final String apiUrl) {
+        if (TextUtils.isEmpty(apiUrl)) return;
+        if (apiUrl.startsWith("assets://") || apiUrl.startsWith("content://") || apiUrl.startsWith("file://")) {
+            return; // 本地/内置配置，没有下载成本
+        }
+        // 调用方是订阅列表的点击回调（主线程）：磁盘读写、md5、json 解析一律挪到后台
+        jarLoadExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                doPrefetchConfig(apiUrl);
+            }
+        });
+    }
+
+    private void doPrefetchConfig(String apiUrl) {
+        final String cacheName = MD5.encode(apiUrl);
+        final File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + cacheName);
+        final File meta = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + cacheName + ".meta");
+        if (cache.exists() && cache.length() > 0) {
+            // 配置已经缓存过（以前用过这个订阅），那就只预热它依赖的 jar
+            prefetchSpiderJar(readTextFile(cache));
+            return;
+        }
+        String[] resolved = resolveConfigUrl(apiUrl);
+        final String configUrl = resolved[0];
+        final String configKey = resolved[1];
+        final String apiUrlFinal = apiUrl;
+        OkGo.<String>get(configUrl)
+                .headers("User-Agent", userAgent)
+                .headers("Accept", requestAccept)
+                .execute(new AbsCallback<String>() {
+                    @Override
+                    public void onSuccess(Response<String> response) {
+                        try {
+                            String json = response.body();
+                            if (TextUtils.isEmpty(json)) return;
+                            writeConfigCache(cache, json);
+                            writeCacheMeta(meta, MD5.string2MD5(json), System.currentTimeMillis());
+                            prefetchSpiderJar(json);
+                        } catch (Throwable th) {
+                            th.printStackTrace();
+                        }
+                    }
+
+                    @Override
+                    public void onError(Response<String> response) {
+                        super.onError(response);
+                        // 预取失败无所谓：回到首页后正式加载会再试一次
+                    }
+
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        String result = "";
+                        if (response.body() != null) {
+                            result = FindResult(response.body().string(), configKey);
+                        }
+                        if (apiUrlFinal.startsWith("clan")) {
+                            result = clanContentFix(clanToAddress(apiUrlFinal), result);
+                        }
+                        return fixContentPath(apiUrlFinal, result);
+                    }
+                });
+    }
+
+    /**
+     * 预下载配置里声明的爬虫 jar（只下不下加载）。
+     *
+     * <p>文件路径与 {@link #loadJar} 完全一致（{@code csp_<md5(地址)>.jar}），
+     * 所以回到首页时加载这一步直接命中缓存，省掉一次几 MB 的下载。
+     * 下载同样先落临时文件再改名，成功与否都不影响正式流程。
+     */
+    private void prefetchSpiderJar(String configJson) {
+        if (TextUtils.isEmpty(configJson)) return;
+        try {
+            JsonObject info = new Gson().fromJson(configJson, JsonObject.class);
+            if (info == null) return;
+            String spiderStr = DefaultConfig.safeJsonString(info, "spider", "");
+            if (TextUtils.isEmpty(spiderStr)) return;
+            String jarUrl = spiderStr.split(";md5;")[0].trim();
+            if (!jarUrl.startsWith("http")) return; // img+/空地址交给正式加载逻辑处理
+            final File jar = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp_" + MD5.encode(jarUrl) + ".jar");
+            if (jar.exists() && jar.length() > 0) return;
+            final File tmp = new File(jar.getAbsolutePath() + ".prefetch.tmp");
+            OkGo.<File>get(jarUrl)
+                    .headers("User-Agent", userAgent)
+                    .headers("Accept", requestAccept)
+                    .execute(new AbsCallback<File>() {
+                        @Override
+                        public File convertResponse(okhttp3.Response response) throws Throwable {
+                            File dir = jar.getParentFile();
+                            if (dir != null && !dir.exists()) dir.mkdirs();
+                            if (tmp.exists()) tmp.delete();
+                            FileOutputStream fos = new FileOutputStream(tmp);
+                            try {
+                                fos.write(response.body().bytes());
+                                fos.flush();
+                            } finally {
+                                try {
+                                    fos.close();
+                                } catch (Throwable ignore) {
+                                }
+                            }
+                            return tmp;
+                        }
+
+                        @Override
+                        public void onSuccess(Response<File> response) {
+                            File f = response.body();
+                            if (f == null || !f.exists() || f.length() <= 0) return;
+                            if (jar.exists()) jar.delete();
+                            if (!f.renameTo(jar)) f.delete();
+                        }
+
+                        @Override
+                        public void onError(Response<File> response) {
+                            super.onError(response);
+                            if (tmp.exists()) tmp.delete();
+                        }
+                    });
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
+    }
+
+    /** 读一个小的文本文件（订阅配置），失败返回空串 */
+    private static String readTextFile(File f) {
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new InputStreamReader(new FileInputStream(f), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) sb.append(line).append('\n');
+            return sb.toString();
+        } catch (Throwable th) {
+            return "";
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (Throwable ignore) {
+                }
+            }
+        }
+    }
+
+    /**
+     * 切换订阅后立刻作废旧订阅在内存里的状态。
+     *
+     * <p>首页是「先拿内存里的站点列表渲染、再拉新数据」的：订阅换了但新配置还没解析完的这几秒里，
+     * {@link #getHomeSourceBean()} 和 {@link #getSourceBeanList()} 还是上一个订阅的，
+     * 于是首页标签、站点推荐、聚合搜索全部在用旧源——用户看到的就是「切了订阅但还是旧内容」。
+     *
+     * <p>清空之后首页会走「配置还没好」的分支（转圈/加载中），不会再拿旧源的数据冒充新源。
+     */
+    public synchronized void resetForSwitch() {
+        mCurApiUrl = "";
+        if (sourceBeanList != null) sourceBeanList.clear();
+        mHomeSource = null;
+        spider = "";
+        wallpaper = "";
+    }
+
+    /** 当前内存里的站点列表是哪个订阅解析出来的；用于判断是否需要重新加载 */
+    public String getLoadedApiUrl() {
+        return mCurApiUrl == null ? "" : mCurApiUrl;
+    }
+
     public void loadConfig(boolean useCache, LoadConfigCallback callback, Activity activity) {
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (apiUrl.isEmpty()) {
@@ -194,25 +399,9 @@ public class ApiConfig {
             }
             return;
         }
-        String TempKey = null, configUrl = "", pk = ";pk;";
-        if (apiUrl.contains(pk)) {
-            String[] a = apiUrl.split(pk);
-            TempKey = a[1];
-            if (apiUrl.startsWith("clan")){
-                configUrl = clanToAddress(a[0]);
-            }else if (apiUrl.startsWith("http")){
-                configUrl = a[0];
-            }else {
-                configUrl = "http://" + a[0];
-            }
-        } else if (apiUrl.startsWith("clan")) {
-            configUrl = clanToAddress(apiUrl);
-        } else if (!apiUrl.startsWith("http")) {
-            configUrl = "http://" + configUrl;
-        } else {
-            configUrl = apiUrl;
-        }
-        String configKey = TempKey;
+        String[] resolved = resolveConfigUrl(apiUrl);
+        String configUrl = resolved[0];
+        String configKey = resolved[1];
         OkGo.<String>get(configUrl)
                 .headers("User-Agent", userAgent)
                 .headers("Accept", requestAccept)
