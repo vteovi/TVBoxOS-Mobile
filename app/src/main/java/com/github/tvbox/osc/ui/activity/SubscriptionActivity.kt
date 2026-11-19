@@ -11,6 +11,7 @@ import com.blankj.utilcode.util.LogUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.github.tvbox.osc.R
+import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.base.BaseVbActivity
 import com.github.tvbox.osc.bean.Source
 import com.github.tvbox.osc.bean.Subscription
@@ -123,7 +124,13 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
                 val subscription = mSubscriptions[i]
                 if (i == position) {
                     subscription.setChecked(true)
-                    mSelectedUrl = subscription.url
+                    if (mSelectedUrl != subscription.url) {
+                        mSelectedUrl = subscription.url
+                        // 选中就开始在后台下载这份订阅的配置与爬虫 jar。
+                        // 等用户从订阅页回到首页时，配置和 jar 已经在本地，
+                        // 省掉「切了订阅还要等几秒」里最大的一块等待。
+                        ApiConfig.get().prefetchConfig(subscription.url)
+                    }
                 } else {
                     subscription.setChecked(false)
                 }
@@ -334,6 +341,7 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
             }
             mSelectedUrl = normalizedUrl
             mSubscriptions.add(Subscription(name, normalizedUrl).setChecked(true))
+            ApiConfig.get().prefetchConfig(normalizedUrl)
         } else {
             mSubscriptions.add(Subscription(name, normalizedUrl).setChecked(false))
         }
@@ -535,6 +543,12 @@ class SubscriptionActivity : BaseVbActivity<ActivitySubscriptionBinding>() {
                 // 切换了订阅源: 配置已写盘, 让首页直接走本地缓存秒开, 后台再静默刷新
                 intent.putExtra(IntentKey.CACHE_CONFIG_CHANGED, true)
                 intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK
+                // 先把订阅地址写盘, 再作废内存里的旧订阅状态。
+                // 不作废的话, 新配置解析完之前的那几秒里, 首页标签、站点推荐、
+                // 聚合搜索用的还都是上一个订阅的站点列表 —— 就是「切了订阅还是旧内容」。
+                Hawk.put(HawkConfig.API_URL, mSelectedUrl)
+                Hawk.put<List<Subscription>?>(HawkConfig.SUBSCRIPTIONS, mSubscriptions)
+                ApiConfig.get().resetForSwitch()
             } else {
                 intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }

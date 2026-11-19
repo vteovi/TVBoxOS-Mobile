@@ -148,6 +148,18 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         initData()
     }
 
+    /**
+     * 当前内存里的站点列表是不是「当前订阅地址」解析出来的。
+     *
+     * <p>切换订阅后新配置要下载+解析，这几秒里 {@code ApiConfig} 里还是旧订阅的数据。
+     * 用它来判断要不要先等配置，避免把旧订阅的内容当成新订阅展示出来。
+     */
+    private fun configMatchesCurrentSubscription(): Boolean {
+        val want = Hawk.get(HawkConfig.API_URL, "")
+        if (want.isNullOrEmpty()) return true
+        return want == ApiConfig.get().loadedApiUrl
+    }
+
     private fun initViewModel() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
@@ -204,6 +216,17 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
     private fun initData() {
         val mainActivity = mActivity as MainActivity
         onlyConfigChanged = mainActivity.useCacheConfig
+
+        // 内存里的站点列表不是当前订阅解析出来的（刚切过订阅、新配置还没解析完）：
+        // 这时如果照常往下走，首页标签、站点推荐、聚合搜索用的都还是上一个订阅的源，
+        // 用户看到的就是「切了订阅还是旧内容」。等新配置解析完再渲染。
+        if (!configMatchesCurrentSubscription()) {
+            dataInitOk = false
+            jarInitOk = false
+            sortDataReady = false
+            loadConfig()
+            return
+        }
 
         val home = ApiConfig.get().homeSourceBean
         if (home != null && !home.name.isNullOrEmpty()) {
