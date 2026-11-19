@@ -1,4 +1,36 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+        maven { url "https://maven.aliyun.com/repository/gradle-plugin" }
+    }
+}
+
 rootProject.name = "TVBoxMobile"
+
+// 依赖仓库统一在这里声明：Gradle 8 推荐做法，能保证所有模块（含 annotationProcessor）
+// 都用同一组仓库。之前只在根 build.gradle 的 allprojects 里声明，CI 上会出现只查
+// gradlePluginPortal 的情况（room-compiler 这类注解处理器的传递依赖解析失败）。
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://maven.aliyun.com/repository/public" }
+        maven { url "https://maven.aliyun.com/repository/central" }
+        maven { url "https://maven.aliyun.com/repository/google" }
+        // dlna-cast 里 cling 用的仓库
+        maven {
+            url 'http://4thline.org/m2'
+            allowInsecureProtocol = true
+        }
+        maven { url "https://jitpack.io" }
+    }
+}
+
 include ':app'
 include ':player'
 include ':quickjs'
