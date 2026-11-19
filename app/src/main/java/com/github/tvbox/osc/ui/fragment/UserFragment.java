@@ -115,12 +115,14 @@ public class UserFragment extends BaseLazyFragment {
                 }
                 Movie.Video vod = ((Movie.Video) adapter.getItem(position));
                 Bundle bundle = new Bundle();
-                if (!TextUtils.isEmpty(vod.id)) {
+                // 站点推荐的卡片只有片名/封面，id 不一定能取到详情；
+                // 统一把 title 传下去，详情取不到时详情页会用片名兜底去聚合搜索
+                bundle.putString("title", vod.name);
+                if (!TextUtils.isEmpty(vod.id) && !vod.id.startsWith("msearch:")) {
                     bundle.putString("id", vod.id);
                     bundle.putString("sourceKey", vod.sourceKey);
                     jumpActivity(DetailActivity.class, bundle);
                 } else {
-                    bundle.putString("title", vod.name);
                     jumpActivity(FastSearchActivity.class, bundle);
                 }
             }
