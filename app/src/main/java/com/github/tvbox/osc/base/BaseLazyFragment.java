@@ -263,6 +263,14 @@ public abstract class BaseLazyFragment extends Fragment implements CustomAdapt {
         });
     }
 
+    /**
+     * 带重试回调的注册：空态/错误态被点击时会回调 listener，
+     * 用于「加载失败后能原地重试」，避免只能杀掉重进。
+     */
+    protected void setLoadSir2(View view, Callback.OnReloadListener listener) {
+        mLoadService = LoadSir.getDefault().register(view, listener);
+    }
+
     protected void showLoading() {
         if (mLoadService != null) {
             mLoadService.showCallback(LoadingCallback.class);

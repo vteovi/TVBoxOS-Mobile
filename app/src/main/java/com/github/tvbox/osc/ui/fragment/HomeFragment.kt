@@ -91,6 +91,20 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         }
     }
 
+    /**
+     * 分类/推荐没取到时的自动重试（只重试一次）。
+     * 老机型和刚装好的设备上，首次冷启动时蜘蛛 jar 还没解压/初始化完，
+     * homeContent 容易直接返回空或者超时，页面上就只剩一个空的分栏。
+     * 之前这种情况没有任何补救，只能杀进程重进。
+     */
+    private var sortRetryCount = 0
+    private val sortRetryTask = Runnable {
+        val home = ApiConfig.get().homeSourceBean
+        if (home != null && !home.key.isNullOrEmpty()) {
+            sourceViewModel?.getSort(home.key)
+        }
+    }
+
     var errorTipDialog: TipDialog? = null
 
     /**
@@ -130,6 +144,13 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
             mHandler.removeCallbacks(sortTimeoutTask)
             showSuccess()
+            // 一个分栏都没拿到（蜘蛛还没就绪/接口超时）：自动重试一次，避免停在空页面
+            val sortList = absXml?.classes?.sortList
+            if ((sortList == null || sortList.isEmpty()) && sortRetryCount < 1) {
+                sortRetryCount++
+                mHandler.removeCallbacks(sortRetryTask)
+                mHandler.postDelayed(sortRetryTask, 3000L)
+            }
             val oldSortIds = mSortDataList.map { it.id }
             mSortDataList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
