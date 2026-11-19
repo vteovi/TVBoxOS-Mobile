@@ -1,6 +1,6 @@
 {
-  "version": "2.36.8",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.8/TVBox-Mobile-v2.36.8-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.8/TVBox-Mobile-v2.36.8-armv7a.apk",
-  "changelog": "**修复切换订阅后「慢几拍」：回到首页还是上一个订阅源的内容，点海报进搜索也还是旧源的结果**\n原因有两个：一是订阅页选中后只是记下地址，配置要等回到首页才开始下载，「几秒」主要花在这里；二是新配置下载解析完之前，内存里仍然是上一个订阅的站点列表，首页标签、站点推荐、聚合搜索都在拿旧源的数据用\n现在**选中订阅的那一刻就在后台预取**这份订阅的配置和它依赖的爬虫 jar，等回到首页时配置和 jar 都已在本地，只剩解析和加载\n切换生效时立刻作废内存里的旧订阅状态（站点列表、首页站点、爬虫声明），新配置没解析完之前首页不再拿旧源渲染，而是显示加载中\n首页增加一致性判断：内存里的配置不是当前订阅解析出来的，就先等配置，不会再把上一个订阅的内容当成新订阅展示\n顺带修掉一个老问题：不带协议的订阅地址（如 `example.com/api.json`）原来会被拼成 `http://`，请求必然失败\n版本号 2.36.7/397 → 2.36.8/398"
+  "version": "2.36.9",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.9/TVBox-Mobile-v2.36.9-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.9/TVBox-Mobile-v2.36.9-armv7a.apk",
+  "changelog": "**修复 v2.36.8 发布失败、GitHub 上一直看不到新版本的问题**：tag 和 CI 其实都正常触发了，但构建步骤因为 4 个依赖解析不到而失败，Release 没能生成\n根因：loadsir、okgo、tv-recyclerview、flowlayout-lib 这 4 个库是已关停的 jcenter 遗留坐标，jitpack 和 mavenCentral 都是 404、只有阿里云仓库还有；之前为了避免阿里云偶发 502 而在 CI 上禁用了全部镜像，把这 4 个库也一起禁掉了\n现在用 exclusiveContent 把这 4 个库单独路由到阿里云仓库，CI 上也能取到；其余依赖仍走官方源，不会重新引入 502 风险\n清缓存后模拟 CI 验证：4 个库全部重新解析成功、BUILD SUCCESSFUL\n版本号 2.36.8/398 → 2.36.9/399"
 }
