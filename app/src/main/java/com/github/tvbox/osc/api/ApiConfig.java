@@ -35,6 +35,8 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -316,10 +318,34 @@ public class ApiConfig {
     }
 
 
+    /** jar 下载与 dex 加载专用线程：这两步在老机型上要好几秒，绝不能占用主线程 */
+    private static final ExecutorService jarLoadExecutor = Executors.newSingleThreadExecutor();
+
     public void loadJar(boolean useCache, String spider, LoadConfigCallback callback) {
+        // 必须离开主线程：DexClassLoader 首次加载几 MB 的 jar 要等 dex 优化，
+        // 放在主线程会直接卡住首页甚至 ANR，而之前为了防 ANR 把等待窗口压到 1 秒，
+        // 反而让慢速机型被误判成"订阅不可用"（首页只剩「主页」一个标签）。
+        jarLoadExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    doLoadJar(useCache, spider, callback);
+                } catch (Throwable th) {
+                    th.printStackTrace();
+                    // 兜一个结果：否则首页会永远停在加载中，看起来就是一片空白
+                    callback.error("");
+                }
+            }
+        });
+    }
+
+    private void doLoadJar(boolean useCache, String spider, LoadConfigCallback callback) {
         String[] urls = spider.split(";md5;");
         String jarUrl = urls[0];
         String md5 = urls.length > 1 ? urls[1].trim() : "";
+        // 必须和 JarLoader.getSpider 里算 jarKey 的方式一致(同样用 MD5.string2MD5(jarUrl))，
+        // 这样这里加载好的类加载器能被 getSpider 直接命中，不会被当成"没加载过"而重下一遍
+        final String jarKey = jarUrl.isEmpty() ? "main" : MD5.string2MD5(jarUrl);
         // 按 jar 地址分源缓存: 每个订阅源的 jar 各存一份, 切换订阅源时直接命中本地缓存秒加载,
         // 不再共用单一 csp.jar 导致来回切源时互相覆盖、每次都要重新下载几 MB 的 jar。
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp_" + MD5.encode(jarUrl) + ".jar");
@@ -334,13 +360,18 @@ public class ApiConfig {
 
         if (!md5.isEmpty() || useCache) {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
-                if (jarLoader.load(cache.getAbsolutePath())) {
+                if (jarLoader.load(cache.getAbsolutePath(), jarKey)) {
                     callback.success();
                     return;
                 }
-                // 缓存里的 csp.jar 已损坏(下载不全, 或拿到的是错误页而非真正的 jar),
-                // 删掉后走下面的下载流程重新拉一次。
-                // 否则会被坏缓存一直卡住, 每次启动都提示"更新订阅失败"且首页没有分类。
+                // 能走到这里说明 md5 已经校验通过，文件本身是完好的，
+                // 加载失败只可能是 dex 优化太慢或运行时异常，此时删掉缓存重新下载毫无意义，
+                // 反而把好文件弄没了、下次继续失败。只有 useCache 路径（没做 md5 校验）
+                // 才怀疑文件损坏并删掉重下。
+                if (!useCache) {
+                    callback.error("");
+                    return;
+                }
                 cache.delete();
             }
         }
@@ -376,7 +407,7 @@ public class ApiConfig {
             @Override
             public void onSuccess(Response<File> response) {
                 if (response.body().exists()) {
-                    if (jarLoader.load(response.body().getAbsolutePath())) {
+                    if (jarLoader.load(response.body().getAbsolutePath(), jarKey)) {
                         callback.success();
                     } else {
                         // 便于定位: 若是错误页而非 jar, 这里的大小/文件头会很明显
@@ -396,7 +427,7 @@ public class ApiConfig {
                         + (response.getException() != null ? response.getException().getMessage() : ""));
                 // 下载失败时若本地还留着上次可用的 jar(比如网络抖动), 先加载旧缓存兜底,
                 // 不让首页空转; 后续重新进首页/冷启动时会再校验更新。
-                if (cache.exists() && jarLoader.load(cache.getAbsolutePath())) {
+                if (cache.exists() && jarLoader.load(cache.getAbsolutePath(), jarKey)) {
                     callback.success();
                     return;
                 }

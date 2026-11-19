@@ -44,11 +44,36 @@ public class JarLoader {
      * @param cache
      */
     public boolean load(String cache) {
+        return load(cache, "main");
+    }
+
+    /**
+     * 按指定 key 注册类加载器。
+     *
+     * <p>之前不论加载的是哪个 jar，都固定注册成 "main"。而 {@link #getSpider} 在源带 jar 时
+     * 算出来的 key 是 {@code MD5.string2MD5(jarUrl)}，永远命中不了这条已注册的记录，
+     * 于是退回到 {@link #loadJarInternal} 用完全不同的文件名重新下载一遍同一个 jar。
+     *
+     * <p>老机型/弱网下这一遍下载会超过首页分栏 15 秒的超时，超时后线程被打断，
+     * 写一半的 jar 留在磁盘上，下次启动校验不过再下 —— 恶性循环，
+     * 表现就是首页永远只有「主页」一个标签，下面什么都取不到。
+     *
+     * <p>用 jarKey 注册后，getSpider 直接命中内存里已经加载好的类加载器，不再重复下载。
+     */
+    public boolean load(String cache, String key) {
         spiders.clear();
-        recentJarKey = "main";
+        recentJarKey = key;
         proxyMethods.clear();
         classLoaders.clear();
-        return loadClassLoader(cache, "main");
+        boolean ok = loadClassLoader(cache, key);
+        if (ok && !"main".equals(key)) {
+            // 源的 jar 字段为空时 getSpider 会走 "main" 分支，这里一并注册，两边都能命中
+            BaseDexClassLoader loader = classLoaders.get(key);
+            if (loader != null) {
+                classLoaders.put("main", loader);
+            }
+        }
+        return ok;
     }
 
     private boolean loadClassLoader(String jar, String key) {
@@ -80,10 +105,13 @@ public class JarLoader {
                     }
                 }
                 count++;
-            } while (classInit == null && count < 5);
+            } while (classInit == null && count < 50);
 
             if (classInit == null) {
-                // dex 真的加载不出来, 此时才判定订阅失败
+                // dex 真的加载不出来, 此时才判定订阅失败。
+                // 注意等待窗口: 原本只等 5 x 200ms = 1 秒, 老机型上几 MB 的 jar
+                // 走 dex2oat/verify 经常要好几秒, 1 秒内拿不到 Init 类就被判死,
+                // 整份订阅直接不可用(首页只剩"主页"一个标签)。这里放宽到 10 秒。
                 return false;
             }
 
@@ -219,6 +247,14 @@ public class JarLoader {
         if (classLoaders.contains(key))
             return classLoaders.get(key);
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + key + ".jar");
+        if (!cache.exists()) {
+            // ApiConfig.loadJar 把 jar 落在 csp_<md5>.jar，这里原本只认 <md5>.jar，
+            // 同一个 jar 会被再下载一遍。能对上就直接复用，省掉一次几 MB 的下载
+            File prefixed = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp_" + key + ".jar");
+            if (prefixed.exists() && (md5.isEmpty() || MD5.getFileMd5(prefixed).equalsIgnoreCase(md5))) {
+                cache = prefixed;
+            }
+        }
         if (!md5.isEmpty()) {
             if (cache.exists() && MD5.getFileMd5(cache).equalsIgnoreCase(md5)) {
                 loadClassLoader(cache.getAbsolutePath(), key);
