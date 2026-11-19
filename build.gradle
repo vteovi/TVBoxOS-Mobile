@@ -3,10 +3,13 @@ buildscript {
     ext.kotlin_version = '1.9.24'
     repositories {
         gradlePluginPortal()
-        maven { url "https://maven.aliyun.com/repository/releases" }
-        maven { url "https://maven.aliyun.com/repository/public" }
         google()
         mavenCentral()
+        // 阿里云镜像只在本地用：CI 上它会返回 502，直接让 :classpath 解析失败
+        if (System.getenv("CI") == null) {
+            maven { url "https://maven.aliyun.com/repository/releases" }
+            maven { url "https://maven.aliyun.com/repository/public" }
+        }
         maven { url "https://jitpack.io" }
     }
     dependencies {
