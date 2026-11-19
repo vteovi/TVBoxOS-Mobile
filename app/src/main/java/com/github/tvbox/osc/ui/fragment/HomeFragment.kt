@@ -78,8 +78,9 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
      * 顶部tabs分类集合,用于渲染tab页,每个tab对应fragment内的数据
      */
     private var mSortDataList: List<SortData> = ArrayList()
-    private var dataInitOk = false
-    private var jarInitOk = false
+    // jar 加载的回调在子线程，主线程要立刻看到结果，加 @Volatile
+    @Volatile private var dataInitOk = false
+    @Volatile private var jarInitOk = false
 
     /** 分栏数据是否已经真的拿到过（占位/缓存渲染不算），用于判断是否还需要兜底重试 */
     private var sortDataReady = false
