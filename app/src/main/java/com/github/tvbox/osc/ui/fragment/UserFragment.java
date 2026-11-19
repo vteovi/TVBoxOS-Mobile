@@ -141,7 +141,14 @@ public class UserFragment extends BaseLazyFragment {
         });
 
         tvHotList1.setAdapter(homeHotVodAdapter);
-        setLoadSir2(tvHotList1);
+        // 空态/失败态可点击重试：原来 onReload 是空实现，加载失败只能杀掉重进
+        setLoadSir2(tvHotList1, new com.kingja.loadsir.callback.Callback.OnReloadListener() {
+            @Override
+            public void onReload(View v) {
+                showLoading();
+                initHomeHotVod(homeHotVodAdapter);
+            }
+        });
         initHomeHotVod(homeHotVodAdapter);
     }
 
@@ -204,6 +211,21 @@ public class UserFragment extends BaseLazyFragment {
                                     }
                                 }
                             });
+                        }
+
+                        @Override
+                        public void onError(Response<String> response) {
+                            super.onError(response);
+                            // 请求失败时原来什么都不做，页面会一直停在加载态（看起来就是一片空白）。
+                            // 有当日缓存就先用缓存，没有就切空态，空态点击可重试。
+                            String cached = Hawk.get("home_hot", "");
+                            ArrayList<Movie.Video> cachedVideos = cached.isEmpty() ? null : loadHots(cached);
+                            if (cachedVideos != null && cachedVideos.size() > 0) {
+                                showSuccess();
+                                adapter.setNewData(cachedVideos);
+                            } else {
+                                showEmpty();
+                            }
                         }
 
                         @Override
