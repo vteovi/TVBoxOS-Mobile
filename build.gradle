@@ -18,21 +18,8 @@ buildscript {
     }
 }
 
-allprojects {
-    repositories {
-        gradlePluginPortal()
-        maven { url "https://maven.aliyun.com/repository/releases" }
-        maven { url "https://maven.aliyun.com/repository/public" }
-        //dlna-cast中cling仓
-        maven {
-            url 'http://4thline.org/m2'
-            allowInsecureProtocol true
-        }
-        maven { url "https://jitpack.io" }
-        google()
-        mavenCentral()
-    }
-}
+// 注意：依赖仓库统一在 settings.gradle 的 dependencyResolutionManagement 里声明
+// （PREFER_SETTINGS 模式下，这里的 allprojects.repositories 会被忽略，所以不再重复写）。
 
 task clean(type: Delete) {
     delete rootProject.buildDir
