@@ -1,6 +1,6 @@
 {
-  "version": "2.36.0",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.0/TVBox-Mobile-v2.36.0-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.0/TVBox-Mobile-v2.36.0-armv7a.apk",
-  "changelog": "**「请选择首页数据源」弹窗适配平板/大屏**：原来固定 330dp 宽 + 2 列，在宽屏上左右各空一大截，数据源多的时候还要一直往下滚\n大屏下宽度改为「屏宽 62%，限制在 460~720dp 之间」，列数按每列约 160dp 自动换算（600dp 屏 3 列、大平板 4 列），一屏能看全的数据源多了一倍\n列表区高度上限从固定 410dp 提到「屏高 62%，上限 760dp」，少滚很多\n手机竖屏保持原样（330dp / 2 列），其它使用同一弹窗的页面（设置项、音轨选择等）也不受影响\n版本号 2.35.2/389 → 2.36.0/390"
+  "version": "2.36.3",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.3/TVBox-Mobile-v2.36.3-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.3/TVBox-Mobile-v2.36.3-armv7a.apk",
+  "changelog": "**修复部分数据源（如龙门影视）点海报进入后显示「暂无数据」**\n- 这类 App 接口的详情地址按 User-Agent 放行，蜘蛛取不到详情时页面就是空的；现在蜘蛛返回空会按同一套接口直连兜底一次，UA 与蜘蛛一致，再把返回统一成标准结构\n- 站点推荐首页的卡片之前点海报只带了 id、没带片名，详情为空时没有任何兜底信息；现在统一带上片名\n- 详情确实拿不到时不再停在白页，会自动带着片名转聚合搜索，去其它数据源里找同名影片；详情正常的数据源行为不变\n- 顺带补上 msearch: 前缀卡片的判断（这类卡片直接进搜索）\n版本号 2.36.0/390 → 2.36.3/393"
 }
