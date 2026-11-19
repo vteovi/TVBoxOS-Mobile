@@ -74,7 +74,25 @@ public class SourceViewModel extends ViewModel {
         playResult = new MutableLiveData<>();
     }
 
-    public static final ExecutorService spThreadPool = Executors.newSingleThreadExecutor();
+    /**
+     * 蜘蛛调用线程池。
+     *
+     * 曾经是 newSingleThreadExecutor(单线程): 列表/详情/播放/搜索全部串行排队。
+     * 只要其中任意一次 spider 调用卡住(老机型、弱网、源站不响应, 这些调用本身没有超时),
+     * 后面排队的任务就永远轮不到 —— 首页 getSort 被卡在队列里, 分栏数据永远回不来,
+     * 表现就是「连顶部那排标签都看不到」的整片空白, 而且怎么重启重进都复现。
+     * 改为固定 4 线程: 单次调用卡住只占住一个线程, 不再拖死整条链。
+     */
+    public static final ExecutorService spThreadPool = Executors.newFixedThreadPool(4);
+
+    /**
+     * 首页分栏(getSort)专用线程池。
+     *
+     * 分栏是「整屏有没有内容」的前置条件, 不能和数据列表共用队列:
+     * 用户进过分类页之后, 列表请求会排在前面, 首页分栏就得干等。
+     * 独立单线程保证它永远最先拿到执行机会, 且分栏只会请求一次, 不会自我堆积。
+     */
+    public static final ExecutorService sortLoadPool = Executors.newSingleThreadExecutor();
 
     /**
      * 首页推荐(homeVideoContent)专用线程池。
@@ -150,7 +168,7 @@ public class SourceViewModel extends ViewModel {
                     }
                 }
             };
-            spThreadPool.execute(waitResponse);
+            sortLoadPool.execute(waitResponse);
         } else if (type == 0 || type == 1) {
             OkGo.<String>get(sourceBean.getApi())
                     .tag(sourceBean.getKey() + "_sort")
