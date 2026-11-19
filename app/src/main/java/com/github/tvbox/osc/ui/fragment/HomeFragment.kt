@@ -78,16 +78,36 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
      * 顶部tabs分类集合,用于渲染tab页,每个tab对应fragment内的数据
      */
     private var mSortDataList: List<SortData> = ArrayList()
-    private var dataInitOk = false
-    private var jarInitOk = false
+    // jar 加载的回调在子线程，主线程要立刻看到结果，加 @Volatile
+    @Volatile private var dataInitOk = false
+    @Volatile private var jarInitOk = false
+
+    /** 分栏数据是否已经真的拿到过（占位/缓存渲染不算），用于判断是否还需要兜底重试 */
+    private var sortDataReady = false
 
     /**
      * 分类结果兜底: 分类接口超时/卡死时, 至少把首页渲染出来(只剩"主页"栏),
      * 避免整页空白、"分栏一个都没有"。
      */
     private val sortTimeoutTask = Runnable {
-        if (mSortDataList.isEmpty()) {
+        // 不能用 mSortDataList.isEmpty() 判断：占位渲染之后列表就不为空了，
+        // 但数据其实还没回来，用空列表判断会把真正的兜底跳过
+        if (!sortDataReady) {
             sourceViewModel?.sortResult?.postValue(null)
+        }
+    }
+
+    /**
+     * 分类/推荐没取到时的自动重试（只重试一次）。
+     * 老机型和刚装好的设备上，首次冷启动时蜘蛛 jar 还没解压/初始化完，
+     * homeContent 容易直接返回空或者超时，页面上就只剩一个空的分栏。
+     * 之前这种情况没有任何补救，只能杀进程重进。
+     */
+    private var sortRetryCount = 0
+    private val sortRetryTask = Runnable {
+        val home = ApiConfig.get().homeSourceBean
+        if (home != null && !home.key.isNullOrEmpty()) {
+            sourceViewModel?.getSort(home.key)
         }
     }
 
@@ -122,14 +142,37 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         }
         setLoadSir(mBinding.contentLayout)
         initViewModel()
+        // 先把缓存/占位的分栏画出来，不等接口和蜘蛛。
+        // 老机型、弱网、源站慢的时候之前是整屏空白一直等，现在至少立刻有内容
+        renderTabsPlaceholder()
         initData()
+    }
+
+    /**
+     * 当前内存里的站点列表是不是「当前订阅地址」解析出来的。
+     *
+     * <p>切换订阅后新配置要下载+解析，这几秒里 {@code ApiConfig} 里还是旧订阅的数据。
+     * 用它来判断要不要先等配置，避免把旧订阅的内容当成新订阅展示出来。
+     */
+    private fun configMatchesCurrentSubscription(): Boolean {
+        val want = Hawk.get(HawkConfig.API_URL, "")
+        if (want.isNullOrEmpty()) return true
+        return want == ApiConfig.get().loadedApiUrl
     }
 
     private fun initViewModel() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
             mHandler.removeCallbacks(sortTimeoutTask)
+            sortDataReady = true
             showSuccess()
+            // 一个分栏都没拿到（蜘蛛还没就绪/接口超时）：自动重试一次，避免停在空页面
+            val sortList = absXml?.classes?.sortList
+            if ((sortList == null || sortList.isEmpty()) && sortRetryCount < 1) {
+                sortRetryCount++
+                mHandler.removeCallbacks(sortRetryTask)
+                mHandler.postDelayed(sortRetryTask, 3000L)
+            }
             val oldSortIds = mSortDataList.map { it.id }
             mSortDataList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
@@ -174,13 +217,29 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         val mainActivity = mActivity as MainActivity
         onlyConfigChanged = mainActivity.useCacheConfig
 
+        // 内存里的站点列表不是当前订阅解析出来的（刚切过订阅、新配置还没解析完）：
+        // 这时如果照常往下走，首页标签、站点推荐、聚合搜索用的都还是上一个订阅的源，
+        // 用户看到的就是「切了订阅还是旧内容」。等新配置解析完再渲染。
+        if (!configMatchesCurrentSubscription()) {
+            dataInitOk = false
+            jarInitOk = false
+            sortDataReady = false
+            loadConfig()
+            return
+        }
+
         val home = ApiConfig.get().homeSourceBean
         if (home != null && !home.name.isNullOrEmpty()) {
             mBinding.tvName.text = home.name
             mBinding.tvName.postDelayed({ mBinding.tvName.isSelected = true }, 2000)
         }
 
-        showLoading()
+        // 先把缓存/占位的分栏画出来，再决定要不要盖一层整屏 loading：
+        // 有内容就直接显示，没有才转圈，避免「明明能先看到标签却一直白屏」
+        renderTabsPlaceholder()
+        if (mSortDataList.isEmpty()) {
+            showLoading()
+        }
         when{
             dataInitOk && jarInitOk -> {
                 //正常初始化会先加载,最终到这,此时数据有以下几种情况
@@ -213,10 +272,10 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 }
 
                 sourceViewModel?.getSort(ApiConfig.get().homeSourceBean.key)
-                // 分类还没渲染出来时上一道保险, 超时就直接渲染"主页"栏
-                if (mSortDataList.isEmpty()) {
+                // 数据还没到手时上一道保险：超时就当空结果处理，触发自动重试
+                if (!sortDataReady) {
                     mHandler.removeCallbacks(sortTimeoutTask)
-                    mHandler.postDelayed(sortTimeoutTask, 20000L)
+                    mHandler.postDelayed(sortTimeoutTask, 12000L)
                 }
             }
             dataInitOk && !jarInitOk -> {
@@ -335,6 +394,54 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             ConvertUtils.dp2px(10f)
         )
         return textView
+    }
+
+    /**
+     * 在等接口和蜘蛛的时候，先用本地缓存的分栏把页面画出来；没有缓存就先放一个「主页」占位。
+     *
+     * 之前的顺序是「拿到 sortResult 才 initViewPager」，所以只要分栏接口慢、蜘蛛卡住，
+     * 或者请求排在别的蜘蛛调用后面，整屏就是空的：顶部标签一个都没有、下面也没有内容。
+     * 老机型和刚装好的设备上最容易碰到（冷启动时 jar 还在解压，spider 调用一卡就是几十秒）。
+     * 现在先把结构画出来，真实数据回来后再按需刷新。
+     */
+    private fun renderTabsPlaceholder() {
+        if (mSortDataList.isNotEmpty()) return
+        val key = ApiConfig.get().homeSourceBean?.key ?: ""
+        if (key.isEmpty()) return
+        val cacheKey = "sort_cache_$key"
+        var cachedList: List<SortData>? = null
+        try {
+            val cacheJson = Hawk.get(cacheKey, "")
+            if (cacheJson.isNotEmpty()) {
+                val cached: ArrayList<SortData>? = com.blankj.utilcode.util.GsonUtils.fromJson(
+                    cacheJson,
+                    object : com.google.gson.reflect.TypeToken<ArrayList<SortData>>() {}.type
+                )
+                if (cached != null && cached.isNotEmpty()) cachedList = cached
+            }
+        } catch (ignore: Exception) {
+        }
+        val tabs = cachedList ?: DefaultConfig.adjustSort(key, ArrayList(), true)
+        // 关掉「主页」又没有缓存时这里会是空的，那就没什么可画的，交给 loading 状态
+        if (tabs.isEmpty()) return
+        mSortDataList = tabs
+        val fakeXml = AbsSortXml()
+        if (cachedList != null) {
+            try {
+                val recJson = Hawk.get(cacheKey + "_rec", "")
+                if (recJson.isNotEmpty()) {
+                    val recList: ArrayList<com.github.tvbox.osc.bean.Movie.Video>? =
+                        com.blankj.utilcode.util.GsonUtils.fromJson(
+                            recJson,
+                            object : com.google.gson.reflect.TypeToken<ArrayList<com.github.tvbox.osc.bean.Movie.Video>>() {}.type
+                        )
+                    if (recList != null) fakeXml.videoList = recList
+                }
+            } catch (ignore: Exception) {
+            }
+        }
+        showSuccess()
+        initViewPager(fakeXml)
     }
 
     private fun initViewPager(absXml: AbsSortXml?) {
