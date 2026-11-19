@@ -1,6 +1,6 @@
 {
-  "version": "2.36.3",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.3/TVBox-Mobile-v2.36.3-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.3/TVBox-Mobile-v2.36.3-armv7a.apk",
-  "changelog": "**修复部分数据源（如龙门影视）点海报进入后显示「暂无数据」**\n- 这类 App 接口的详情地址按 User-Agent 放行，蜘蛛取不到详情时页面就是空的；现在蜘蛛返回空会按同一套接口直连兜底一次，UA 与蜘蛛一致，再把返回统一成标准结构\n- 站点推荐首页的卡片之前点海报只带了 id、没带片名，详情为空时没有任何兜底信息；现在统一带上片名\n- 详情确实拿不到时不再停在白页，会自动带着片名转聚合搜索，去其它数据源里找同名影片；详情正常的数据源行为不变\n- 顺带补上 msearch: 前缀卡片的判断（这类卡片直接进搜索）\n版本号 2.36.0/390 → 2.36.3/393"
+  "version": "2.36.8",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.8/TVBox-Mobile-v2.36.8-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.8/TVBox-Mobile-v2.36.8-armv7a.apk",
+  "changelog": "**修复切换订阅后「慢几拍」：回到首页还是上一个订阅源的内容，点海报进搜索也还是旧源的结果**\n原因有两个：一是订阅页选中后只是记下地址，配置要等回到首页才开始下载，「几秒」主要花在这里；二是新配置下载解析完之前，内存里仍然是上一个订阅的站点列表，首页标签、站点推荐、聚合搜索都在拿旧源的数据用\n现在**选中订阅的那一刻就在后台预取**这份订阅的配置和它依赖的爬虫 jar，等回到首页时配置和 jar 都已在本地，只剩解析和加载\n切换生效时立刻作废内存里的旧订阅状态（站点列表、首页站点、爬虫声明），新配置没解析完之前首页不再拿旧源渲染，而是显示加载中\n首页增加一致性判断：内存里的配置不是当前订阅解析出来的，就先等配置，不会再把上一个订阅的内容当成新订阅展示\n顺带修掉一个老问题：不带协议的订阅地址（如 `example.com/api.json`）原来会被拼成 `http://`，请求必然失败\n版本号 2.36.7/397 → 2.36.8/398"
 }
