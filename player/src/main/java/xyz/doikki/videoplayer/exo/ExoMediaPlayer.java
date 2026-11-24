@@ -26,6 +26,7 @@ import com.google.android.exoplayer2.video.VideoSize;
 import java.util.Map;
 
 import xyz.doikki.videoplayer.player.AbstractPlayer;
+import xyz.doikki.videoplayer.player.PlayerError;
 
 public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
 
@@ -316,6 +317,12 @@ public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
     public void onPlayerError(@NonNull PlaybackException error) {
         errorCode = error.errorCode;
         Log.e("tag--", "" + error.errorCode);
+        // 记下错误码与原因，界面提示要用（ErrorMessage 可能带换行，截断第一行）
+        String exoMsg = error.getMessage() == null ? "" : error.getMessage().trim();
+        int nl = exoMsg.indexOf('\n');
+        if (nl > 0) exoMsg = exoMsg.substring(0, nl);
+        PlayerError.set("Exo 播放失败：" + PlayerError.describeExoError(error.errorCode)
+                + (exoMsg.isEmpty() ? "" : "：" + exoMsg));
         if (path != null) {
             setDataSource(path, headers);
             path = null;

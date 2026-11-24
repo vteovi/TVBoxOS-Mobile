@@ -222,6 +222,7 @@ public class AndroidMediaPlayer extends AbstractPlayer implements MediaPlayer.On
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
+        PlayerError.set("系统播放器失败：" + PlayerError.describeMediaError(what, extra));
         mPlayerEventListener.onError();
         return true;
     }

@@ -421,29 +421,8 @@ public class VodController extends BaseController {
         mPlayerBtn.setOnClickListener(view -> {
             myHandle.removeCallbacks(myRunnable);
             myHandle.postDelayed(myRunnable, dismissTimeOperationBar);
-            try {
-                int playerType = mPlayerConfig.getInt("pl");
-                ArrayList<Integer> exsitPlayerTypes = PlayerHelper.getExistPlayerTypes();
-                int playerTypeIdx = 0;
-                int playerTypeSize = exsitPlayerTypes.size();
-                for (int i = 0; i < playerTypeSize; i++) {
-                    if (playerType == exsitPlayerTypes.get(i)) {
-                        if (i == playerTypeSize - 1) {
-                            playerTypeIdx = 0;
-                        } else {
-                            playerTypeIdx = i + 1;
-                        }
-                    }
-                }
-                playerType = exsitPlayerTypes.get(playerTypeIdx);
-                mPlayerConfig.put("pl", playerType);
-                updatePlayerCfgView();
-                listener.updatePlayerCfg();
-                listener.replay(false);
-                hideBottom();
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+            switchToNextPlayer(true);
+            hideBottom();
             mPlayerBtn.requestFocus();
             mPlayerBtn.requestFocusFromTouch();
         });
@@ -720,6 +699,34 @@ public class VodController extends BaseController {
     public void setPlayerConfig(JSONObject playerCfg) {
         this.mPlayerConfig = playerCfg;
         updatePlayerCfgView();
+    }
+
+    /**
+     * 切到下一个播放器。
+     *
+     * <p>includeExternal=false 时只在内置播放器（系统 / IJK / Exo）之间循环。
+     * 播放失败后的自动切换**必须**传 false，否则会直接把用户弹到 MX/VLC 之类的
+     * 外部 App 里去；外部播放器只在用户明确选择时才调用。</p>
+     */
+    public void switchToNextPlayer(boolean includeExternal) {
+        try {
+            int playerType = mPlayerConfig.getInt("pl");
+            ArrayList<Integer> exist = new ArrayList<>();
+            for (int type : PlayerHelper.getExistPlayerTypes()) {
+                if (includeExternal || type < 10) exist.add(type);
+            }
+            if (exist.isEmpty()) return;
+            int idx = exist.indexOf(playerType);
+            int nextIdx = (idx < 0 || idx == exist.size() - 1) ? 0 : idx + 1;
+            int next = exist.get(nextIdx);
+            if (next == playerType && exist.size() == 1) return;
+            mPlayerConfig.put("pl", next);
+            updatePlayerCfgView();
+            listener.updatePlayerCfg();
+            listener.replay(false);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     void updatePlayerCfgView() {

@@ -2,6 +2,8 @@ package com.github.tvbox.osc.ui.fragment;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
@@ -31,6 +33,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Observer;
@@ -105,6 +108,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -118,6 +122,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import me.jessyan.autosize.AutoSize;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkTimedText;
+import xyz.doikki.videoplayer.player.PlayerError;
 import xyz.doikki.videoplayer.player.AbstractPlayer;
 import xyz.doikki.videoplayer.player.ProgressManager;
 
@@ -135,6 +140,18 @@ public class PlayFragment extends BaseLazyFragment {
      * 记录当前播放url
      */
     private String mCurrentUrl;
+    /**
+     * 当前播放地址对应的请求头，外部播放器要用
+     */
+    private HashMap<String, String> mCurrentHeaders;
+    /**
+     * 最后一次播放失败的详情（播放器 + 错误码 + 地址），点提示可再次查看
+     */
+    private String lastPlayErrorDetail = "";
+    /**
+     * 失败弹窗是否已经在显示，避免连续的错误回调叠出多个弹窗
+     */
+    private boolean playErrorDialogShowing = false;
     private boolean mFullWindows;
     /**
      * 非全屏下的设置弹窗
@@ -144,10 +161,6 @@ public class PlayFragment extends BaseLazyFragment {
      * 全屏下的设置弹窗
      */
     private BasePopupView mPlayingControlRightDialog;
-    /**
-     * 视频播放出错时,自动切换另一个播放器,这个开关避免多次切换
-     */
-    boolean retriedSwitchPlayer = false;
     @Override
     protected int getLayoutResID() {
         return R.layout.activity_play;
@@ -212,6 +225,10 @@ public class PlayFragment extends BaseLazyFragment {
         });
         mVideoView = findViewById(R.id.mVideoView);
         mPlayLoadTip = findViewById(R.id.play_load_tip);
+        // 提示文字本身也能点开详情弹窗，避免弹窗被误关后再也看不到错误原因
+        mPlayLoadTip.setOnClickListener(v -> {
+            if (!TextUtils.isEmpty(lastPlayErrorDetail)) showPlaybackErrorDialog(lastPlayErrorDetail);
+        });
         mPlayLoading = findViewById(R.id.play_loading);
         mPlayLoadErr = findViewById(R.id.play_load_error);
         mController = new VodController(requireContext());
@@ -272,7 +289,16 @@ public class PlayFragment extends BaseLazyFragment {
 
             @Override
             public void errReplay() {
-                errorWithRetry("视频播放出错", false);
+                // 先自动重试一次（只重试，不换播放器、绝不自动拉起外部播放器）
+                if (autoRetry()) return;
+                if (!isAdded()) return;
+                final String detail = buildPlaybackErrorDetail();
+                lastPlayErrorDetail = detail;
+                LOG.i("play error: " + detail.replace("\n", " | "));
+                requireActivity().runOnUiThread(() -> {
+                    setTip("播放失败，点此查看详情", false, true);
+                    showPlaybackErrorDialog(detail);
+                });
             }
 
             @Override
@@ -652,22 +678,136 @@ public class PlayFragment extends BaseLazyFragment {
             mPlayLoadTip.setVisibility(View.VISIBLE);
             mPlayLoading.setVisibility(loading ? View.VISIBLE : View.GONE);
             mPlayLoadErr.setVisibility(err ? View.VISIBLE : View.GONE);
-
-            if ("视频播放出错".equals(msg)){
-                if (!retriedSwitchPlayer){
-                    ToastUtils.showShort("播放出错,正在尝试切换播放器");
-                    retriedSwitchPlayer = true;
-                    mController.mPlayerBtn.performClick();
-                }else {
-                    SpanUtils.with(mPlayLoadTip)
-                            .append("视频播放出错，")
-                            .append("切换播放器")
-                            .setClickSpan(Utils.getThemeColor(requireContext(), R.color.orange), false, view -> {
-                                mController.mPlayerBtn.performClick();
-                            }).create();
-                }
-            }
         });
+    }
+
+    /**
+     * 把播放器报的错误拼成一份能看懂的详情：播放器 + 错误码/原因 + 当前地址。
+     */
+    private String buildPlaybackErrorDetail() {
+        StringBuilder sb = new StringBuilder();
+        int playerType = 1;
+        try {
+            playerType = mVodPlayerCfg.getInt("pl");
+        } catch (Throwable ignored) {
+        }
+        sb.append("播放器：").append(PlayerHelper.getPlayerName(playerType));
+        String err = PlayerError.get();
+        if (TextUtils.isEmpty(err))
+            err = "播放器没有返回具体错误，多见于地址失效、缺少 Referer/UA，或协议不被支持";
+        sb.append("\n错误：").append(err);
+        if (!TextUtils.isEmpty(mCurrentUrl)) {
+            String u = mCurrentUrl;
+            if (u.length() > 220) u = u.substring(0, 220) + "…";
+            sb.append("\n地址：").append(u);
+        }
+        if (mCurrentUrl != null && mCurrentUrl.startsWith("proxy://"))
+            sb.append("\n提示：这是 App 内部代理地址，外部播放器打不开");
+        return sb.toString();
+    }
+
+    /**
+     * 播放失败弹窗：先让用户看清原因，再由用户决定重试 / 换内置播放器 / 用外部播放器。
+     *
+     * <p>之前是失败后直接触发播放器按钮的点击（在已安装的播放器列表里循环），
+     * 列表里带 MX/VLC 时会把用户直接弹到外部 App，所以现在改成显式选择。</p>
+     */
+    private void showPlaybackErrorDialog(final String detail) {
+        if (!isAdded() || mActivity == null || mActivity.isFinishing()) return;
+        if (playErrorDialogShowing) return;
+        playErrorDialogShowing = true;
+        final String[] items = new String[]{"重试当前集", "换个内置播放器", "用外部播放器打开", "复制错误信息"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("播放失败")
+                .setMessage(detail)
+                .setItems(items, (dialog, which) -> {
+                    dialog.dismiss();
+                    switch (which) {
+                        case 0:
+                            autoRetryCount = 0;
+                            play(false);
+                            break;
+                        case 1:
+                            mController.switchToNextPlayer(false);
+                            break;
+                        case 2:
+                            openExternalPlayerManually();
+                            break;
+                        case 3:
+                            copyPlayError(detail);
+                            break;
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .setOnDismissListener(d -> playErrorDialogShowing = false)
+                .show();
+    }
+
+    /**
+     * 只有用户明确点了"用外部播放器打开"才会走到这里。
+     */
+    private void openExternalPlayerManually() {
+        if (!isAdded() || mActivity == null) return;
+        if (TextUtils.isEmpty(mCurrentUrl)) {
+            ToastUtils.showShort("还没有可播放的地址");
+            return;
+        }
+        if (mCurrentUrl.startsWith("proxy://")) {
+            ToastUtils.showShort("当前是 App 内部代理地址，外部播放器打不开，请先用内置播放器");
+            return;
+        }
+        final ArrayList<Integer> externals = new ArrayList<>();
+        for (int type : PlayerHelper.getExistPlayerTypes()) {
+            if (type >= 10) externals.add(type);
+        }
+        if (externals.isEmpty()) {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("没有可用的外部播放器")
+                    .setMessage("没有检测到已安装的外部播放器（MX Player / VLC 等）。安装后可在播放页长按播放器按钮选择。")
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+        if (externals.size() == 1) {
+            launchExternalPlayer(externals.get(0));
+            return;
+        }
+        final String[] names = new String[externals.size()];
+        for (int i = 0; i < externals.size(); i++)
+            names[i] = PlayerHelper.getPlayerName(externals.get(i));
+        new AlertDialog.Builder(requireContext())
+                .setTitle("选择外部播放器")
+                .setItems(names, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchExternalPlayer(externals.get(which));
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void launchExternalPlayer(int playerType) {
+        try {
+            if (mVodInfo == null || mActivity == null) return;
+            VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
+            String playTitle = mVodInfo.name + " " + vs.name;
+            long progress = getSavedProgress(progressKey);
+            boolean ok = PlayerHelper.runExternalPlayer(playerType, mActivity, mCurrentUrl, playTitle, playSubtitle, mCurrentHeaders, progress);
+            ToastUtils.showShort(ok ? "已调用 " + PlayerHelper.getPlayerName(playerType)
+                    : "调用失败，请确认已安装 " + PlayerHelper.getPlayerName(playerType));
+        } catch (Throwable th) {
+            th.printStackTrace();
+            ToastUtils.showShort("调用外部播放器失败：" + th.getMessage());
+        }
+    }
+
+    private void copyPlayError(String detail) {
+        try {
+            ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("play-error", detail));
+            ToastUtils.showShort("错误信息已复制");
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
     }
 
     void hideTip() {
@@ -765,6 +905,9 @@ public class PlayFragment extends BaseLazyFragment {
 
     void playUrl(String url, HashMap<String, String> headers) {
         mCurrentUrl = url;
+        mCurrentHeaders = headers;
+        // 换地址就是新的播放尝试，清掉上一次的错误快照
+        PlayerError.clear();
         if (url == null || url.length() == 0) return;
         // 部分 spider 会直接返回 webview:// / video:// 这类地址，播放器本身不认识；
         // 之前会原样丢给 ExoPlayer/IJK，表现为点播放黑屏或直接报错。这里按 extractor 语义先分发。
@@ -1260,6 +1403,8 @@ public class PlayFragment extends BaseLazyFragment {
 
     public void play(boolean reset) {
         if (mVodInfo == null) return;
+        lastPlayErrorDetail = "";
+        PlayerError.clear();
         VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
         EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_REFRESH, mVodInfo.playIndex));
         EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_REFRESH_NOTIFY, mVodInfo.name + "&&" + vs.name));
