@@ -58,6 +58,28 @@ public abstract class Spider {
         return null;
     }
 
+    /**
+     * 新版 catvod 的 jar 爬虫统一用 proxy(Map) 这个命名。宿主调用链是 jar 里的
+     * com.github.catvod.spider.Proxy 静态入口 -> 具体 spider 实例的 proxy(...)，
+     * 基类缺这个方法时运行期会抛 NoSuchMethodError，表现为走代理的源点播放直接黑屏。
+     */
+    public Object[] proxy(Map < String, String > params) throws Exception {
+        return proxyLocal(params);
+    }
+
+    public String action(String action) throws Exception {
+        return "{}";
+    }
+
+    /**
+     * 旧版 catvod API：jar 里的爬虫会用 getProxy(true) 拼本地代理基地址，
+     * 再自行追加 ?do=xxx。宿主缺这个方法时，调用方在运行期会 NoSuchMethodError，
+     * 表现为"能出列表、点播放就失败"。
+     */
+    public String getProxy(boolean local) {
+        return com.github.catvod.Proxy.getUrl(local);
+    }
+
     public void cancelByTag() {
 
     }

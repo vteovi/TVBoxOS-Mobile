@@ -16,6 +16,7 @@ import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 import tv.danmaku.ijk.media.player.misc.IjkTrackInfo;
 import xyz.doikki.videoplayer.player.AbstractPlayer;
+import xyz.doikki.videoplayer.player.PlayerError;
 import xyz.doikki.videoplayer.player.VideoViewManager;
 
 public class IjkPlayer extends AbstractPlayer implements IMediaPlayer.OnErrorListener,
@@ -71,6 +72,7 @@ public class IjkPlayer extends AbstractPlayer implements IMediaPlayer.OnErrorLis
                 mMediaPlayer.setDataSource(mAppContext, uri, headers);
             }
         } catch (Exception e) {
+            PlayerError.set("IJK 打开地址失败：" + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : "：" + e.getMessage()));
             mPlayerEventListener.onError();
         }
     }
@@ -213,6 +215,8 @@ public class IjkPlayer extends AbstractPlayer implements IMediaPlayer.OnErrorLis
 
     @Override
     public boolean onError(IMediaPlayer mp, int what, int extra) {
+        // 错误码在回调里被丢掉就再也拿不到了，先记下来给界面展示
+        PlayerError.set("IJK 播放失败：" + PlayerError.describeMediaError(what, extra));
         mPlayerEventListener.onError();
         return true;
     }

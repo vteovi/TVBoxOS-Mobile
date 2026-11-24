@@ -127,6 +127,10 @@ public class JarLoader {
             if (!cacheDir.exists())
                 cacheDir.mkdirs();
             BaseDexClassLoader classLoader = createClassLoader(jar, cacheDir);
+            // 先把本地代理端口写进 jar 里的 com.github.catvod.Proxy(默认 -1)。
+            // 这一步漏了, spider 拼出的 m3u8 代理地址就是 http://127.0.0.1:-1/proxy?...,
+            // 播放器连不上, 表现是"能搜到剧但点了播不了"。
+            bindProxyPort(classLoader);
 
             // 第一步: 只要能把 Init 类加载出来, 就说明 jar/dex 本身是完好的, 订阅即视为可用。
             // 这是判断"订阅能不能用"的唯一标准。
@@ -171,6 +175,8 @@ public class JarLoader {
                 System.out.println("自定义爬虫 Init 初始化失败(仅影响依赖它的源, 订阅仍可用): " + th);
                 th.printStackTrace();
             }
+            // Init 里可能重新初始化了 Proxy, 再写一次端口(幂等)
+            bindProxyPort(classLoader);
 
             // 第三步: Proxy 为可选能力, 没有也不影响其它源
             try {
@@ -184,6 +190,19 @@ public class JarLoader {
             th.printStackTrace();
         }
         return success;
+    }
+
+    /**
+     * 把宿主本地服务的真实端口写进 {@code com.github.catvod.Proxy}。
+     * 宿主持有同名类时 loadClass 命中的就是宿主那份，jar 自带一份时也能写中，
+     * 两种情况都能避免 spider 拼出 {@code 127.0.0.1:-1} 的地址。
+     */
+    private void bindProxyPort(BaseDexClassLoader loader) {
+        try {
+            Class<?> clazz = loader.loadClass("com.github.catvod.Proxy");
+            clazz.getMethod("set", int.class).invoke(null, com.github.tvbox.osc.server.RemoteServer.serverPort);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** Android 14(API 34) 起, 系统禁止 DexClassLoader 加载"可写目录"里的 dex。 */
@@ -407,12 +426,30 @@ public class JarLoader {
         return null;
     }
 
+    /**
+     * /proxy 的分发入口。
+     *
+     * <p>订阅里每个源可能各带一份 jar, jar 里的 {@code com.github.catvod.spider.Proxy}
+     * 是按 jar 注册的; 而 /proxy 请求过来时只认 {@link #recentJarKey}。
+     * 搜索是并发的、详情页也可能先跑过别的源, recentJarKey 很容易指向另一份 jar,
+     * 于是 proxyMethods.get(recentJarKey) 拿到的是错的那份(或者 null) ->
+     * /proxy 返回空 -> 播放器报 Exo 2004。这里在 recent 失手时把已注册的 jar 都试一遍。</p>
+     */
     public Object[] proxyInvoke(Map params) {
+        Object[] rs = invokeProxy(proxyMethods.get(recentJarKey), params);
+        if (rs != null) return rs;
+        for (java.util.Map.Entry<String, Method> entry : proxyMethods.entrySet()) {
+            if (entry.getKey().equals(recentJarKey)) continue;
+            rs = invokeProxy(entry.getValue(), params);
+            if (rs != null) return rs;
+        }
+        return null;
+    }
+
+    private Object[] invokeProxy(Method proxyFun, Map params) {
         try {
-            Method proxyFun = proxyMethods.get(recentJarKey);
-            if (proxyFun != null) {
-                return (Object[]) proxyFun.invoke(null, params);
-            }
+            if (proxyFun == null) return null;
+            return (Object[]) proxyFun.invoke(null, params);
         } catch (Throwable th) {
 
         }

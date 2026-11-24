@@ -2,6 +2,8 @@ package com.github.tvbox.osc.ui.fragment;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
@@ -31,6 +33,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Observer;
@@ -71,6 +74,7 @@ import com.github.tvbox.osc.ui.dialog.SearchSubtitleDialog;
 import com.github.tvbox.osc.ui.dialog.SelectDialog;
 import com.github.tvbox.osc.ui.dialog.SubtitleDialog;
 import com.github.tvbox.osc.util.AdBlocker;
+import com.github.tvbox.osc.util.parser.SuperParse;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
@@ -104,6 +108,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -117,6 +122,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import me.jessyan.autosize.AutoSize;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkTimedText;
+import xyz.doikki.videoplayer.player.PlayerError;
 import xyz.doikki.videoplayer.player.AbstractPlayer;
 import xyz.doikki.videoplayer.player.ProgressManager;
 
@@ -134,6 +140,18 @@ public class PlayFragment extends BaseLazyFragment {
      * 记录当前播放url
      */
     private String mCurrentUrl;
+    /**
+     * 当前播放地址对应的请求头，外部播放器要用
+     */
+    private HashMap<String, String> mCurrentHeaders;
+    /**
+     * 最后一次播放失败的详情（播放器 + 错误码 + 地址），点提示可再次查看
+     */
+    private String lastPlayErrorDetail = "";
+    /**
+     * 失败弹窗是否已经在显示，避免连续的错误回调叠出多个弹窗
+     */
+    private boolean playErrorDialogShowing = false;
     private boolean mFullWindows;
     /**
      * 非全屏下的设置弹窗
@@ -143,10 +161,6 @@ public class PlayFragment extends BaseLazyFragment {
      * 全屏下的设置弹窗
      */
     private BasePopupView mPlayingControlRightDialog;
-    /**
-     * 视频播放出错时,自动切换另一个播放器,这个开关避免多次切换
-     */
-    boolean retriedSwitchPlayer = false;
     @Override
     protected int getLayoutResID() {
         return R.layout.activity_play;
@@ -211,6 +225,10 @@ public class PlayFragment extends BaseLazyFragment {
         });
         mVideoView = findViewById(R.id.mVideoView);
         mPlayLoadTip = findViewById(R.id.play_load_tip);
+        // 提示文字本身也能点开详情弹窗，避免弹窗被误关后再也看不到错误原因
+        mPlayLoadTip.setOnClickListener(v -> {
+            if (!TextUtils.isEmpty(lastPlayErrorDetail)) showPlaybackErrorDialog(lastPlayErrorDetail);
+        });
         mPlayLoading = findViewById(R.id.play_loading);
         mPlayLoadErr = findViewById(R.id.play_load_error);
         mController = new VodController(requireContext());
@@ -271,7 +289,16 @@ public class PlayFragment extends BaseLazyFragment {
 
             @Override
             public void errReplay() {
-                errorWithRetry("视频播放出错", false);
+                // 先自动重试一次（只重试，不换播放器、绝不自动拉起外部播放器）
+                if (autoRetry()) return;
+                if (!isAdded()) return;
+                final String detail = buildPlaybackErrorDetail();
+                lastPlayErrorDetail = detail;
+                LOG.i("play error: " + detail.replace("\n", " | "));
+                requireActivity().runOnUiThread(() -> {
+                    setTip("播放失败，点此查看详情", false, true);
+                    showPlaybackErrorDialog(detail);
+                });
             }
 
             @Override
@@ -651,22 +678,146 @@ public class PlayFragment extends BaseLazyFragment {
             mPlayLoadTip.setVisibility(View.VISIBLE);
             mPlayLoading.setVisibility(loading ? View.VISIBLE : View.GONE);
             mPlayLoadErr.setVisibility(err ? View.VISIBLE : View.GONE);
-
-            if ("视频播放出错".equals(msg)){
-                if (!retriedSwitchPlayer){
-                    ToastUtils.showShort("播放出错,正在尝试切换播放器");
-                    retriedSwitchPlayer = true;
-                    mController.mPlayerBtn.performClick();
-                }else {
-                    SpanUtils.with(mPlayLoadTip)
-                            .append("视频播放出错，")
-                            .append("切换播放器")
-                            .setClickSpan(Utils.getThemeColor(requireContext(), R.color.orange), false, view -> {
-                                mController.mPlayerBtn.performClick();
-                            }).create();
-                }
-            }
         });
+    }
+
+    /**
+     * 把播放器报的错误拼成一份能看懂的详情：播放器 + 错误码/原因 + 当前地址。
+     */
+    private String buildPlaybackErrorDetail() {
+        StringBuilder sb = new StringBuilder();
+        int playerType = 1;
+        try {
+            playerType = mVodPlayerCfg.getInt("pl");
+        } catch (Throwable ignored) {
+        }
+        sb.append("播放器：").append(PlayerHelper.getPlayerName(playerType));
+        String err = PlayerError.get();
+        if (TextUtils.isEmpty(err))
+            err = "播放器没有返回具体错误，多见于地址失效、缺少 Referer/UA，或协议不被支持";
+        sb.append("\n错误：").append(err);
+        if (!TextUtils.isEmpty(mCurrentUrl)) {
+            String u = mCurrentUrl;
+            if (u.length() > 220) u = u.substring(0, 220) + "…";
+            sb.append("\n地址：").append(u);
+        }
+        if (mCurrentUrl != null && mCurrentUrl.startsWith("proxy://"))
+            sb.append("\n提示：这是 App 内部代理地址，外部播放器打不开");
+        return sb.toString();
+    }
+
+    /**
+     * 播放失败弹窗：先让用户看清原因，再由用户决定重试 / 换内置播放器 / 用外部播放器。
+     *
+     * <p>之前是失败后直接触发播放器按钮的点击（在已安装的播放器列表里循环），
+     * 列表里带 MX/VLC 时会把用户直接弹到外部 App，所以现在改成显式选择。</p>
+     */
+    private void showPlaybackErrorDialog(final String detail) {
+        if (!isAdded() || mActivity == null || mActivity.isFinishing()) return;
+        if (playErrorDialogShowing) return;
+        playErrorDialogShowing = true;
+        final String[] items = new String[]{"重试当前集", "换个内置播放器", "用外部播放器打开", "复制到剪切板"};
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setTitle("播放失败")
+                .setMessage(detail + "\n\n（长按上面的文字可直接选中复制）")
+                .setItems(items, (dialog1, which) -> {
+                    dialog1.dismiss();
+                    switch (which) {
+                        case 0:
+                            autoRetryCount = 0;
+                            play(false);
+                            break;
+                        case 1:
+                            mController.switchToNextPlayer(false);
+                            break;
+                        case 2:
+                            openExternalPlayerManually();
+                            break;
+                        case 3:
+                            copyPlayError(detail);
+                            break;
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .setOnDismissListener(d -> playErrorDialogShowing = false)
+                .create();
+        dialog.show();
+        // 系统 AlertDialog 的 message 默认不可选中，用户没法复制错误码；这里打开选中
+        TextView msgView = dialog.findViewById(android.R.id.message);
+        if (msgView != null) {
+            msgView.setTextIsSelectable(true);
+            msgView.setOnLongClickListener(v -> {
+                copyPlayError(detail);
+                return true;
+            });
+        }
+    }
+
+    /**
+     * 只有用户明确点了"用外部播放器打开"才会走到这里。
+     */
+    private void openExternalPlayerManually() {
+        if (!isAdded() || mActivity == null) return;
+        if (TextUtils.isEmpty(mCurrentUrl)) {
+            ToastUtils.showShort("还没有可播放的地址");
+            return;
+        }
+        if (mCurrentUrl.startsWith("proxy://")) {
+            ToastUtils.showShort("当前是 App 内部代理地址，外部播放器打不开，请先用内置播放器");
+            return;
+        }
+        final ArrayList<Integer> externals = new ArrayList<>();
+        for (int type : PlayerHelper.getExistPlayerTypes()) {
+            if (type >= 10) externals.add(type);
+        }
+        if (externals.isEmpty()) {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("没有可用的外部播放器")
+                    .setMessage("没有检测到已安装的外部播放器（MX Player / VLC 等）。安装后可在播放页长按播放器按钮选择。")
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+        if (externals.size() == 1) {
+            launchExternalPlayer(externals.get(0));
+            return;
+        }
+        final String[] names = new String[externals.size()];
+        for (int i = 0; i < externals.size(); i++)
+            names[i] = PlayerHelper.getPlayerName(externals.get(i));
+        new AlertDialog.Builder(requireContext())
+                .setTitle("选择外部播放器")
+                .setItems(names, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchExternalPlayer(externals.get(which));
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void launchExternalPlayer(int playerType) {
+        try {
+            if (mVodInfo == null || mActivity == null) return;
+            VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
+            String playTitle = mVodInfo.name + " " + vs.name;
+            long progress = getSavedProgress(progressKey);
+            boolean ok = PlayerHelper.runExternalPlayer(playerType, mActivity, mCurrentUrl, playTitle, playSubtitle, mCurrentHeaders, progress);
+            ToastUtils.showShort(ok ? "已调用 " + PlayerHelper.getPlayerName(playerType)
+                    : "调用失败，请确认已安装 " + PlayerHelper.getPlayerName(playerType));
+        } catch (Throwable th) {
+            th.printStackTrace();
+            ToastUtils.showShort("调用外部播放器失败：" + th.getMessage());
+        }
+    }
+
+    private void copyPlayError(String detail) {
+        try {
+            ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("play-error", detail));
+            ToastUtils.showShort("错误信息已复制");
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
     }
 
     void hideTip() {
@@ -762,8 +913,94 @@ public class PlayFragment extends BaseLazyFragment {
         return StringUtils.join(lines, linesplit);
     }
 
+    private static final java.util.regex.Pattern LOCAL_PROXY_PORT =
+            java.util.regex.Pattern.compile("(127\\.0\\.0\\.1|localhost):(-?\\d+)");
+
+    /** 把本地代理地址里的端口改成宿主真实端口（-1 / 9978 / 0 都会命中） */
+    static String normalizeLocalProxyPort(String url) {
+        try {
+            int port = RemoteServer.serverPort;
+            if (port <= 0 || url == null || url.length() == 0) return url;
+            java.util.regex.Matcher m = LOCAL_PROXY_PORT.matcher(url);
+            StringBuffer sb = new StringBuffer();
+            boolean changed = false;
+            while (m.find()) {
+                String host = "localhost".equalsIgnoreCase(m.group(1)) ? "127.0.0.1" : m.group(1);
+                int cur;
+                try {
+                    cur = Integer.parseInt(m.group(2));
+                } catch (Throwable th) {
+                    cur = -1;
+                }
+                if (cur == port) {
+                    m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(host + ":" + m.group(2)));
+                } else {
+                    m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(host + ":" + port));
+                    changed = true;
+                }
+            }
+            m.appendTail(sb);
+            return changed ? sb.toString() : url;
+        } catch (Throwable th) {
+            return url;
+        }
+    }
+
+    /** 是否为本机代理地址（spider / 复杂解析把播放地址包在 /proxy?do=... 里） */
+    static boolean isLocalProxyUrl(String url) {
+        if (url == null || url.length() == 0) return false;
+        int port = RemoteServer.serverPort;
+        if (port > 0 && url.contains("127.0.0.1:" + port + "/proxy")) return true;
+        return url.contains("/proxy?do=") || url.contains("/proxy?go=");
+    }
+
     void playUrl(String url, HashMap<String, String> headers) {
         mCurrentUrl = url;
+        mCurrentHeaders = headers;
+        // 换地址就是新的播放尝试，清掉上一次的错误快照
+        PlayerError.clear();
+        if (url == null || url.length() == 0) return;
+        // 兜底: 有些 spider 的 com.github.catvod.Proxy 端口没被宿主写到，会拼出
+        // http://127.0.0.1:-1/proxy?...（正常应该是本地服务端口）。这种地址播放器
+        // 连不上，Exo 报 HTTP 状态码异常(2004)、IJK 报 -1004，换成真实端口再播。
+        // 端口写错的不止 -1: 部分 jar 把本地代理写死成 9978(fongmi 默认端口), 而本机
+        // 实际是 9980, 同样是连不上 -> Exo 2004。统一把 127.0.0.1/localhost 的端口改成真实端口。
+        String portFixed = normalizeLocalProxyPort(url);
+        if (!portFixed.equals(url)) {
+            // 用递归而不是改形参: 下面还有匿名内部类引用 url, 形参一旦重新赋值就不是
+            // effectively final, 编译直接报错。
+            playUrl(portFixed, headers);
+            return;
+        }
+        // 部分 spider 会直接返回 webview:// / video:// 这类地址，播放器本身不认识；
+        // 之前会原样丢给 ExoPlayer/IJK，表现为点播放黑屏或直接报错。这里按 extractor 语义先分发。
+        String lowerPlayUrl = url.toLowerCase(java.util.Locale.ROOT);
+        if (lowerPlayUrl.startsWith("webview://")) {
+            String webviewTarget = url.substring("webview://".length()).trim();
+            if (webviewTarget.length() > 0) {
+                initParse("", false, "", webviewTarget);
+            } else {
+                errorWithRetry("播放地址为空", false);
+            }
+            return;
+        }
+        if (lowerPlayUrl.startsWith("video://")) {
+            String videoTarget = url.substring("video://".length()).trim();
+            if (videoTarget.length() > 0 && !videoTarget.toLowerCase(java.util.Locale.ROOT).startsWith("video://")) {
+                playUrl(videoTarget, headers);
+            } else {
+                errorWithRetry("播放地址为空", false);
+            }
+            return;
+        }
+        // 本地代理地址(spider 把真实地址整个包在 url= 参数里)绝对不能走下面的 m3u8 净化:
+        // 净化用 url.lastIndexOf('/') 推 base, 拿到的会是 http://127.0.0.1:9980/ 本身,
+        // 相对分片被改写成 http://127.0.0.1:9980/xxx.ts -> 404, Exo 报 2004,
+        // 表现就是"能搜到、点播放就报 HTTP 状态码异常"。分片重写交给 /proxy 那条链路做。
+        if (isLocalProxyUrl(url)) {
+            startPlayUrl(url, headers);
+            return;
+        }
         if (!Hawk.get(HawkConfig.VIDEO_PURIFY, true)) {
             startPlayUrl(url, headers);
             return;
@@ -881,7 +1118,7 @@ public class PlayFragment extends BaseLazyFragment {
 
     void startPlayUrl(String url, HashMap<String, String> headers) {
         LOG.i("playUrl:" + url);
-        if (autoRetryCount > 0 && url.contains(".m3u8")) {
+        if (autoRetryCount > 0 && url.contains(".m3u8") && !isLocalProxyUrl(url)) {
             url = "http://home.jundie.top:666/unBom.php?m3u8=" + url;//尝试去bom头再次播放
         }
         String finalUrl = url;
@@ -1237,6 +1474,8 @@ public class PlayFragment extends BaseLazyFragment {
 
     public void play(boolean reset) {
         if (mVodInfo == null) return;
+        lastPlayErrorDetail = "";
+        PlayerError.clear();
         VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
         EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_REFRESH, mVodInfo.playIndex));
         EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_REFRESH_NOTIFY, mVodInfo.name + "&&" + vs.name));
@@ -1299,7 +1538,12 @@ public class PlayFragment extends BaseLazyFragment {
 
     private void initParse(String flag, boolean useParse, String playUrl, final String url) {
         parseFlag = flag;
-        webUrl = url;
+        // spider 返回 webview:// 表示"用 WebView 打开该页再嗅探"，解包后交给嗅探流程；
+        // 否则 WebView 会把 webview:// 当成真实网址去加载，直接失败。
+        String webviewUrl = url == null ? "" : url.trim();
+        if (webviewUrl.toLowerCase(java.util.Locale.ROOT).startsWith("webview://"))
+            webviewUrl = webviewUrl.substring("webview://".length()).trim();
+        webUrl = webviewUrl;
         ParseBean parseBean = null;
         mController.showParse(useParse);
         if (useParse) {
@@ -1361,6 +1605,11 @@ public class PlayFragment extends BaseLazyFragment {
         mHandler.removeMessages(100);
         stopLoadWebView(false);
         OkGo.getInstance().cancelTag("json_jx");
+        try {
+            SuperParse.stopJsonJx();
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
         if (parseThreadPool != null) {
             try {
                 parseThreadPool.shutdown();
@@ -1373,10 +1622,130 @@ public class PlayFragment extends BaseLazyFragment {
 
     ExecutorService parseThreadPool;
 
+    /**
+     * 聚合解析：把订阅里所有解析器（type 0 网页嗅探 / type 1 json）一起用。
+     * isSuper=true 走 SuperParse：WebView 打开聚合页嗅探的同时，并发请求所有 json 解析器，
+     * 谁先出地址用谁。之前没有这条路，只靠单个 jx 的源解析不出来，表现就是"点播放报错，
+     * 换哪个播放内核都一样"。
+     */
+    private void parseMix(ParseBean pb, boolean isSuper) {
+        setTip(isSuper ? "正在超级解析" : "正在解析播放地址", true, false);
+        if (parseThreadPool == null) parseThreadPool = Executors.newSingleThreadExecutor();
+        LinkedHashMap<String, HashMap<String, String>> jxs = new LinkedHashMap<>();
+        String extendName = "";
+        for (ParseBean p : ApiConfig.get().getParseBeanList()) {
+            // 跳过"超级解析"自身，否则会往解析器表里塞一条 type=4 的空记录
+            if (p.getType() == 4) continue;
+            HashMap<String, String> data = new HashMap<>();
+            data.put("url", p.getUrl());
+            if (p.getUrl().equals(pb.getUrl())) extendName = p.getName();
+            data.put("type", p.getType() + "");
+            data.put("ext", p.getExt());
+            jxs.put(p.getName(), data);
+        }
+        final String finalExtendName = extendName;
+        final ExecutorService pool = parseThreadPool;
+        pool.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (isSuper) {
+                    JSONObject rs = SuperParse.parse(jxs, parseFlag + "123", webUrl);
+                    if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) {
+                        // 订阅里没有 type=0 的网页解析器时，SuperParse 拼不出可嗅探的聚合页；
+                        // 这时退回纯 json 解析器并发，避免"只有 json 解析"的订阅直接判失败。
+                        JSONObject res = SuperParse.doJsonJx(webUrl);
+                        if (res != null && res.has("url") && !res.optString("url").isEmpty()) {
+                            rsJsonJX(res, false);
+                        } else {
+                            setTip("解析错误", false, true);
+                        }
+                        return;
+                    }
+                    if (rs.has("parse") && rs.optInt("parse", 0) == 1) {
+                        if (rs.has("ua")) webUserAgent = rs.optString("ua").trim();
+                        // json 解析与 WebView 嗅探并行，谁先出结果用谁
+                        try {
+                            new Thread(() -> {
+                                JSONObject res = SuperParse.doJsonJx(webUrl);
+                                rsJsonJX(res, true);
+                            }).start();
+                        } catch (Throwable ignored) {
+                        }
+                        if (!isAdded()) return;
+                        requireActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                String mixParseUrl = DefaultConfig.checkReplaceProxy(rs.optString("url", ""));
+                                stopLoadWebView(false);
+                                setTip("正在嗅探播放地址", true, false);
+                                mHandler.removeMessages(100);
+                                mHandler.sendEmptyMessageDelayed(100, 20 * 1000);
+                                loadWebView(mixParseUrl);
+                            }
+                        });
+                    } else {
+                        rsJsonJX(rs, false);
+                    }
+                } else {
+                    JSONObject rs = ApiConfig.get().jsonExtMix(parseFlag + "111", pb.getUrl(), finalExtendName, jxs, webUrl);
+                    if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) {
+                        setTip("解析错误", false, true);
+                    } else if (rs.has("parse") && rs.optInt("parse", 0) == 1) {
+                        if (rs.has("ua")) webUserAgent = rs.optString("ua").trim();
+                        if (!isAdded()) return;
+                        requireActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                String mixParseUrl = DefaultConfig.checkReplaceProxy(rs.optString("url", ""));
+                                stopParse();
+                                setTip("正在嗅探播放地址", true, false);
+                                mHandler.removeMessages(100);
+                                mHandler.sendEmptyMessageDelayed(100, 20 * 1000);
+                                loadWebView(mixParseUrl);
+                            }
+                        });
+                    } else {
+                        rsJsonJX(rs, false);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 统一的解析结果落地：把 header 拆出来、提示解析来源、交给播放入口。
+     */
+    private void rsJsonJX(JSONObject rs, boolean isSuper) {
+        if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) return;
+        if (isSuper) stopLoadWebView(false);
+        HashMap<String, String> headers = null;
+        if (rs.has("header")) {
+            try {
+                JSONObject hds = rs.getJSONObject("header");
+                Iterator<String> keys = hds.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    if (headers == null) headers = new HashMap<>();
+                    headers.put(key, hds.getString(key));
+                }
+            } catch (Throwable th) {
+                th.printStackTrace();
+            }
+        }
+        if (rs.has("jxFrom")) {
+            final String from = rs.optString("jxFrom");
+            if (isAdded())
+                requireActivity().runOnUiThread(() -> ToastUtils.showShort("解析来自:" + from));
+        }
+        playUrl(rs.optString("url", ""), headers);
+    }
+
     private void doParse(ParseBean pb) {
         stopParse();
         initParseLoadFound();
-        if (pb.getType() == 0) {
+        if (pb.getType() == 4) { // 超级解析：并发跑所有解析器 + WebView 嗅探
+            parseMix(pb, true);
+        } else if (pb.getType() == 0) {
             setTip("正在嗅探播放地址", true, false);
             mHandler.removeMessages(100);
             mHandler.sendEmptyMessageDelayed(100, 20 * 1000);
