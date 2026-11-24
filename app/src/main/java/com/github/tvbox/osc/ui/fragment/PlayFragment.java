@@ -716,12 +716,12 @@ public class PlayFragment extends BaseLazyFragment {
         if (!isAdded() || mActivity == null || mActivity.isFinishing()) return;
         if (playErrorDialogShowing) return;
         playErrorDialogShowing = true;
-        final String[] items = new String[]{"重试当前集", "换个内置播放器", "用外部播放器打开", "复制错误信息"};
-        new AlertDialog.Builder(requireContext())
+        final String[] items = new String[]{"重试当前集", "换个内置播放器", "用外部播放器打开", "复制到剪切板"};
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setTitle("播放失败")
-                .setMessage(detail)
-                .setItems(items, (dialog, which) -> {
-                    dialog.dismiss();
+                .setMessage(detail + "\n\n（长按上面的文字可直接选中复制）")
+                .setItems(items, (dialog1, which) -> {
+                    dialog1.dismiss();
                     switch (which) {
                         case 0:
                             autoRetryCount = 0;
@@ -740,7 +740,17 @@ public class PlayFragment extends BaseLazyFragment {
                 })
                 .setNegativeButton("关闭", null)
                 .setOnDismissListener(d -> playErrorDialogShowing = false)
-                .show();
+                .create();
+        dialog.show();
+        // 系统 AlertDialog 的 message 默认不可选中，用户没法复制错误码；这里打开选中
+        TextView msgView = dialog.findViewById(android.R.id.message);
+        if (msgView != null) {
+            msgView.setTextIsSelectable(true);
+            msgView.setOnLongClickListener(v -> {
+                copyPlayError(detail);
+                return true;
+            });
+        }
     }
 
     /**
@@ -909,6 +919,16 @@ public class PlayFragment extends BaseLazyFragment {
         // 换地址就是新的播放尝试，清掉上一次的错误快照
         PlayerError.clear();
         if (url == null || url.length() == 0) return;
+        // 兜底: 有些 spider 的 com.github.catvod.Proxy 端口没被宿主写到，会拼出
+        // http://127.0.0.1:-1/proxy?...（正常应该是本地服务端口）。这种地址播放器
+        // 连不上，Exo 报 HTTP 状态码异常(2004)、IJK 报 -1004，换成真实端口再播。
+        if (url.contains("127.0.0.1:-1") || url.contains("localhost:-1")) {
+            // 用递归而不是改形参: 下面还有匿名内部类引用 url, 形参一旦重新赋值就不是
+            // effectively final, 编译直接报错。
+            playUrl(url.replace("127.0.0.1:-1", "127.0.0.1:" + RemoteServer.serverPort)
+                    .replace("localhost:-1", "127.0.0.1:" + RemoteServer.serverPort), headers);
+            return;
+        }
         // 部分 spider 会直接返回 webview:// / video:// 这类地址，播放器本身不认识；
         // 之前会原样丢给 ExoPlayer/IJK，表现为点播放黑屏或直接报错。这里按 extractor 语义先分发。
         String lowerPlayUrl = url.toLowerCase(java.util.Locale.ROOT);

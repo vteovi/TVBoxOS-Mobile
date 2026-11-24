@@ -49,11 +49,18 @@ public class ControlManager {
     }
 
     public String getAddress(boolean local) {
+        // 服务可能还没起来（比如直接从历史记录进详情页），此时给一个基于当前端口的地址，
+        // 总比 NPE 或被拼成 127.0.0.1:-1 强
+        if (mServer == null) {
+            return "http://127.0.0.1:" + RemoteServer.serverPort + "/";
+        }
         return local ? mServer.getLoadAddress() : mServer.getServerAddress();
     }
 
     public void startServer() {
         if (mServer != null) {
+            // 服务已在跑: 兜底把当前端口同步给 spider(可能上次启动后端口被改过)
+            com.github.catvod.Proxy.set(RemoteServer.serverPort);
             return;
         }
         do {
@@ -85,6 +92,10 @@ public class ControlManager {
             });
             try {
                 mServer.start();
+                // 关键: 新版 spider jar 用 com.github.catvod.Proxy.getUrl(true) 拼本地代理地址,
+                // 该类默认端口是 -1, 不 set 就会拼出 http://127.0.0.1:-1/proxy?...,
+                // 播放器连不上 -> Exo 报 HTTP 状态码异常(2004), 表现为"能搜到剧但播不了"。
+                com.github.catvod.Proxy.set(RemoteServer.serverPort);
                 IjkMediaPlayer.setDotPort(Hawk.get(HawkConfig.DOH_URL, 0) > 0, RemoteServer.serverPort);
                 break;
             } catch (IOException ex) {

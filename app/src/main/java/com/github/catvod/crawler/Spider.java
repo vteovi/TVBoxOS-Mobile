@@ -71,6 +71,15 @@ public abstract class Spider {
         return "{}";
     }
 
+    /**
+     * 旧版 catvod API：jar 里的爬虫会用 getProxy(true) 拼本地代理基地址，
+     * 再自行追加 ?do=xxx。宿主缺这个方法时，调用方在运行期会 NoSuchMethodError，
+     * 表现为"能出列表、点播放就失败"。
+     */
+    public String getProxy(boolean local) {
+        return com.github.catvod.Proxy.getUrl(local);
+    }
+
     public void cancelByTag() {
 
     }
