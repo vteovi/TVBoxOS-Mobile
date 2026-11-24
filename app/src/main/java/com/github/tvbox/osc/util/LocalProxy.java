@@ -76,6 +76,11 @@ public class LocalProxy {
                 response.close();
                 return null;
             }
+            if (response.code() >= 400) {
+                // 目标站拒绝(需要 spider 自己的鉴权头/签名)时交回 spider, 别盖掉它本来能成功的请求
+                response.close();
+                return null;
+            }
             ResponseBody body = response.body();
             byte[] bytes = body == null ? new byte[0] : body.bytes();
             if (isPlaylist(url, mime, bytes)) {
