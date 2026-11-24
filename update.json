@@ -1,6 +1,6 @@
 {
-  "version": "2.36.9",
-  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.9/TVBox-Mobile-v2.36.9-arm64v8.apk",
-  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.9/TVBox-Mobile-v2.36.9-armv7a.apk",
-  "changelog": "**修复 v2.36.8 发布失败、GitHub 上一直看不到新版本的问题**：tag 和 CI 其实都正常触发了，但构建步骤因为 4 个依赖解析不到而失败，Release 没能生成\n根因：loadsir、okgo、tv-recyclerview、flowlayout-lib 这 4 个库是已关停的 jcenter 遗留坐标，jitpack 和 mavenCentral 都是 404、只有阿里云仓库还有；之前为了避免阿里云偶发 502 而在 CI 上禁用了全部镜像，把这 4 个库也一起禁掉了\n现在用 exclusiveContent 把这 4 个库单独路由到阿里云仓库，CI 上也能取到；其余依赖仍走官方源，不会重新引入 502 风险\n清缓存后模拟 CI 验证：4 个库全部重新解析成功、BUILD SUCCESSFUL\n版本号 2.36.8/398 → 2.36.9/399"
+  "version": "2.36.14",
+  "apk_url": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.14/TVBox-Mobile-v2.36.14-arm64v8.apk",
+  "apk_url_armv7a": "https://gh-proxy.com/https://github.com/vteovi/TVBoxOS-Mobile/releases/download/v2.36.14/TVBox-Mobile-v2.36.14-armv7a.apk",
+  "changelog": "**修复「奶酪秒播」「荐片|多线」点播放仍报「HTTP 状态码异常（2004）」的问题**（端口已是 9980，说明 2.36.13 的端口修复已生效，堵点在别处）\n根因一：`PlayFragment.playUrl` 的 m3u8「去广告」净化对本地代理地址做了错误的相对路径重写。代理地址形如 `http://127.0.0.1:9980/proxy?do=m3u8&url=<编码后的真实地址>`，净化时用 `url.lastIndexOf('/')` 推 base，只能取到 `http://127.0.0.1:9980/`，于是 m3u8 里的相对分片被改写成 `http://127.0.0.1:9980/xxx.ts`，请求必然 404\n根因二：`/proxy` 的处理器分发太窄\n新增 `util/LocalProxy`：宿主自己的转发兜底。spider 代理没命中或返回非 2xx 时，直接抓 `url`（只透传 UA/Referer/Cookie/Origin/Accept 等白名单头），m3u8 顺手把分片、`#EXT-X-KEY/#EXT-X-MAP` 的 URI 重写成代理地址。这样即使 jar 里没有 Proxy 实现也能播\n播放地址端口兜底从「只认 -1」扩展为「127.0.0.1/localhost 的任意端口都改成真实端口」，兼容把本地代理写死成 9978 的 jar\n版本号 2.36.13/403 → 2.36.14/404"
 }
