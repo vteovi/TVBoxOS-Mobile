@@ -134,12 +134,24 @@ public class JsLoader {
         return new SpiderNull();
     }
 
+    /**
+     * js 源的代理是"源实例"上的方法, 只能按 recentJarKey 找实例。
+     * 并发搜索 / 详情页比价会把 recent 改到别的源, 这里失手时把已加载的源都试一遍。
+     */
     public Object[] proxyInvoke(Map<String, String> params) {
+        Object[] rs = invokeProxy(spiders.get(recentJarKey), params);
+        if (rs != null) return rs;
+        for (Spider spider : spiders.values()) {
+            rs = invokeProxy(spider, params);
+            if (rs != null) return rs;
+        }
+        return null;
+    }
+
+    private Object[] invokeProxy(Spider proxyFun, Map<String, String> params) {
         try {
-            Spider proxyFun = spiders.get(recentJarKey);
-            if (proxyFun != null) {
-                return proxyFun.proxyLocal(params);
-            }
+            if (proxyFun == null) return null;
+            return proxyFun.proxyLocal(params);
         } catch (Throwable th) {
             LOG.e("proxyInvoke", th);
         }

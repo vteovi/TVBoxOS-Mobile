@@ -19,6 +19,8 @@ import com.github.tvbox.osc.util.AES;
 import com.github.tvbox.osc.util.AdBlocker;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.LOG;
+import com.github.tvbox.osc.util.LocalProxy;
 import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.google.gson.Gson;
@@ -1257,8 +1259,32 @@ public class ApiConfig {
         return jarLoader.getSpider(sourceBean.getKey(), sourceBean.getApi(), sourceBean.getExt(), sourceBean.getJar());
     }
 
-    public Object[] proxyLocal(Map param) {
-        return jarLoader.proxyInvoke(param);
+    public Object[] proxyLocal(Map<String, String> param) {
+        Object[] rs = null;
+        // do=m3u8 是纯转发语义: 自己抓回来 + 把分片/#EXT-X-KEY 的 URI 重写成绝对代理地址
+        // 最可靠, 不依赖 jar 里的 Proxy 实现(它有可能按错误的 base 写相对路径)。
+        if ("m3u8".equals(param.get("do"))) {
+            Object[] local = LocalProxy.proxy(param);
+            if (local != null) return local;
+        }
+        try {
+            // js 型源的代理是实例方法(见 JsSpider.proxyLocal), 走 jarLoader 永远拿不到;
+            // 新版 spider 会把地址拼成 ?do=js, 必须按 do 分发。
+            if ("js".equals(param.get("do"))) {
+                rs = jsLoader.proxyInvoke(param);
+            } else {
+                rs = jarLoader.proxyInvoke(param);
+            }
+        } catch (Throwable th) {
+            LOG.e("proxyLocal", th);
+        }
+        // spider 的代理没命中/返回错误(多 jar 时 recentJarKey 常被别的源改掉,
+        // 或者这个 jar 压根没带 Proxy 类), 用宿主自己的转发兜底。
+        // 不兜底的话 /proxy 返回 500 或目标站 403, 播放器统一报 Exo 2004。
+        if (LocalProxy.isOk(rs)) return rs;
+        Object[] local = LocalProxy.proxy(param);
+        if (local != null) return local;
+        return rs;
     }
 
     public JSONObject jsonExt(String key, LinkedHashMap<String, String> jxs, String url) {

@@ -426,12 +426,30 @@ public class JarLoader {
         return null;
     }
 
+    /**
+     * /proxy 的分发入口。
+     *
+     * <p>订阅里每个源可能各带一份 jar, jar 里的 {@code com.github.catvod.spider.Proxy}
+     * 是按 jar 注册的; 而 /proxy 请求过来时只认 {@link #recentJarKey}。
+     * 搜索是并发的、详情页也可能先跑过别的源, recentJarKey 很容易指向另一份 jar,
+     * 于是 proxyMethods.get(recentJarKey) 拿到的是错的那份(或者 null) ->
+     * /proxy 返回空 -> 播放器报 Exo 2004。这里在 recent 失手时把已注册的 jar 都试一遍。</p>
+     */
     public Object[] proxyInvoke(Map params) {
+        Object[] rs = invokeProxy(proxyMethods.get(recentJarKey), params);
+        if (rs != null) return rs;
+        for (java.util.Map.Entry<String, Method> entry : proxyMethods.entrySet()) {
+            if (entry.getKey().equals(recentJarKey)) continue;
+            rs = invokeProxy(entry.getValue(), params);
+            if (rs != null) return rs;
+        }
+        return null;
+    }
+
+    private Object[] invokeProxy(Method proxyFun, Map params) {
         try {
-            Method proxyFun = proxyMethods.get(recentJarKey);
-            if (proxyFun != null) {
-                return (Object[]) proxyFun.invoke(null, params);
-            }
+            if (proxyFun == null) return null;
+            return (Object[]) proxyFun.invoke(null, params);
         } catch (Throwable th) {
 
         }

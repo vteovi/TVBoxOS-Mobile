@@ -913,6 +913,47 @@ public class PlayFragment extends BaseLazyFragment {
         return StringUtils.join(lines, linesplit);
     }
 
+    private static final java.util.regex.Pattern LOCAL_PROXY_PORT =
+            java.util.regex.Pattern.compile("(127\\.0\\.0\\.1|localhost):(-?\\d+)");
+
+    /** 把本地代理地址里的端口改成宿主真实端口（-1 / 9978 / 0 都会命中） */
+    static String normalizeLocalProxyPort(String url) {
+        try {
+            int port = RemoteServer.serverPort;
+            if (port <= 0 || url == null || url.length() == 0) return url;
+            java.util.regex.Matcher m = LOCAL_PROXY_PORT.matcher(url);
+            StringBuffer sb = new StringBuffer();
+            boolean changed = false;
+            while (m.find()) {
+                String host = "localhost".equalsIgnoreCase(m.group(1)) ? "127.0.0.1" : m.group(1);
+                int cur;
+                try {
+                    cur = Integer.parseInt(m.group(2));
+                } catch (Throwable th) {
+                    cur = -1;
+                }
+                if (cur == port) {
+                    m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(host + ":" + m.group(2)));
+                } else {
+                    m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(host + ":" + port));
+                    changed = true;
+                }
+            }
+            m.appendTail(sb);
+            return changed ? sb.toString() : url;
+        } catch (Throwable th) {
+            return url;
+        }
+    }
+
+    /** 是否为本机代理地址（spider / 复杂解析把播放地址包在 /proxy?do=... 里） */
+    static boolean isLocalProxyUrl(String url) {
+        if (url == null || url.length() == 0) return false;
+        int port = RemoteServer.serverPort;
+        if (port > 0 && url.contains("127.0.0.1:" + port + "/proxy")) return true;
+        return url.contains("/proxy?do=") || url.contains("/proxy?go=");
+    }
+
     void playUrl(String url, HashMap<String, String> headers) {
         mCurrentUrl = url;
         mCurrentHeaders = headers;
@@ -922,11 +963,13 @@ public class PlayFragment extends BaseLazyFragment {
         // 兜底: 有些 spider 的 com.github.catvod.Proxy 端口没被宿主写到，会拼出
         // http://127.0.0.1:-1/proxy?...（正常应该是本地服务端口）。这种地址播放器
         // 连不上，Exo 报 HTTP 状态码异常(2004)、IJK 报 -1004，换成真实端口再播。
-        if (url.contains("127.0.0.1:-1") || url.contains("localhost:-1")) {
+        // 端口写错的不止 -1: 部分 jar 把本地代理写死成 9978(fongmi 默认端口), 而本机
+        // 实际是 9980, 同样是连不上 -> Exo 2004。统一把 127.0.0.1/localhost 的端口改成真实端口。
+        String portFixed = normalizeLocalProxyPort(url);
+        if (!portFixed.equals(url)) {
             // 用递归而不是改形参: 下面还有匿名内部类引用 url, 形参一旦重新赋值就不是
             // effectively final, 编译直接报错。
-            playUrl(url.replace("127.0.0.1:-1", "127.0.0.1:" + RemoteServer.serverPort)
-                    .replace("localhost:-1", "127.0.0.1:" + RemoteServer.serverPort), headers);
+            playUrl(portFixed, headers);
             return;
         }
         // 部分 spider 会直接返回 webview:// / video:// 这类地址，播放器本身不认识；
@@ -948,6 +991,14 @@ public class PlayFragment extends BaseLazyFragment {
             } else {
                 errorWithRetry("播放地址为空", false);
             }
+            return;
+        }
+        // 本地代理地址(spider 把真实地址整个包在 url= 参数里)绝对不能走下面的 m3u8 净化:
+        // 净化用 url.lastIndexOf('/') 推 base, 拿到的会是 http://127.0.0.1:9980/ 本身,
+        // 相对分片被改写成 http://127.0.0.1:9980/xxx.ts -> 404, Exo 报 2004,
+        // 表现就是"能搜到、点播放就报 HTTP 状态码异常"。分片重写交给 /proxy 那条链路做。
+        if (isLocalProxyUrl(url)) {
+            startPlayUrl(url, headers);
             return;
         }
         if (!Hawk.get(HawkConfig.VIDEO_PURIFY, true)) {
@@ -1067,7 +1118,7 @@ public class PlayFragment extends BaseLazyFragment {
 
     void startPlayUrl(String url, HashMap<String, String> headers) {
         LOG.i("playUrl:" + url);
-        if (autoRetryCount > 0 && url.contains(".m3u8")) {
+        if (autoRetryCount > 0 && url.contains(".m3u8") && !isLocalProxyUrl(url)) {
             url = "http://home.jundie.top:666/unBom.php?m3u8=" + url;//尝试去bom头再次播放
         }
         String finalUrl = url;

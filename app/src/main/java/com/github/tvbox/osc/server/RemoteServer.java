@@ -105,9 +105,19 @@ public class RemoteServer extends NanoHTTPD {
                 return NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "proxy result empty");
             }
             if (rs[0] instanceof NanoHTTPD.Response) return (NanoHTTPD.Response) rs[0];
-            int code = (int) rs[0];
-            String mime = (String) rs[1];
-            InputStream stream = rs[2] != null ? (InputStream) rs[2] : null;
+            // 不同 jar 的 Proxy 返回值不统一: code 可能是 int/Integer/String,
+            // body 可能是 InputStream/byte[]/String。原来直接强转会 ClassCastException,
+            // 被 catch 成 500, 播放器只会报 "HTTP 状态码异常(2004)"。
+            int code;
+            if (rs[0] instanceof Number) code = ((Number) rs[0]).intValue();
+            else code = Integer.parseInt(String.valueOf(rs[0]).trim());
+            String mime = rs[1] == null ? "" : String.valueOf(rs[1]);
+            Object body = rs[2];
+            InputStream stream;
+            if (body == null) stream = null;
+            else if (body instanceof InputStream) stream = (InputStream) body;
+            else if (body instanceof byte[]) stream = new ByteArrayInputStream((byte[]) body);
+            else stream = new ByteArrayInputStream(String.valueOf(body).getBytes("UTF-8"));
             Response response = NanoHTTPD.newChunkedResponse(Response.Status.lookup(code), mime, stream);
             if (rs.length >= 4 && rs[3] instanceof Map) {
                 Map < String, String > headers = (Map < String, String > ) rs[3];
