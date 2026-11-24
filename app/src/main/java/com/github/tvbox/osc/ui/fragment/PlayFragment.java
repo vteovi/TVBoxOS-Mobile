@@ -71,6 +71,7 @@ import com.github.tvbox.osc.ui.dialog.SearchSubtitleDialog;
 import com.github.tvbox.osc.ui.dialog.SelectDialog;
 import com.github.tvbox.osc.ui.dialog.SubtitleDialog;
 import com.github.tvbox.osc.util.AdBlocker;
+import com.github.tvbox.osc.util.parser.SuperParse;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
@@ -1388,6 +1389,11 @@ public class PlayFragment extends BaseLazyFragment {
         mHandler.removeMessages(100);
         stopLoadWebView(false);
         OkGo.getInstance().cancelTag("json_jx");
+        try {
+            SuperParse.stopJsonJx();
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
         if (parseThreadPool != null) {
             try {
                 parseThreadPool.shutdown();
@@ -1400,10 +1406,130 @@ public class PlayFragment extends BaseLazyFragment {
 
     ExecutorService parseThreadPool;
 
+    /**
+     * 聚合解析：把订阅里所有解析器（type 0 网页嗅探 / type 1 json）一起用。
+     * isSuper=true 走 SuperParse：WebView 打开聚合页嗅探的同时，并发请求所有 json 解析器，
+     * 谁先出地址用谁。之前没有这条路，只靠单个 jx 的源解析不出来，表现就是"点播放报错，
+     * 换哪个播放内核都一样"。
+     */
+    private void parseMix(ParseBean pb, boolean isSuper) {
+        setTip(isSuper ? "正在超级解析" : "正在解析播放地址", true, false);
+        if (parseThreadPool == null) parseThreadPool = Executors.newSingleThreadExecutor();
+        LinkedHashMap<String, HashMap<String, String>> jxs = new LinkedHashMap<>();
+        String extendName = "";
+        for (ParseBean p : ApiConfig.get().getParseBeanList()) {
+            // 跳过"超级解析"自身，否则会往解析器表里塞一条 type=4 的空记录
+            if (p.getType() == 4) continue;
+            HashMap<String, String> data = new HashMap<>();
+            data.put("url", p.getUrl());
+            if (p.getUrl().equals(pb.getUrl())) extendName = p.getName();
+            data.put("type", p.getType() + "");
+            data.put("ext", p.getExt());
+            jxs.put(p.getName(), data);
+        }
+        final String finalExtendName = extendName;
+        final ExecutorService pool = parseThreadPool;
+        pool.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (isSuper) {
+                    JSONObject rs = SuperParse.parse(jxs, parseFlag + "123", webUrl);
+                    if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) {
+                        // 订阅里没有 type=0 的网页解析器时，SuperParse 拼不出可嗅探的聚合页；
+                        // 这时退回纯 json 解析器并发，避免"只有 json 解析"的订阅直接判失败。
+                        JSONObject res = SuperParse.doJsonJx(webUrl);
+                        if (res != null && res.has("url") && !res.optString("url").isEmpty()) {
+                            rsJsonJX(res, false);
+                        } else {
+                            setTip("解析错误", false, true);
+                        }
+                        return;
+                    }
+                    if (rs.has("parse") && rs.optInt("parse", 0) == 1) {
+                        if (rs.has("ua")) webUserAgent = rs.optString("ua").trim();
+                        // json 解析与 WebView 嗅探并行，谁先出结果用谁
+                        try {
+                            new Thread(() -> {
+                                JSONObject res = SuperParse.doJsonJx(webUrl);
+                                rsJsonJX(res, true);
+                            }).start();
+                        } catch (Throwable ignored) {
+                        }
+                        if (!isAdded()) return;
+                        requireActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                String mixParseUrl = DefaultConfig.checkReplaceProxy(rs.optString("url", ""));
+                                stopLoadWebView(false);
+                                setTip("正在嗅探播放地址", true, false);
+                                mHandler.removeMessages(100);
+                                mHandler.sendEmptyMessageDelayed(100, 20 * 1000);
+                                loadWebView(mixParseUrl);
+                            }
+                        });
+                    } else {
+                        rsJsonJX(rs, false);
+                    }
+                } else {
+                    JSONObject rs = ApiConfig.get().jsonExtMix(parseFlag + "111", pb.getUrl(), finalExtendName, jxs, webUrl);
+                    if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) {
+                        setTip("解析错误", false, true);
+                    } else if (rs.has("parse") && rs.optInt("parse", 0) == 1) {
+                        if (rs.has("ua")) webUserAgent = rs.optString("ua").trim();
+                        if (!isAdded()) return;
+                        requireActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                String mixParseUrl = DefaultConfig.checkReplaceProxy(rs.optString("url", ""));
+                                stopParse();
+                                setTip("正在嗅探播放地址", true, false);
+                                mHandler.removeMessages(100);
+                                mHandler.sendEmptyMessageDelayed(100, 20 * 1000);
+                                loadWebView(mixParseUrl);
+                            }
+                        });
+                    } else {
+                        rsJsonJX(rs, false);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 统一的解析结果落地：把 header 拆出来、提示解析来源、交给播放入口。
+     */
+    private void rsJsonJX(JSONObject rs, boolean isSuper) {
+        if (rs == null || !rs.has("url") || rs.optString("url").isEmpty()) return;
+        if (isSuper) stopLoadWebView(false);
+        HashMap<String, String> headers = null;
+        if (rs.has("header")) {
+            try {
+                JSONObject hds = rs.getJSONObject("header");
+                Iterator<String> keys = hds.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    if (headers == null) headers = new HashMap<>();
+                    headers.put(key, hds.getString(key));
+                }
+            } catch (Throwable th) {
+                th.printStackTrace();
+            }
+        }
+        if (rs.has("jxFrom")) {
+            final String from = rs.optString("jxFrom");
+            if (isAdded())
+                requireActivity().runOnUiThread(() -> ToastUtils.showShort("解析来自:" + from));
+        }
+        playUrl(rs.optString("url", ""), headers);
+    }
+
     private void doParse(ParseBean pb) {
         stopParse();
         initParseLoadFound();
-        if (pb.getType() == 0) {
+        if (pb.getType() == 4) { // 超级解析：并发跑所有解析器 + WebView 嗅探
+            parseMix(pb, true);
+        } else if (pb.getType() == 0) {
             setTip("正在嗅探播放地址", true, false);
             mHandler.removeMessages(100);
             mHandler.sendEmptyMessageDelayed(100, 20 * 1000);

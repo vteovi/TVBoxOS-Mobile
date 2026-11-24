@@ -927,6 +927,10 @@ public class ApiConfig {
                 pb.setType(DefaultConfig.safeJsonInt(obj, "type", 0));
                 parseBeanList.add(pb);
             }
+            // 有解析配置时才挂"超级解析"：它把订阅里所有解析器并发跑一遍，
+            // 谁先出结果用谁，同时保留 WebView 嗅探。缺了它，只靠单个 jx 时
+            // 很多源会解析失败，表现是点播放直接报错（换播放内核也没用）。
+            if (!parseBeanList.isEmpty()) addSuperParse();
         }
         // 获取默认解析
         if (parseBeanList != null && parseBeanList.size() > 0) {
@@ -1326,6 +1330,19 @@ public class ApiConfig {
 
     public List<SourceBean> getSourceBeanList() {
         return new ArrayList<>(sourceBeanList.values());
+    }
+
+    /**
+     * 注册"超级解析"（type=4）：并发跑所有解析器 + WebView 嗅探，取最先成功的结果。
+     * 放在列表首位，未手动指定默认解析时会优先用它。
+     */
+    private void addSuperParse() {
+        ParseBean superPb = new ParseBean();
+        superPb.setName("超级解析");
+        superPb.setUrl("SuperParse");
+        superPb.setExt("");
+        superPb.setType(4);
+        parseBeanList.add(0, superPb);
     }
 
     public List<ParseBean> getParseBeanList() {

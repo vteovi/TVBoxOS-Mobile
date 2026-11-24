@@ -8,6 +8,7 @@ import android.util.Base64;
 
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
+import com.github.tvbox.osc.util.Proxy;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.event.ServerEvent;
 import com.github.tvbox.osc.util.FileUtils;
@@ -94,6 +95,31 @@ public class RemoteServer extends NanoHTTPD {
         isStarted = false;
     }
 
+    /**
+     * 把 spider/超级解析返回的 Object[]{code, mime, stream, headers?} 转成响应。
+     * 拿不到有效结果时返回 500，而不是让空指针把请求线程打死。
+     */
+    private Response getProxy(Object[] rs) {
+        try {
+            if (rs == null || rs.length < 3) {
+                return NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "proxy result empty");
+            }
+            if (rs[0] instanceof NanoHTTPD.Response) return (NanoHTTPD.Response) rs[0];
+            int code = (int) rs[0];
+            String mime = (String) rs[1];
+            InputStream stream = rs[2] != null ? (InputStream) rs[2] : null;
+            Response response = NanoHTTPD.newChunkedResponse(Response.Status.lookup(code), mime, stream);
+            if (rs.length >= 4 && rs[3] instanceof Map) {
+                Map < String, String > headers = (Map < String, String > ) rs[3];
+                for (String key : headers.keySet()) response.addHeader(key, headers.get(key));
+            }
+            return response;
+        } catch (Throwable th) {
+            th.printStackTrace();
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "proxy error");
+        }
+    }
+
     @Override
     public Response serve(IHTTPSession session) {
         EventBus.getDefault().post(new ServerEvent(ServerEvent.SERVER_CONNECTION));
@@ -114,27 +140,15 @@ public class RemoteServer extends NanoHTTPD {
                     params.put("request-headers", new Gson().toJson(session.getHeaders()));
                     if (params.containsKey("do")) {
                         Object[] rs = ApiConfig.get().proxyLocal(params);
-                        //if (rs[0] instanceof Response) {
-                        //    return (Response) rs[0];
-                        //}
-                        int code = (int) rs[0];
-                        String mime = (String) rs[1];
-                        InputStream stream = rs[2] != null ? (InputStream) rs[2] : null;
-                        Response response = NanoHTTPD.newChunkedResponse(
-                                NanoHTTPD.Response.Status.lookup(code),
-                                mime,
-                                stream);
-                        if (rs.length > 3) {
-                            try {
-                                HashMap < String, String > headers = (HashMap < String, String > ) rs[3];
-                                for (String key: headers.keySet()) {
-                                    response.addHeader(key, headers.get(key));
-                                }
-                            } catch (Throwable th) {
-                                th.printStackTrace();
-                            }
-                        }
-                        return response;
+                        return getProxy(rs);
+                    }
+                    // 新版 spider 与"超级解析"会把地址包装成 proxy://go=xxx&...，
+                    // DefaultConfig.checkReplaceProxy 再换成 http://127.0.0.1:9978/proxy?go=xxx。
+                    // 之前这里只认 do=，go= 直接落空返回空响应，WebView 拿不到页面、
+                    // 嗅探不出真实地址，表现就是点播放报错，且换哪个播放内核都一样。
+                    if (params.containsKey("go")) {
+                        Object[] rs = Proxy.proxy(params);
+                        return getProxy(rs);
                     }
                 } else if (fileName.startsWith("/file/")) {
                     try {
