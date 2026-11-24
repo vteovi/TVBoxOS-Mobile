@@ -764,6 +764,28 @@ public class PlayFragment extends BaseLazyFragment {
 
     void playUrl(String url, HashMap<String, String> headers) {
         mCurrentUrl = url;
+        if (url == null || url.length() == 0) return;
+        // 部分 spider 会直接返回 webview:// / video:// 这类地址，播放器本身不认识；
+        // 之前会原样丢给 ExoPlayer/IJK，表现为点播放黑屏或直接报错。这里按 extractor 语义先分发。
+        String lowerPlayUrl = url.toLowerCase(java.util.Locale.ROOT);
+        if (lowerPlayUrl.startsWith("webview://")) {
+            String webviewTarget = url.substring("webview://".length()).trim();
+            if (webviewTarget.length() > 0) {
+                initParse("", false, "", webviewTarget);
+            } else {
+                errorWithRetry("播放地址为空", false);
+            }
+            return;
+        }
+        if (lowerPlayUrl.startsWith("video://")) {
+            String videoTarget = url.substring("video://".length()).trim();
+            if (videoTarget.length() > 0 && !videoTarget.toLowerCase(java.util.Locale.ROOT).startsWith("video://")) {
+                playUrl(videoTarget, headers);
+            } else {
+                errorWithRetry("播放地址为空", false);
+            }
+            return;
+        }
         if (!Hawk.get(HawkConfig.VIDEO_PURIFY, true)) {
             startPlayUrl(url, headers);
             return;
@@ -1299,7 +1321,12 @@ public class PlayFragment extends BaseLazyFragment {
 
     private void initParse(String flag, boolean useParse, String playUrl, final String url) {
         parseFlag = flag;
-        webUrl = url;
+        // spider 返回 webview:// 表示"用 WebView 打开该页再嗅探"，解包后交给嗅探流程；
+        // 否则 WebView 会把 webview:// 当成真实网址去加载，直接失败。
+        String webviewUrl = url == null ? "" : url.trim();
+        if (webviewUrl.toLowerCase(java.util.Locale.ROOT).startsWith("webview://"))
+            webviewUrl = webviewUrl.substring("webview://".length()).trim();
+        webUrl = webviewUrl;
         ParseBean parseBean = null;
         mController.showParse(useParse);
         if (useParse) {
